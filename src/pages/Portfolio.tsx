@@ -171,12 +171,26 @@ export default function Portfolio() {
     change: ((prices?.[asset.symbol] || 0) - (asset.buyPrice || 0)) / (asset.buyPrice || 1) * 100
   })).sort((a, b) => b.value - a.value);
 
-  // Performance metrics
+  // Performance metrics - calculate from real data
+  const calculatePeriodReturn = (days: number) => {
+    if (valueHistory.length < 2) return { value: 0, percentage: 0 };
+    
+    const currentValue = totalValue;
+    const pastValue = valueHistory.find((entry, index) => 
+      index >= valueHistory.length - Math.ceil(days / 1) // Approximate days to data points
+    )?.value || currentValue;
+    
+    const change = currentValue - pastValue;
+    const percentage = pastValue > 0 ? (change / pastValue) * 100 : 0;
+    
+    return { value: change, percentage };
+  };
+
   const periodReturns = {
-    '1D': { value: 234.56, percentage: 1.23 },
-    '1W': { value: 1234.56, percentage: 5.67 },
-    '1M': { value: 3456.78, percentage: 12.34 },
-    '1Y': { value: 12345.67, percentage: 45.67 }
+    '1D': calculatePeriodReturn(1),
+    '1W': calculatePeriodReturn(7),
+    '1M': calculatePeriodReturn(30),
+    '1Y': calculatePeriodReturn(365)
   };
 
   // Calculate daily change
@@ -335,11 +349,11 @@ export default function Portfolio() {
         >
           <MetricCard
             title="Total Return"
-            value={hideBalances ? '••••••' : `+$${periodReturns['1Y'].value.toLocaleString()}`}
-            change={periodReturns['1Y'].percentage}
-            isPositive={true}
+            value={hideBalances ? '•••••' : `+$${periodReturns[timeframe].value.toLocaleString()}`}
+            change={periodReturns[timeframe].percentage}
+            isPositive={periodReturns[timeframe].value >= 0}
             icon={<TrendingUp size={16} className="text-[#F0B90B]" />}
-            subValue="Since inception"
+            subValue={`Last ${timeframe === '1D' ? 'day' : timeframe === '1W' ? 'week' : timeframe === '1M' ? 'month' : 'year'}`}
           />
           
           <MetricCard
@@ -360,7 +374,7 @@ export default function Portfolio() {
             title="Risk Profile"
             value={riskLevel}
             icon={<Shield size={16} className="text-[#F0B90B]" />}
-            subValue="Moderate-Low volatility"
+            subValue={`${riskLevel} volatility`}
           />
         </motion.div>
 
