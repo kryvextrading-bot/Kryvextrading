@@ -185,6 +185,22 @@ const TradeRow = ({ trade }: { trade: Trade }) => (
 // ==================== ORDER CARD ====================
 const OrderCard = ({ order, type, onComplete, onCancel }: any) => {
   const isBuy = order.details?.side === 'buy' || order.details?.side === 'up';
+  const isCompleted = order.status === 'Completed';
+  
+  // Calculate P&L for completed orders
+  const getPnLForOrder = () => {
+    if (!isCompleted || !order.details?.price) return null;
+    // Simple P&L calculation - this would need real market data comparison
+    const currentPrice = order.details?.currentPrice || order.details.price;
+    const pnl = isBuy 
+      ? (currentPrice - order.details.price) * order.amount 
+      : (order.details.price - currentPrice) * order.amount;
+    return pnl;
+  };
+  
+  const pnl = getPnLForOrder();
+  const isWin = pnl && pnl > 0;
+  const isLoss = pnl && pnl < 0;
   
   return (
     <motion.div
@@ -200,9 +216,21 @@ const OrderCard = ({ order, type, onComplete, onCancel }: any) => {
           </Badge>
           <span className="text-xs text-[#848E9C]">{order.asset}</span>
         </div>
-        <Badge className="bg-yellow-500/20 text-yellow-400">
-          {order.status}
-        </Badge>
+        {isCompleted ? (
+          <Badge className={
+            isWin 
+              ? 'bg-green-500/20 text-green-400' 
+              : isLoss 
+                ? 'bg-red-500/20 text-red-400'
+                : 'bg-blue-500/20 text-blue-400'
+          }>
+            {isWin ? 'WIN' : isLoss ? 'LOSS' : 'NEUTRAL'}
+          </Badge>
+        ) : (
+          <Badge className="bg-yellow-500/20 text-yellow-400">
+            {order.status}
+          </Badge>
+        )}
       </div>
       
       <div className="grid grid-cols-2 gap-2 text-xs">
@@ -230,7 +258,22 @@ const OrderCard = ({ order, type, onComplete, onCancel }: any) => {
         )}
       </div>
 
-      {order.details?.endTime && (
+      {/* Show P&L for completed orders */}
+      {isCompleted && pnl !== null && (
+        <div className="pt-2 border-t border-[#2B3139]">
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-[#848E9C]">P&L</span>
+            <span className={`font-bold text-sm ${
+              isWin ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-blue-400'
+            }`}>
+              {isWin ? '+' : ''}{pnl.toFixed(2)} USDT
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Show action buttons for pending orders */}
+      {order.details?.endTime && !isCompleted && (
         <div className="flex items-center justify-between pt-2 border-t border-[#2B3139]">
           <CountdownTimer 
             endTime={order.details.endTime} 
@@ -1407,11 +1450,75 @@ export default function Trading() {
                     )}
 
                     {activeSpotTab === 'completed' && (
-                      <div className="text-center py-8 text-[#848E9C] text-sm">
-                        {transactions.filter(t => t.type === 'Trade' && t.status === 'Completed').length === 0
-                          ? 'No completed orders'
-                          : `${transactions.filter(t => t.type === 'Trade' && t.status === 'Completed').length} completed orders`
-                        }
+                      <div>
+                        {transactions.filter(t => t.type === 'Trade' && t.status === 'Completed').length === 0 ? (
+                          <div className="text-center py-8 text-[#848E9C] text-sm">No completed orders</div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {transactions.filter(t => t.type === 'Trade' && t.status === 'Completed').map(transaction => {
+                              const pnl = getPnL(transaction);
+                              const isWin = pnl && pnl > 0;
+                              const isLoss = pnl && pnl < 0;
+                              
+                              return (
+                                <motion.div
+                                  key={transaction.id}
+                                  initial={{ opacity: 0, y: 20 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  className="bg-[#1E2329] rounded-lg p-3 space-y-2 border border-[#2B3139] hover:border-[#F0B90B]/50 transition-all"
+                                >
+                                  <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                      <Badge className={
+                                        transaction.details?.side === 'buy' 
+                                          ? 'bg-green-500/20 text-green-400' 
+                                          : 'bg-red-500/20 text-red-400'
+                                      }>
+                                        {transaction.details?.side?.toUpperCase()}
+                                      </Badge>
+                                      <span className="text-xs text-[#848E9C]">{transaction.asset}</span>
+                                    </div>
+                                    <Badge className={
+                                      isWin 
+                                        ? 'bg-green-500/20 text-green-400' 
+                                        : isLoss 
+                                          ? 'bg-red-500/20 text-red-400'
+                                          : 'bg-blue-500/20 text-blue-400'
+                                    }>
+                                      {isWin ? 'WIN' : isLoss ? 'LOSS' : 'NEUTRAL'}
+                                    </Badge>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div>
+                                      <span className="text-[#848E9C]">Amount</span>
+                                      <div className="font-medium text-[#EAECEF]">${transaction.amount.toLocaleString()}</div>
+                                    </div>
+                                    {transaction.details?.price && (
+                                      <div>
+                                        <span className="text-[#848E9C]">Price</span>
+                                        <div className="font-medium text-[#EAECEF]">${transaction.details.price}</div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {pnl !== null && (
+                                    <div className="pt-2 border-t border-[#2B3139]">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-xs text-[#848E9C]">P&L</span>
+                                        <span className={`font-bold text-sm ${
+                                          isWin ? 'text-green-400' : isLoss ? 'text-red-400' : 'text-blue-400'
+                                        }`}>
+                                          {isWin ? '+' : ''}{pnl.toFixed(2)} USDT
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </motion.div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
 
