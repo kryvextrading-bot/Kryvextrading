@@ -1,17 +1,20 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/hooks/use-toast';
+import { adminApiService } from '@/services/admin-api';
+import { Database } from '@/lib/supabase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import { 
   Search, 
   Filter, 
@@ -67,55 +70,74 @@ import {
   Wifi,
   WifiOff
 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 
 // ==================== TYPES ====================
-interface Transaction {
-  id: string;
-  userId: string;
-  userEmail: string;
-  userName: string;
-  userType: 'individual' | 'business' | 'institutional';
-  userKycLevel: 1 | 2 | 3;
-  type: 'deposit' | 'withdrawal' | 'transfer' | 'trade' | 'fee' | 'interest' | 'refund';
-  status: 'pending' | 'approved' | 'rejected' | 'completed' | 'failed' | 'cancelled' | 'flagged';
-  amount: number;
-  currency: string;
-  cryptoAmount?: number;
-  cryptoCurrency?: string;
-  fee: number;
-  feeCurrency: string;
-  timestamp: string;
-  completedAt?: string;
-  description: string;
-  reference: string;
-  internalReference: string;
-  riskLevel: 'low' | 'medium' | 'high' | 'critical';
-  riskScore: number;
-  riskFactors: string[];
-  requiresApproval: boolean;
-  approvalLevel: 1 | 2 | 3;
-  approvedBy?: string;
-  approvedAt?: string;
-  rejectionReason?: string;
-  notes?: string;
-  tags: string[];
-  ipAddress?: string;
-  deviceInfo?: string;
+type TransactionType = Database['public']['Tables']['transactions']['Row'];
+
+interface Transaction extends TransactionType {
+  userName?: string;
+  userType?: 'individual' | 'business' | 'institutional';
+  timestamp?: string;
+  currency?: string;
+  feeCurrency?: string;
+  requiresApproval?: boolean;
+  riskLevel?: 'low' | 'medium' | 'high' | 'critical';
+  riskScore?: number;
+  reference?: string;
+  description?: string;
   location?: string;
+  ipAddress?: string;
   counterparty?: string;
-  counterpartyAccount?: string;
-  bankReference?: string;
-  blockchainTxHash?: string;
-  complianceChecks: {
-    aml: boolean;
-    sanction: boolean;
-    pep: boolean;
-    fraud: boolean;
-    velocity: boolean;
-  };
+  completedAt?: string;
+  approvedAt?: string;
+  notes?: string;
+  flagged?: boolean;
+  deviceInfo?: string;
+  browserInfo?: string;
+  sessionId?: string;
+  twoFactorVerified?: boolean;
+  biometricVerified?: boolean;
+  voiceVerified?: boolean;
+  faceVerified?: boolean;
+  smsVerified?: boolean;
+  emailVerified?: boolean;
+  appVersion?: string;
+  osVersion?: string;
+  networkType?: string;
+  vpnDetected?: boolean;
+  proxyDetected?: boolean;
+  torDetected?: boolean;
+  suspiciousActivity?: boolean;
+  fraudScore?: number;
+  amlScore?: number;
+  kycLevel?: number;
+  complianceFlags?: string[];
+  regulatoryFlags?: string[];
+  sanctionsScreened?: boolean;
+  pepScreened?: boolean;
+  adverseMediaScreened?: boolean;
+  watchlistMatched?: boolean;
+  investigationRequired?: boolean;
+  manualReviewRequired?: boolean;
+  autoApproved?: boolean;
+  autoRejected?: boolean;
+  priorityLevel?: 'low' | 'medium' | 'high' | 'urgent';
+  escalationLevel?: number;
+  reviewCount?: number;
+  approvalHistory?: {
+    timestamp: string;
+    reviewer: string;
+    action: 'approved' | 'rejected' | 'flagged' | 'escalated';
+    reason?: string;
+  }[];
+  auditTrail?: {
+    timestamp: string;
+    action: string;
+    user: string;
+    details?: string;
+  }[];
 }
 
 interface TransactionStats {
@@ -591,242 +613,67 @@ export function TransactionManagement() {
   const loadTransactions = async () => {
     try {
       setIsLoading(true);
-      // Mock data - replace with actual API call
-      const mockTransactions: Transaction[] = [
-        {
-          id: 'TXN-2024-001234',
-          userId: 'USR-001',
-          userEmail: 'john.doe@example.com',
-          userName: 'John Doe',
-          userType: 'individual',
-          userKycLevel: 2,
-          type: 'deposit',
-          status: 'completed',
-          amount: 15000.00,
-          currency: 'USD',
-          fee: 25.00,
-          feeCurrency: 'USD',
-          timestamp: '2024-07-13T10:30:00Z',
-          completedAt: '2024-07-13T10:31:15Z',
-          description: 'Wire transfer deposit from Chase Bank',
-          reference: 'REF-WIRE-2024-7890',
-          internalReference: 'INT-7890-ABC',
-          riskLevel: 'low',
-          riskScore: 12,
-          riskFactors: [],
-          requiresApproval: false,
-          approvalLevel: 1,
-          approvedBy: 'system',
-          approvedAt: '2024-07-13T10:31:00Z',
-          tags: ['wire', 'instant', 'verified'],
-          ipAddress: '192.168.1.100',
-          deviceInfo: 'Chrome/120.0 on Windows',
-          location: 'New York, USA',
-          counterparty: 'Chase Bank',
-          counterpartyAccount: '****4321',
-          bankReference: 'WIRE-7890-ABC',
-          complianceChecks: {
-            aml: true,
-            sanction: true,
-            pep: false,
-            fraud: true,
-            velocity: true
-          }
-        },
-        {
-          id: 'TXN-2024-001235',
-          userId: 'USR-002',
-          userEmail: 'jane.smith@company.com',
-          userName: 'Jane Smith',
-          userType: 'business',
-          userKycLevel: 3,
-          type: 'withdrawal',
-          status: 'pending',
-          amount: 50000.00,
-          currency: 'USD',
-          fee: 75.00,
-          feeCurrency: 'USD',
-          timestamp: '2024-07-13T14:20:00Z',
-          description: 'Corporate withdrawal to business account',
-          reference: 'REF-ACH-2024-1234',
-          internalReference: 'INT-1234-BCD',
-          riskLevel: 'medium',
-          riskScore: 45,
-          riskFactors: ['large_amount', 'business_account'],
-          requiresApproval: true,
-          approvalLevel: 2,
-          tags: ['ach', 'business', 'review_required'],
-          ipAddress: '10.0.0.50',
-          deviceInfo: 'Firefox/121.0 on macOS',
-          location: 'San Francisco, USA',
-          counterparty: 'Wells Fargo',
-          counterpartyAccount: '****5678',
-          bankReference: 'ACH-1234-BCD',
-          complianceChecks: {
-            aml: true,
-            sanction: true,
-            pep: false,
-            fraud: false,
-            velocity: true
-          }
-        },
-        {
-          id: 'TXN-2024-001236',
-          userId: 'USR-003',
-          userEmail: 'mike.wilson@trader.com',
-          userName: 'Mike Wilson',
-          userType: 'individual',
-          userKycLevel: 2,
-          type: 'trade',
-          status: 'completed',
-          amount: 25000.00,
-          currency: 'USD',
-          cryptoAmount: 0.375,
-          cryptoCurrency: 'BTC',
-          fee: 62.50,
-          feeCurrency: 'USD',
-          timestamp: '2024-07-13T16:45:00Z',
-          completedAt: '2024-07-13T16:45:30Z',
-          description: 'Market buy BTC',
-          reference: 'REF-TRADE-2024-5678',
-          internalReference: 'INT-5678-CDE',
-          riskLevel: 'low',
-          riskScore: 8,
-          riskFactors: [],
-          requiresApproval: false,
-          approvalLevel: 1,
-          approvedBy: 'system',
-          approvedAt: '2024-07-13T16:45:15Z',
-          tags: ['crypto', 'btc', 'market_order'],
-          ipAddress: '172.16.0.75',
-          deviceInfo: 'Mobile App iOS 17.4',
-          location: 'Chicago, USA',
-          blockchainTxHash: '0x7a4f8e2d1c3b5a6e9d8c7b4a2f5e6d7c8b9a0f1e',
-          complianceChecks: {
-            aml: true,
-            sanction: true,
-            pep: false,
-            fraud: true,
-            velocity: true
-          }
-        },
-        {
-          id: 'TXN-2024-001237',
-          userId: 'USR-001',
-          userEmail: 'john.doe@example.com',
-          userName: 'John Doe',
-          userType: 'individual',
-          userKycLevel: 2,
-          type: 'withdrawal',
-          status: 'rejected',
-          amount: 75000.00,
-          currency: 'USD',
-          fee: 125.00,
-          feeCurrency: 'USD',
-          timestamp: '2024-07-12T09:15:00Z',
-          description: 'Large withdrawal request',
-          reference: 'REF-WIRE-2024-9012',
-          internalReference: 'INT-9012-DEF',
-          riskLevel: 'high',
-          riskScore: 78,
-          riskFactors: ['unusual_pattern', 'large_amount', 'recent_activity'],
-          requiresApproval: true,
-          approvalLevel: 3,
-          approvedBy: 'admin.sarah',
-          approvedAt: '2024-07-12T09:30:00Z',
-          rejectionReason: 'Insufficient KYC verification - Level 3 required for amounts > $50,000',
-          notes: 'User contacted support; KYC upgrade in progress',
-          tags: ['rejected', 'kyc_required', 'high_value'],
-          ipAddress: '192.168.1.100',
-          deviceInfo: 'Chrome/120.0 on Windows',
-          location: 'New York, USA',
-          counterparty: 'Bank of America',
-          counterpartyAccount: '****8765',
-          complianceChecks: {
-            aml: true,
-            sanction: true,
-            pep: false,
-            fraud: false,
-            velocity: false
-          }
-        },
-        {
-          id: 'TXN-2024-001238',
-          userId: 'USR-004',
-          userEmail: 'sarah.johnson@investor.com',
-          userName: 'Sarah Johnson',
-          userType: 'individual',
-          userKycLevel: 3,
-          type: 'deposit',
-          status: 'pending',
-          amount: 250000.00,
-          currency: 'USD',
-          fee: 250.00,
-          feeCurrency: 'USD',
-          timestamp: '2024-07-13T18:20:00Z',
-          description: 'Institutional deposit - pension fund',
-          reference: 'REF-WIRE-2024-3456',
-          internalReference: 'INT-3456-EFG',
-          riskLevel: 'medium',
-          riskScore: 35,
-          riskFactors: ['large_amount', 'institutional'],
-          requiresApproval: true,
-          approvalLevel: 2,
-          tags: ['wire', 'institutional', 'pending_review'],
-          ipAddress: '10.0.0.200',
-          deviceInfo: 'Safari/17.4 on macOS',
-          location: 'Boston, USA',
-          counterparty: 'Fidelity Investments',
-          counterpartyAccount: '****2468',
-          bankReference: 'WIRE-3456-EFG',
-          complianceChecks: {
-            aml: true,
-            sanction: true,
-            pep: false,
-            fraud: true,
-            velocity: true
-          }
-        },
-        {
-          id: 'TXN-2024-001239',
-          userId: 'USR-005',
-          userEmail: 'robert.chen@crypto.com',
-          userName: 'Robert Chen',
-          userType: 'individual',
-          userKycLevel: 2,
-          type: 'trade',
-          status: 'flagged',
-          amount: 50000.00,
-          currency: 'USD',
-          cryptoAmount: 1.25,
-          cryptoCurrency: 'ETH',
-          fee: 125.00,
-          feeCurrency: 'USD',
-          timestamp: '2024-07-13T19:50:00Z',
-          description: 'Large ETH purchase - flagged for review',
-          reference: 'REF-TRADE-2024-7890',
-          internalReference: 'INT-7890-FGH',
-          riskLevel: 'critical',
-          riskScore: 92,
-          riskFactors: ['rapid_trading', 'large_amount', 'new_account', 'unusual_pattern'],
-          requiresApproval: true,
-          approvalLevel: 3,
-          tags: ['crypto', 'eth', 'flagged', 'review_required'],
-          ipAddress: '45.33.22.11',
-          deviceInfo: 'Unknown device - VPN detected',
-          location: 'Singapore',
-          blockchainTxHash: '0x9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c',
-          complianceChecks: {
-            aml: false,
-            sanction: true,
-            pep: false,
-            fraud: false,
-            velocity: false
-          }
-        }
-      ];
-      setTransactions(mockTransactions);
+      const data = await adminApiService.getTransactions();
+      
+      // Transform database data to match component interface
+      const transformedData: Transaction[] = data.map(tx => ({
+        ...tx,
+        userId: tx.user_id,
+        userEmail: tx.user_email,
+        userName: tx.user_email.split('@')[0], // Extract name from email for now
+        timestamp: tx.date,
+        currency: 'USD', // Default currency
+        feeCurrency: 'USD', // Default fee currency
+        requiresApproval: tx.status === 'Pending',
+        riskLevel: 'medium' as const, // Default risk level
+        riskScore: 50, // Default risk score
+        flagged: false,
+        // Add other optional properties with defaults
+        userType: 'individual' as const,
+        reference: `TX-${tx.id.slice(0, 8)}`,
+        description: `${tx.type} transaction for ${tx.asset}`,
+        location: 'Unknown',
+        ipAddress: '0.0.0.0',
+        counterparty: 'Unknown',
+        deviceInfo: 'Unknown',
+        browserInfo: 'Unknown',
+        sessionId: 'Unknown',
+        twoFactorVerified: false,
+        biometricVerified: false,
+        voiceVerified: false,
+        faceVerified: false,
+        smsVerified: false,
+        emailVerified: false,
+        appVersion: '1.0.0',
+        osVersion: 'Unknown',
+        networkType: 'Unknown',
+        vpnDetected: false,
+        proxyDetected: false,
+        torDetected: false,
+        suspiciousActivity: false,
+        fraudScore: 0,
+        amlScore: 0,
+        kycLevel: 1,
+        complianceFlags: [],
+        regulatoryFlags: [],
+        sanctionsScreened: false,
+        pepScreened: false,
+        adverseMediaScreened: false,
+        watchlistMatched: false,
+        investigationRequired: false,
+        manualReviewRequired: false,
+        autoApproved: false,
+        autoRejected: false,
+        priorityLevel: 'medium' as const,
+        escalationLevel: 0,
+        reviewCount: 0,
+        approvalHistory: [],
+        auditTrail: []
+      }));
+      
+      setTransactions(transformedData);
     } catch (error) {
+      console.error('Error loading transactions:', error);
       toast({
         title: "Error",
         description: "Failed to load transactions",
@@ -842,29 +689,29 @@ export function TransactionManagement() {
     
     const totalVolume = filtered.reduce((sum, t) => sum + t.amount, 0);
     const totalTransactions = filtered.length;
-    const pendingApprovals = filtered.filter(t => t.requiresApproval && t.status === 'pending').length;
+    const pendingApprovals = filtered.filter(t => t.requiresApproval && t.status === 'Pending').length;
     const highRiskCount = filtered.filter(t => t.riskLevel === 'high' || t.riskLevel === 'critical').length;
-    const flaggedCount = filtered.filter(t => t.status === 'flagged').length;
-    const completedCount = filtered.filter(t => t.status === 'completed').length;
+    const flaggedCount = filtered.filter(t => t.flagged).length;
+    const completedCount = filtered.filter(t => t.status === 'Completed').length;
     const successRate = totalTransactions > 0 ? (completedCount / totalTransactions) * 100 : 0;
     
-    // Mock changes - replace with real period-over-period calculations
-    const totalVolumeChange = 12.5;
-    const totalTransactionsChange = 8.3;
-    const pendingApprovalsChange = -5.2;
-    const highRiskChange = 2.1;
+    // TODO: Replace with real period-over-period calculations
+    const totalVolumeChange = 0;
+    const totalTransactionsChange = 0;
+    const pendingApprovalsChange = 0;
+    const highRiskChange = 0;
     
     // Average processing time for completed transactions (in minutes)
-    const completedWithTime = filtered.filter(t => t.status === 'completed' && t.completedAt);
+    const completedWithTime = filtered.filter(t => t.status === 'Completed' && t.completedAt);
     const averageProcessingTime = completedWithTime.length > 0
       ? completedWithTime.reduce((sum, t) => {
-          const start = new Date(t.timestamp).getTime();
+          const start = new Date(t.timestamp!).getTime();
           const end = new Date(t.completedAt!).getTime();
           return sum + (end - start) / 60000;
         }, 0) / completedWithTime.length
       : 0;
     
-    const approved = filtered.filter(t => t.status === 'approved' || t.status === 'completed').length;
+    const approved = filtered.filter(t => t.status === 'Completed').length;
     const approvalRate = filtered.length > 0 ? (approved / filtered.length) * 100 : 0;
     
     const volumeByType = filtered.reduce((acc, t) => {

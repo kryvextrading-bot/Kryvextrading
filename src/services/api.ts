@@ -723,6 +723,20 @@ class ApiService {
     });
   }
 
+  // Audit Logs
+  async getAuditLogs(): Promise<any[]> {
+    return new Promise((resolve) => {
+      setTimeout(() => resolve([]), 500);
+    });
+  }
+
+  // Security Events
+  async getSecurityEvents(): Promise<any[]> {
+    return new Promise((resolve) => {
+      setTimeout(() => resolve([]), 500);
+    });
+  }
+
   // Spot Order Management
   async getSpotOrders(): Promise<any[]> {
     return this.request<any[]>('/spotOrders');
@@ -853,6 +867,40 @@ class ApiService {
     return new Promise(resolve => setTimeout(resolve, 300));
   }
 
+  // Wallet Management
+  async getWalletRequests(): Promise<any[]> {
+    return new Promise((resolve) => {
+      setTimeout(() => resolve([]), 500);
+    });
+  }
+
+  async approveWalletRequest(requestId: string): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, 300));
+  }
+
+  async rejectWalletRequest(requestId: string, notes: string): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, 300));
+  }
+
+  async processWalletRequest(requestId: string): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, 300));
+  }
+
+  // Admin Fund Management
+  async adminAddFunds(userId: string, amount: number, currency: string, reason: string): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  async adminRemoveFunds(userId: string, amount: number, currency: string, reason: string): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  async getUserWalletBalances(userId: string): Promise<any[]> {
+    return new Promise(resolve => {
+      setTimeout(() => resolve([]), 300);
+    });
+  }
+
   /**
    * Admin: Add funds to a user's wallet
    */
@@ -871,11 +919,175 @@ class ApiService {
     return new Promise(resolve => setTimeout(resolve, 300));
   }
 
-  async getUserKyc(userId: string): Promise<any> {
+  /**
+   * Admin: Create audit log entry
+   */
+  async createAuditLog(entry: {
+    userId: string;
+    action: string;
+    details: string;
+    adminId: string;
+  }): Promise<void> {
+    console.log('📝 [API] Creating audit log:', entry);
+    return new Promise(resolve => setTimeout(resolve, 300));
+  }
+
+  /**
+   * Admin: Reset user password
+   */
+  async resetUserPassword(userId: string): Promise<void> {
+    console.log('🔑 [API] Resetting password for user:', userId);
+    return new Promise(resolve => setTimeout(resolve, 300));
+  }
+
+  /**
+   * Admin: Get user KYC documents
+   */
+  async getUserKycDocuments(userId: string): Promise<any[]> {
     const user = mockUsers.find(u => u.id === userId);
     if (!user) throw new Error('User not found');
-    return new Promise(resolve => setTimeout(() => resolve(user.kyc), 300));
+    
+    // Mock KYC documents
+    const documents = [
+      {
+        id: '1',
+        type: 'passport',
+        name: 'Passport Copy',
+        status: 'verified',
+        uploadDate: '2024-01-15',
+        url: '/documents/passport.pdf'
+      },
+      {
+        id: '2',
+        type: 'id_card',
+        name: 'National ID Card',
+        status: 'verified',
+        uploadDate: '2024-01-10',
+        url: '/documents/id_card.pdf'
+      },
+      {
+        id: '3',
+        type: 'proof_of_address',
+        name: 'Proof of Address',
+        status: 'pending',
+        uploadDate: '2024-01-20',
+        url: '/documents/address_proof.pdf'
+      }
+    ];
+    
+    return new Promise(resolve => setTimeout(() => resolve(documents), 300));
   }
+
+  /**
+   * Admin: Get user audit logs
+   */
+  async getUserAuditLogs(userId: string): Promise<any[]> {
+    console.log('📋 [API] Getting audit logs for user:', userId);
+    
+    // Mock audit logs
+    const logs = [
+      {
+        id: '1',
+        action: 'suspend',
+        details: 'User suspended due to policy violation',
+        timestamp: '2024-01-15T10:30:00Z',
+        adminId: 'admin-001'
+      },
+      {
+        id: '2',
+        action: 'kyc_approve',
+        details: 'KYC documents approved',
+        timestamp: '2024-01-14T15:20:00Z',
+        adminId: 'admin-001'
+      },
+      {
+        id: '3',
+        action: 'credit_adjustment',
+        details: 'Credit score increased by 50 points',
+        timestamp: '2024-01-13T09:15:00Z',
+        adminId: 'admin-001'
+      }
+    ];
+    
+    return new Promise(resolve => setTimeout(() => resolve(logs), 300));
+  }
+
+  /**
+   * Admin: Get all users with enhanced data
+   */
+  async getAllUsersEnhanced(): Promise<User[]> {
+    console.log('👥 [API] Getting all enhanced user data...');
+    
+    // Enhanced user data with additional fields
+    const enhancedUsers = mockUsers.map(user => ({
+      ...user,
+      creditScore: user.creditScore || Math.floor(Math.random() * 300) + 400,
+      kycStatus: user.kycStatus || 'Pending',
+      accountType: user.accountType || 'Standard',
+      accountNumber: user.accountNumber || '',
+      lastLogin: user.lastLogin || '2024-01-10T14:30:00Z',
+      registrationDate: user.registrationDate || '2023-06-15T10:00:00Z',
+      documents: user.documents || [],
+      auditLogs: []
+    }));
+    
+    return new Promise(resolve => setTimeout(() => resolve(enhancedUsers), 300));
+  }
+
+  /**
+   * Admin: Suspend user
+   */
+  async suspendUser(userId: string, reason: string): Promise<void> {
+    console.log('🚫 [API] Suspending user:', { userId, reason });
+    const user = mockUsers.find(u => u.id === userId);
+    if (user) {
+      user.status = 'Suspended';
+      user.suspensionReason = reason;
+      user.suspendedAt = new Date().toISOString();
+    }
+    return new Promise(resolve => setTimeout(resolve, 300));
+  }
+
+  /**
+   * Admin: Unsuspend user
+   */
+  async unsuspendUser(userId: string): Promise<void> {
+    console.log('✅ [API] Unsuspending user:', userId);
+    const user = mockUsers.find(u => u.id === userId);
+    if (user) {
+      user.status = 'Active';
+      user.suspensionReason = null;
+      user.suspendedAt = null;
+    }
+    return new Promise(resolve => setTimeout(resolve, 300));
+  }
+
+  /**
+   * Admin: Update KYC status
+   */
+  async updateKycStatus(userId: string, status: string): Promise<void> {
+    console.log('📋 [API] Updating KYC status:', { userId, status });
+    const user = mockUsers.find(u => u.id === userId);
+    if (user) {
+      user.kycStatus = status;
+      user.kycUpdatedAt = new Date().toISOString();
+    }
+    return new Promise(resolve => setTimeout(resolve, 300));
+  }
+
+  /**
+   * Admin: Update credit score
+   */
+  async updateCreditScore(userId: string, score: number): Promise<void> {
+    console.log('📈 [API] Updating credit score:', { userId, score });
+    const user = mockUsers.find(u => u.id === userId);
+    if (user) {
+      user.creditScore = score;
+      user.creditScoreUpdatedAt = new Date().toISOString();
+    }
+    return new Promise(resolve => setTimeout(resolve, 300));
+  }
+
 }
 
 // Export singleton instance

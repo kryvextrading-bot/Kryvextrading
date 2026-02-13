@@ -15,7 +15,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAdmin = false,
   fallbackPath = '/login'
 }) => {
-  const { isAuthenticated, isAdmin, isLoading } = useAuth();
+  const { isAuthenticated, isAdmin, isSuperAdmin, isLoading } = useAuth();
   const location = useLocation();
 
   // Show loading spinner while checking authentication
@@ -39,7 +39,15 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // If user is authenticated but trying to access login/register pages
   if (isAuthenticated && (location.pathname === '/login' || location.pathname === '/register')) {
-    return <Navigate to="/dashboard" replace />;
+    // Redirect admin users to admin dashboard, regular users to regular dashboard
+    const redirectPath = (isAdmin || isSuperAdmin) ? '/admin/dashboard' : '/dashboard';
+    return <Navigate to={redirectPath} replace />;
+  }
+
+  // Special handling for admin dashboard - don't redirect if already on admin route
+  if (isAuthenticated && (isAdmin || isSuperAdmin) && 
+      (location.pathname === '/admin' || location.pathname === '/admin/dashboard')) {
+    return <>{children}</>;
   }
 
   return <>{children}</>;

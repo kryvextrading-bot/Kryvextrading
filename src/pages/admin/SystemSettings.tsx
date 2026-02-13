@@ -529,7 +529,24 @@ export function SystemSettings() {
       setIsLoading(true);
       setValidationErrors({});
       const data = await apiService.getSystemSettings();
-      setSettings(data);
+      // Merge API response with default settings to ensure all properties exist
+      const mergedSettings = {
+        ...defaultSettings,
+        ...(data as any),
+        // Merge nested objects to preserve all properties
+        security: { ...defaultSettings.security, ...(data as any).security },
+        transactions: { ...defaultSettings.transactions, ...(data as any).transactions },
+        notifications: { ...defaultSettings.notifications, ...(data as any).notifications },
+        system: { ...defaultSettings.system, ...(data as any).system },
+        compliance: { ...defaultSettings.compliance, ...(data as any).compliance },
+        trading: { ...defaultSettings.trading, ...(data as any).trading },
+        api: { ...defaultSettings.api, ...(data as any).api },
+        database: { ...defaultSettings.database, ...(data as any).database },
+        integrations: { ...defaultSettings.integrations, ...(data as any).integrations },
+        backup: { ...defaultSettings.backup, ...(data as any).backup },
+        monitoring: { ...defaultSettings.monitoring, ...(data as any).monitoring },
+      };
+      setSettings(mergedSettings);
       setLastSaved(new Date());
       toast({
         title: "Settings Loaded",

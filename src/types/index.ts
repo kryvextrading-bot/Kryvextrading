@@ -3,9 +3,34 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
+  phone?: string;
   isAdmin: boolean;
   kycStatus: 'pending' | 'verified' | 'rejected';
+  status: 'Active' | 'Pending' | 'Suspended';
+  accountType?: string;
+  accountNumber?: string;
+  balance?: number;
+  creditScore?: number;
+  registrationDate?: string;
+  lastLogin?: string;
+  adminRole?: string;
   createdAt: string;
+  documents?: {
+    id: string;
+    name: string;
+    type: string;
+    url: string;
+    uploadedAt: string;
+  }[];
+  kyc?: {
+    documents: {
+      type: string;
+      url: string;
+      uploadedAt: string;
+    }[];
+    submittedAt?: string;
+    verifiedAt?: string;
+  };
 }
 
 export interface CryptoAsset {

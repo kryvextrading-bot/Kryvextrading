@@ -1,6 +1,7 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { useAuth } from '@/contexts/AuthContext';
 import Index from './pages/Index';
 import HomePage from './pages/HomePage';
 import AssetPage from './pages/AssetPage';
@@ -34,6 +35,14 @@ import Security from './pages/Security';
 import PaymentMethods from './pages/PaymentMethods';
 import TransactionHistory from './pages/TransactionHistory';
 import AdminDashboard from './pages/admin/Dashboard';
+import UserDetailsPage from './pages/admin/UserDetailsPage';
+
+// Admin Dashboard Redirect Component
+const AdminDashboardRedirect = () => {
+  const { isAdmin, isSuperAdmin } = useAuth();
+  const redirectPath = (isAdmin || isSuperAdmin) ? '/admin/dashboard' : '/dashboard';
+  return <Navigate to={redirectPath} replace />;
+};
 
 export default function AppRoutes() {
   return (
@@ -74,7 +83,7 @@ export default function AppRoutes() {
       {/* Protected Routes - require authentication */}
       <Route path="/dashboard" element={
         <ProtectedRoute>
-          <Dashboard />
+          <AdminDashboardRedirect />
         </ProtectedRoute>
       } />
       <Route path="/wallet" element={
@@ -149,6 +158,11 @@ export default function AppRoutes() {
       <Route path="/admin/dashboard" element={
         <ProtectedRoute requireAdmin>
           <AdminDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/user/:userId" element={
+        <ProtectedRoute requireAdmin>
+          <UserDetailsPage />
         </ProtectedRoute>
       } />
     </Routes>

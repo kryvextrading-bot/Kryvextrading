@@ -2,6 +2,7 @@ import { Home, TrendingUp, Wallet, User, CreditCard, Settings, Shuffle } from 'l
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/contexts/AuthContext';
 
 const navigationItems = [
   { href: '/', icon: Home, label: 'Home' },
@@ -15,6 +16,12 @@ const navigationItems = [
 export function Navigation() {
   const location = useLocation();
   const { t } = useTranslation();
+  const { isAdmin, isSuperAdmin } = useAuth();
+
+  // Hide navigation for admin users
+  if (isAdmin || isSuperAdmin) {
+    return null;
+  }
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">

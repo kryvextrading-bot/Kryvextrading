@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,14 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/hooks/use-toast';
+import { adminApiService } from '@/services/admin-api';
+import { Slider } from '@/components/ui/slider';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
-import { Slider } from '@/components/ui/slider';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useToast } from '@/hooks/use-toast';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Search, 
   Filter, 
@@ -43,7 +45,6 @@ import {
   EyeOff,
   Gauge,
   LineChart,
-  AreaChart,
   CandlestickChart,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
@@ -160,7 +161,10 @@ import {
   Platinum,
   Titanium,
   Uranium,
-  Plutonium
+  Plutonium,
+  ChevronUp,
+  ChevronDown,
+  Info
 } from 'lucide-react';
 import {
   LineChart as RechartsLineChart,
@@ -293,299 +297,12 @@ interface Alert {
   userId?: string;
 }
 
-// ==================== MOCK DATA ====================
-const mockTrades: Trade[] = [
-  {
-    id: '1',
-    userId: '1',
-    userEmail: 'john.doe@email.com',
-    userName: 'John Doe',
-    asset: 'BTC/USDT',
-    type: 'spot',
-    orderType: 'market',
-    side: 'buy',
-    amount: 0.5,
-    price: 45000,
-    value: 22500,
-    status: 'closed',
-    pnl: 1250,
-    pnlPercentage: 5.56,
-    fee: 45,
-    feeAsset: 'USDT',
-    winRate: 68.5,
-    date: '2024-07-15T14:30:00Z',
-    closedAt: '2024-07-15T15:30:00Z',
-    duration: 3600,
-    volatility: 15.2,
-    sharpeRatio: 1.8,
-    maxDrawdown: -2.5,
-    marketCap: 850000000000,
-    volume24h: 25000000000,
-    change24h: 2.5,
-    riskScore: 25,
-    riskFactors: ['low_liquidity', 'high_volatility'],
-    exchange: 'Binance',
-    executionTime: 150,
-    slippage: 0.05,
-    strategy: 'Momentum',
-    strategyId: 'strat_1',
-    tags: ['momentum', 'breakout'],
-    notes: 'Good entry point'
-  },
-  {
-    id: '2',
-    userId: '2',
-    userEmail: 'jane.smith@email.com',
-    userName: 'Jane Smith',
-    asset: 'ETH/USDT',
-    type: 'futures',
-    orderType: 'limit',
-    side: 'sell',
-    amount: 10,
-    price: 2800,
-    value: 28000,
-    status: 'open',
-    pnl: 0,
-    pnlPercentage: 0,
-    fee: 28,
-    feeAsset: 'USDT',
-    winRate: 58.3,
-    date: '2024-07-15T15:45:00Z',
-    duration: 1800,
-    leverage: 10,
-    liquidationPrice: 3080,
-    margin: 2800,
-    stopLoss: 2900,
-    takeProfit: 2600,
-    volatility: 18.5,
-    sharpeRatio: 1.2,
-    maxDrawdown: -3.8,
-    marketCap: 380000000000,
-    volume24h: 15000000000,
-    change24h: -1.2,
-    riskScore: 45,
-    riskFactors: ['high_leverage', 'high_volatility'],
-    exchange: 'Bybit',
-    executionTime: 200,
-    slippage: 0.1,
-    strategy: 'Trend Following',
-    strategyId: 'strat_2',
-    tags: ['futures', 'leverage'],
-    notes: 'Waiting for pullback'
-  },
-  {
-    id: '3',
-    userId: '3',
-    userEmail: 'michael.johnson@email.com',
-    userName: 'Michael Johnson',
-    asset: 'BTC/USDT',
-    type: 'options',
-    orderType: 'market',
-    side: 'buy',
-    amount: 1,
-    price: 46000,
-    value: 46000,
-    status: 'closed',
-    pnl: -2300,
-    pnlPercentage: -5,
-    fee: 92,
-    feeAsset: 'USDT',
-    winRate: 45.2,
-    date: '2024-07-15T16:20:00Z',
-    closedAt: '2024-07-15T18:20:00Z',
-    duration: 7200,
-    volatility: 22.5,
-    sharpeRatio: 0.8,
-    maxDrawdown: -5.2,
-    marketCap: 850000000000,
-    volume24h: 25000000000,
-    change24h: 1.8,
-    riskScore: 65,
-    riskFactors: ['options_decay', 'high_volatility'],
-    exchange: 'Deribit',
-    executionTime: 180,
-    slippage: 0.15,
-    strategy: 'Options Spread',
-    strategyId: 'strat_3',
-    tags: ['options', 'theta_decay'],
-    notes: 'IV crush'
-  },
-  {
-    id: '4',
-    userId: '4',
-    userEmail: 'sarah.williams@email.com',
-    userName: 'Sarah Williams',
-    asset: 'SOL/USDT',
-    type: 'spot',
-    orderType: 'market',
-    side: 'buy',
-    amount: 100,
-    price: 150,
-    value: 15000,
-    status: 'closed',
-    pnl: 2250,
-    pnlPercentage: 15,
-    fee: 30,
-    feeAsset: 'USDT',
-    winRate: 72.5,
-    date: '2024-07-14T10:00:00Z',
-    closedAt: '2024-07-15T10:00:00Z',
-    duration: 86400,
-    volatility: 25.8,
-    sharpeRatio: 2.1,
-    maxDrawdown: -1.2,
-    marketCap: 65000000000,
-    volume24h: 3500000000,
-    change24h: 8.5,
-    riskScore: 35,
-    riskFactors: ['high_volatility'],
-    exchange: 'Coinbase',
-    executionTime: 120,
-    slippage: 0.03,
-    strategy: 'Breakout',
-    strategyId: 'strat_4',
-    tags: ['breakout', 'momentum'],
-    notes: 'Strong trend'
-  },
-  {
-    id: '5',
-    userId: '5',
-    userEmail: 'robert.brown@email.com',
-    userName: 'Robert Brown',
-    asset: 'BNB/USDT',
-    type: 'futures',
-    orderType: 'stop',
-    side: 'sell',
-    amount: 50,
-    price: 500,
-    value: 25000,
-    status: 'cancelled',
-    pnl: 0,
-    pnlPercentage: 0,
-    fee: 0,
-    feeAsset: 'USDT',
-    winRate: 52.8,
-    date: '2024-07-15T09:15:00Z',
-    duration: 0,
-    leverage: 5,
-    liquidationPrice: 550,
-    margin: 5000,
-    stopLoss: 520,
-    takeProfit: 450,
-    volatility: 12.5,
-    sharpeRatio: 1.4,
-    maxDrawdown: -2.8,
-    marketCap: 85000000000,
-    volume24h: 1800000000,
-    change24h: -0.5,
-    riskScore: 30,
-    riskFactors: ['low_liquidity'],
-    exchange: 'Binance',
-    executionTime: 0,
-    slippage: 0,
-    strategy: 'Range Trading',
-    strategyId: 'strat_5',
-    tags: ['cancelled', 'stop_order'],
-    notes: 'Order cancelled by user'
-  }
-];
 
-const mockAssetDistribution = [
-  { name: 'BTC', value: 45, color: '#F0B90B' },
-  { name: 'ETH', value: 30, color: '#627EEA' },
-  { name: 'SOL', value: 12, color: '#00FFA3' },
-  { name: 'BNB', value: 8, color: '#F3BA2F' },
-  { name: 'Others', value: 5, color: '#848E9C' }
-];
 
-const mockPnLTrend = [
-  { date: '2024-07-09', pnl: 5000, cumulative: 5000 },
-  { date: '2024-07-10', pnl: 7500, cumulative: 12500 },
-  { date: '2024-07-11', pnl: 6200, cumulative: 18700 },
-  { date: '2024-07-12', pnl: 8900, cumulative: 27600 },
-  { date: '2024-07-13', pnl: 11200, cumulative: 38800 },
-  { date: '2024-07-14', pnl: 9800, cumulative: 48600 },
-  { date: '2024-07-15', pnl: 13450, cumulative: 62050 }
-];
 
-const mockVolumeTrend = [
-  { date: '2024-07-09', volume: 25000000 },
-  { date: '2024-07-10', volume: 32000000 },
-  { date: '2024-07-11', volume: 28000000 },
-  { date: '2024-07-12', volume: 45000000 },
-  { date: '2024-07-13', volume: 52000000 },
-  { date: '2024-07-14', volume: 48000000 },
-  { date: '2024-07-15', volume: 68000000 }
-];
 
-const mockMarketConditions: MarketCondition[] = [
-  {
-    asset: 'BTC/USDT',
-    volatility: 'medium',
-    liquidity: 'high',
-    spread: 0.01,
-    volume24h: 25000000000,
-    priceChange24h: 2.5,
-    trend: 'bullish',
-    support: 44000,
-    resistance: 47000,
-    rsi: 65,
-    macd: 'bullish'
-  },
-  {
-    asset: 'ETH/USDT',
-    volatility: 'high',
-    liquidity: 'high',
-    spread: 0.02,
-    volume24h: 15000000000,
-    priceChange24h: -1.2,
-    trend: 'bearish',
-    support: 2700,
-    resistance: 2900,
-    rsi: 42,
-    macd: 'bearish'
-  },
-  {
-    asset: 'SOL/USDT',
-    volatility: 'high',
-    liquidity: 'medium',
-    spread: 0.05,
-    volume24h: 3500000000,
-    priceChange24h: 8.5,
-    trend: 'bullish',
-    support: 140,
-    resistance: 160,
-    rsi: 72,
-    macd: 'bullish'
-  }
-];
 
-const mockAlerts: Alert[] = [
-  {
-    id: '1',
-    type: 'critical',
-    message: 'Unusual trading pattern detected: 50+ trades in 1 minute from user 123',
-    timestamp: new Date().toISOString(),
-    acknowledged: false,
-    userId: '123'
-  },
-  {
-    id: '2',
-    type: 'warning',
-    message: 'Large order detected: 500 BTC sell order on Binance',
-    timestamp: new Date(Date.now() - 3600000).toISOString(),
-    acknowledged: false,
-    tradeId: '456'
-  },
-  {
-    id: '3',
-    type: 'info',
-    message: 'New trading strategy deployed: Momentum v2',
-    timestamp: new Date(Date.now() - 7200000).toISOString(),
-    acknowledged: true
-  }
-];
-
+    
 // ==================== HELPER FUNCTIONS ====================
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('en-US', {
@@ -762,7 +479,17 @@ const MarketConditionsCard = ({ condition }: { condition: MarketCondition }) => 
 );
 
 // ==================== ALERT BANNER COMPONENT ====================
-const AlertBanner = ({ alert, onDismiss }: { alert: Alert; onDismiss: () => void }) => (
+const AlertBanner = ({ 
+  alert, 
+  onDismiss, 
+  onViewUser, 
+  onViewTrade 
+}: { 
+  alert: Alert; 
+  onDismiss: () => void;
+  onViewUser?: (userId: string) => void;
+  onViewTrade?: (tradeId: string) => void;
+}) => (
   <motion.div
     initial={{ opacity: 0, y: -20 }}
     animate={{ opacity: 1, y: 0 }}
@@ -790,19 +517,29 @@ const AlertBanner = ({ alert, onDismiss }: { alert: Alert; onDismiss: () => void
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {alert.userId && (
-          <Button size="sm" variant="outline" className="h-7 text-xs border-[#2B3139]">
+        {alert.userId && onViewUser && (
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="h-7 text-xs border-[#2B3139] hover:bg-[#F0B90B] hover:text-black transition-colors"
+            onClick={() => onViewUser(alert.userId!)}
+          >
             <Eye className="w-3 h-3 mr-1" />
             View User
           </Button>
         )}
-        {alert.tradeId && (
-          <Button size="sm" variant="outline" className="h-7 text-xs border-[#2B3139]">
+        {alert.tradeId && onViewTrade && (
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="h-7 text-xs border-[#2B3139] hover:bg-[#F0B90B] hover:text-black transition-colors"
+            onClick={() => onViewTrade(alert.tradeId!)}
+          >
             <Eye className="w-3 h-3 mr-1" />
             View Trade
           </Button>
         )}
-        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={onDismiss}>
+        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 hover:bg-red-500/20" onClick={onDismiss}>
           <XCircle className="w-4 h-4" />
         </Button>
       </div>
@@ -1367,10 +1104,11 @@ const CircuitBreakerControls = () => {
 // ==================== MAIN COMPONENT ====================
 export default function TradingAdminPanel() {
   const { toast } = useToast();
-  const [trades, setTrades] = useState<Trade[]>(mockTrades);
-  const [filteredTrades, setFilteredTrades] = useState<Trade[]>(mockTrades);
-  const [alerts, setAlerts] = useState<Alert[]>(mockAlerts);
-  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [filteredTrades, setFilteredTrades] = useState<Trade[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAsset, setSelectedAsset] = useState('all');
   const [selectedUser, setSelectedUser] = useState('all');
@@ -1382,25 +1120,198 @@ export default function TradingAdminPanel() {
   const [showTradeDetails, setShowTradeDetails] = useState(false);
   const [liveUpdates, setLiveUpdates] = useState(true);
 
+  // Navigation handlers
+  const handleViewUser = (userId: string) => {
+    toast({
+      title: "Navigating to User Management",
+      description: "Opening user details...",
+    });
+    navigate(`/admin/dashboard?tab=users&userId=${userId}`);
+  };
+
+  const handleViewTrade = (tradeId: string) => {
+    toast({
+      title: "Navigating to Trading Panel",
+      description: "Opening trade details...",
+    });
+    navigate(`/admin/dashboard?tab=trading&tradeId=${tradeId}`);
+  };
+
+  // Load real trading data
+  const loadTradingData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load data from API
+      const [ordersData, positionsData, usersData] = await Promise.all([
+        adminApiService.getOrders(),
+        adminApiService.getPositions(),
+        adminApiService.getUsers()
+      ]);
+      
+      // Transform orders and positions into trade format
+      const transformedTrades: Trade[] = [
+        ...ordersData.map(order => ({
+          id: order.id,
+          userId: order.user_id,
+          userEmail: '', // Will be filled from user data
+          userName: '', // Will be filled from user data
+          type: 'spot' as const, // Map order type to trade type
+          side: order.side,
+          asset: order.symbol,
+          amount: order.amount,
+          price: order.price || 0,
+          value: order.executed_value || (order.amount * (order.price || 0)),
+          status: (order.status === 'open' ? 'open' : order.status === 'closed' ? 'closed' : order.status === 'cancelled' ? 'cancelled' : order.status === 'expired' ? 'expired' : 'open') as 'open' | 'closed' | 'cancelled' | 'expired',
+          pnl: 0, // Orders don't have P&L
+          pnlPercentage: 0,
+          fee: order.fee,
+          feeAsset: order.fee_asset || 'USDT',
+          winRate: 0,
+          closedAt: order.executed_at,
+          duration: 0,
+          volatility: 0,
+          sharpeRatio: 0,
+          maxDrawdown: 0,
+          marketCap: 0,
+          volume24h: 0,
+          change24h: 0,
+          riskScore: 0,
+          riskFactors: [],
+          exchange: 'Kryvex',
+          executionTime: 0,
+          slippage: 0,
+          strategy: 'Manual',
+          strategyId: '',
+          tags: [],
+          notes: '',
+          orderType: (order.type === 'stop_limit' ? 'stop-limit' : order.type) as 'market' | 'limit' | 'stop' | 'stop-limit',
+          leverage: order.leverage,
+          takeProfit: order.take_profit,
+          stopLoss: order.stop_loss,
+          liquidationPrice: order.liquidation_price,
+          margin: order.margin,
+          filledAmount: order.filled_amount,
+          date: order.created_at, // Add missing date property
+          createdAt: order.created_at,
+          updatedAt: order.updated_at
+        })),
+        ...positionsData.map(position => ({
+          id: position.id,
+          userId: position.user_id,
+          userEmail: '', // Will be filled from user data
+          userName: '', // Will be filled from user data
+          type: 'futures' as const, // Map position to futures type
+          side: position.side,
+          asset: position.symbol,
+          amount: position.quantity,
+          price: position.entry_price,
+          value: position.quantity * position.entry_price,
+          status: position.status,
+          pnl: position.unrealized_pnl + position.realized_pnl,
+          pnlPercentage: position.entry_price > 0 ? ((position.unrealized_pnl + position.realized_pnl) / (position.quantity * position.entry_price)) * 100 : 0,
+          fee: 0,
+          feeAsset: 'USDT',
+          winRate: 0,
+          closedAt: position.closed_at,
+          duration: position.opened_at ? Math.floor((new Date().getTime() - new Date(position.opened_at).getTime()) / (1000 * 60 * 60 * 24)) : 0,
+          volatility: 0,
+          sharpeRatio: 0,
+          maxDrawdown: 0,
+          marketCap: 0,
+          volume24h: 0,
+          change24h: 0,
+          riskScore: 0,
+          riskFactors: [],
+          exchange: 'Kryvex',
+          executionTime: 0,
+          slippage: 0,
+          strategy: 'Position Trading',
+          strategyId: '',
+          tags: [],
+          notes: '',
+          orderType: 'market',
+          leverage: position.leverage,
+          takeProfit: 0,
+          stopLoss: 0,
+          liquidationPrice: position.liquidation_price,
+          margin: position.margin,
+          filledAmount: position.quantity,
+          date: position.created_at, // Add missing date property
+          createdAt: position.created_at,
+          updatedAt: position.updated_at
+        }))
+      ];
+      
+      // Enhance trades with user information
+      const enhancedTrades = transformedTrades.map(trade => {
+        const user = usersData.find(u => u.id === trade.userId);
+        return {
+          ...trade,
+          userName: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email.split('@')[0] : 'Unknown User',
+          userEmail: user?.email || 'unknown@example.com'
+        };
+      });
+
+      setTrades(enhancedTrades);
+      setFilteredTrades(enhancedTrades);
+      setAlerts([]); // No alerts from API yet
+      
+      toast({
+        title: "Data Loaded",
+        description: `Loaded ${enhancedTrades.length} trading records`,
+      });
+    } catch (error) {
+      console.error('Failed to load trading data:', error);
+      setTrades([]);
+      setFilteredTrades([]);
+      setAlerts([]);
+      toast({
+        title: "No Data Available",
+        description: "Could not load trading data",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load data on component mount
+  useEffect(() => {
+    loadTradingData();
+  }, []);
+
   // Calculate statistics
   const stats: TradingStats = {
     totalTrades: trades.length,
     totalVolume: trades.reduce((sum, t) => sum + t.value, 0),
     totalPnL: trades.filter(t => t.status === 'closed').reduce((sum, t) => sum + t.pnl, 0),
     totalFees: trades.reduce((sum, t) => sum + t.fee, 0),
-    winRate: trades.filter(t => t.status === 'closed' && t.pnl > 0).length / trades.filter(t => t.status === 'closed').length * 100,
+    winRate: trades.filter(t => t.status === 'closed').length > 0 
+      ? (trades.filter(t => t.status === 'closed' && t.pnl > 0).length / trades.filter(t => t.status === 'closed').length) * 100 
+      : 0,
     openPositions: trades.filter(t => t.status === 'open').length,
-    averageTradeSize: trades.reduce((sum, t) => sum + t.value, 0) / trades.length,
-    averageDuration: trades.filter(t => t.duration).reduce((sum, t) => sum + (t.duration || 0), 0) / trades.filter(t => t.duration).length,
-    bestTrade: trades.reduce((prev, curr) => (prev.pnl > curr.pnl) ? prev : curr),
-    worstTrade: trades.reduce((prev, curr) => (prev.pnl < curr.pnl) ? prev : curr),
-    profitFactor: trades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0) / Math.abs(trades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0)),
+    averageTradeSize: trades.length > 0 ? trades.reduce((sum, t) => sum + t.value, 0) / trades.length : 0,
+    averageDuration: trades.filter(t => t.duration).length > 0 
+      ? trades.filter(t => t.duration).reduce((sum, t) => sum + (t.duration || 0), 0) / trades.filter(t => t.duration).length 
+      : 0,
+    bestTrade: trades.length > 0 ? trades.reduce((prev, curr) => (prev.pnl > curr.pnl) ? prev : curr, trades[0]) : null,
+    worstTrade: trades.length > 0 ? trades.reduce((prev, curr) => (prev.pnl < curr.pnl) ? prev : curr, trades[0]) : null,
+    profitFactor: trades.filter(t => t.pnl > 0).length > 0 && trades.filter(t => t.pnl < 0).length > 0
+      ? trades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0) / Math.abs(trades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0))
+      : 0,
     sharpeRatio: 1.5, // Calculated from historical data
     maxDrawdown: -15.2,
     recoveryFactor: 1.8,
-    winLossRatio: trades.filter(t => t.pnl > 0).length / trades.filter(t => t.pnl < 0).length,
-    averageWin: trades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0) / trades.filter(t => t.pnl > 0).length,
-    averageLoss: Math.abs(trades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0) / trades.filter(t => t.pnl < 0).length),
+    winLossRatio: trades.filter(t => t.pnl > 0).length > 0 && trades.filter(t => t.pnl < 0).length > 0
+      ? trades.filter(t => t.pnl > 0).length / trades.filter(t => t.pnl < 0).length
+      : 0,
+    averageWin: trades.filter(t => t.pnl > 0).length > 0 
+      ? trades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0) / trades.filter(t => t.pnl > 0).length 
+      : 0,
+    averageLoss: trades.filter(t => t.pnl < 0).length > 0 
+      ? Math.abs(trades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0) / trades.filter(t => t.pnl < 0).length)
+      : 0,
     consecutiveWins: 5,
     consecutiveLosses: 2
   };
@@ -1576,7 +1487,13 @@ export default function TradingAdminPanel() {
       {/* Alerts */}
       <AnimatePresence>
         {alerts.map(alert => (
-          <AlertBanner key={alert.id} alert={alert} onDismiss={() => acknowledgeAlert(alert.id)} />
+          <AlertBanner 
+            key={alert.id} 
+            alert={alert} 
+            onDismiss={() => acknowledgeAlert(alert.id)}
+            onViewUser={handleViewUser}
+            onViewTrade={handleViewTrade}
+          />
         ))}
       </AnimatePresence>
 
@@ -1651,7 +1568,7 @@ export default function TradingAdminPanel() {
       {/* Advanced Monitoring Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ManipulationDetectionCard trades={trades} />
-        <LiquidityMonitoringCard marketConditions={mockMarketConditions} />
+        <LiquidityMonitoringCard marketConditions={[]} />
         <PriceImpactAnalyzer trades={trades} />
         <CircuitBreakerControls />
       </div>
@@ -1666,7 +1583,7 @@ export default function TradingAdminPanel() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {mockMarketConditions.map((condition, i) => (
+            {[].map((condition, i) => (
               <MarketConditionsCard key={i} condition={condition} />
             ))}
           </div>
@@ -1685,7 +1602,7 @@ export default function TradingAdminPanel() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={mockPnLTrend}>
+              <AreaChart data={[]}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#2B3139" />
                 <XAxis dataKey="date" stroke="#848E9C" />
                 <YAxis stroke="#848E9C" />
@@ -1725,7 +1642,7 @@ export default function TradingAdminPanel() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={mockVolumeTrend}>
+              <BarChart data={[]}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#2B3139" />
                 <XAxis dataKey="date" stroke="#848E9C" />
                 <YAxis stroke="#848E9C" />
@@ -1751,17 +1668,17 @@ export default function TradingAdminPanel() {
             <ResponsiveContainer width="100%" height={300}>
               <RechartsPieChart>
                 <Pie
-                  data={mockAssetDistribution}
+                  data={[]}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  label={(entry) => entry.name}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {mockAssetDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  {[].map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color || '#848E9C'} />
                   ))}
                 </Pie>
                 <Tooltip 
@@ -1920,10 +1837,24 @@ export default function TradingAdminPanel() {
       {/* Trades Table */}
       <Card className="bg-[#1E2329] border border-[#2B3139]">
         <CardHeader>
-          <CardTitle className="text-[#EAECEF]">Trading Activity</CardTitle>
-          <CardDescription className="text-[#848E9C]">
-            Showing {filteredTrades.length} of {trades.length} trades
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-[#EAECEF]">Trading Activity</CardTitle>
+              <CardDescription className="text-[#848E9C]">
+                Showing {filteredTrades.length} of {trades.length} trades
+              </CardDescription>
+            </div>
+            <Button 
+              onClick={loadTradingData}
+              disabled={loading}
+              variant="outline"
+              size="sm"
+              className="border-[#2B3139] text-[#848E9C] hover:border-[#F0B90B] hover:text-[#F0B90B]"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -1956,34 +1887,34 @@ export default function TradingAdminPanel() {
                     </TableCell>
                     <TableCell className="text-[#EAECEF] font-medium">{trade.asset}</TableCell>
                     <TableCell>
-                      <Badge className={getTypeColor(trade.type)}>
-                        {trade.type}
+                      <Badge className={getTypeColor(trade.type || 'unknown')}>
+                        {trade.type || 'Unknown'}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getSideColor(trade.side)}>
-                        {trade.side.toUpperCase()}
+                      <Badge className={getSideColor(trade.side || 'unknown')}>
+                        {(trade.side || 'unknown').toUpperCase()}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-[#EAECEF]">{trade.amount}</TableCell>
-                    <TableCell className="text-[#EAECEF]">${trade.price.toLocaleString()}</TableCell>
-                    <TableCell className="text-[#EAECEF]">${trade.value.toLocaleString()}</TableCell>
+                    <TableCell className="text-[#EAECEF]">{trade.amount || '0'}</TableCell>
+                    <TableCell className="text-[#EAECEF]">${(trade.price || 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-[#EAECEF]">${(trade.value || 0).toLocaleString()}</TableCell>
                     <TableCell>
-                      <Badge className={getStatusColor(trade.status)}>
-                        {trade.status}
+                      <Badge className={getStatusColor(trade.status || 'unknown')}>
+                        {trade.status || 'Unknown'}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       {trade.status === 'closed' ? (
-                        <span className={`font-medium ${getPnLColor(trade.pnl)}`}>
-                          {trade.pnl >= 0 ? '+' : ''}${trade.pnl.toLocaleString()}
+                        <span className={`font-medium ${getPnLColor(trade.pnl || 0)}`}>
+                          {(trade.pnl || 0) >= 0 ? '+' : ''}${(trade.pnl || 0).toLocaleString()}
                         </span>
                       ) : (
                         <span className="text-[#848E9C]">-</span>
                       )}
                     </TableCell>
                     <TableCell className="text-[#848E9C] text-sm">
-                      {new Date(trade.date).toLocaleDateString()}
+                      {trade.date ? new Date(trade.date).toLocaleDateString() : 'Unknown'}
                     </TableCell>
                     <TableCell>
                       <Button

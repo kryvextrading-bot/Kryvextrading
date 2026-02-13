@@ -2,7 +2,7 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-export function Table({ className, ...props }: any) {
+function Table({ className, ...props }: any) {
   return <table className={`w-full text-left text-white text-base bg-[#181A20] border border-[#23262F] rounded-lg shadow-lg ${className || ''}`} {...props} />;
 }
 
