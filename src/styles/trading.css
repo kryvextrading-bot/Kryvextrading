@@ -1,0 +1,27 @@
+/* Custom scrollbar styles for trading components */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #1E2329;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #2B3139;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #F0B90B;
+}
+
+/* TradingView widget container */
+.tradingview-widget-container {
+  height: 500px;
+  width: 100%;
+  min-width: 320px;
+  background: #181A20;
+  border-radius: 12px;
+  overflow: hidden;
+}
