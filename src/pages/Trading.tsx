@@ -708,22 +708,28 @@ export default function Trading() {
                   <Settings size={20} className="text-[#848E9C]" />
                 </button>
               </div>
+            </div>
+            
+            {/* Mobile Tabs */}
+            <div className="mt-3">
+              <Tabs value={tab} onValueChange={v => setTab(v as any)} className="w-full">
+                <TabsList className="grid grid-cols-3 w-full bg-[#1E2329] p-1 rounded-xl">
+                  <TabsTrigger value="spot" className="text-sm md:text-base data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg">
+                    Spot
+                  </TabsTrigger>
+                  <TabsTrigger value="futures" className="text-sm md:text-base data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg">
+                    Futures
+                  </TabsTrigger>
+                  <TabsTrigger value="option" className="text-sm md:text-base data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg">
+                    Option
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="container mx-auto px-3 py-4">
-        {/* Pair Selector Modal */}
-        <EnhancedPairSelectorModal
-          open={pairSelectorOpen}
-          onClose={() => setPairSelectorOpen(false)}
-          currentTab={getCurrentTab()}
-          onSelectPair={pair => {
-            if (tab === 'spot') setSpotPair(pair.name);
-            if (tab === 'futures') setFuturesPair(pair.name);
-            if (tab === 'option') setOptionsPair(pair.name);
-          }}
-        />
+        <div className="container mx-auto px-3 py-4">
           {/* Pair Selector Modal */}
           <EnhancedPairSelectorModal
             open={pairSelectorOpen}
@@ -1258,7 +1264,7 @@ export default function Trading() {
               <div className="lg:hidden">
                 {/* Demo Mode Banner for Unauthenticated Users */}
                 {!isAuthenticated && (
-                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mx-3 md:mx-0 mb-4">
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-4">
                     <div className="flex items-center gap-3">
                       <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0" />
                       <div>
@@ -1279,23 +1285,7 @@ export default function Trading() {
                 )}
               </div>
             </div>
-
-            {/* Mobile Tabs */}
-            <div className="mt-3">
-              <Tabs value={tab} onValueChange={v => setTab(v as any)} className="w-full">
-                <TabsList className="grid grid-cols-3 w-full bg-[#1E2329] p-1 rounded-xl">
-                  <TabsTrigger value="spot" className="text-sm md:text-base data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg">
-                    Spot
-                  </TabsTrigger>
-                  <TabsTrigger value="futures" className="text-sm md:text-base data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg">
-                    Futures
-                  </TabsTrigger>
-                  <TabsTrigger value="option" className="text-sm md:text-base data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg">
-                    Option
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
+          </div>
 
           {/* Order Management Section */}
           <div className="mt-6 order-4">
@@ -1547,7 +1537,6 @@ export default function Trading() {
           </div>
         </div>
       </div>
-    </div>
     </ErrorBoundary>
   );
 }

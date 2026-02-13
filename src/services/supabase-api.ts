@@ -35,6 +35,13 @@ class SupabaseApiService {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
+          data: userData,
+          // Disable email confirmation for development
+          options: {
+            data: userData,
+            // Skip email confirmation for development
+            emailRedirectTo: undefined
+          }
         });
         
         if (error) {
@@ -55,8 +62,8 @@ class SupabaseApiService {
             first_name: userData.first_name || '',
             last_name: userData.last_name || '',
             phone: userData.phone || '',
-            status: 'Pending',
-            kyc_status: 'Pending',
+            status: 'Active', // Set to Active instead of Pending (bypasses email confirmation)
+            kyc_status: 'Verified', // Set to Verified (bypasses email confirmation)
             account_type: userData.account_type || 'Traditional IRA',
             account_number: `IRA-2024-${Date.now()}`,
             balance: 0,
