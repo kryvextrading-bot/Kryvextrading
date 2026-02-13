@@ -123,8 +123,8 @@ export default function Register() {
     
     try {
       await register({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
         email: formData.email,
         phone: '',
       });
@@ -485,7 +485,7 @@ export default function Register() {
       </motion.div>
 
       {/* Mobile Optimization Styles */}
-      <style jsx>{`
+      <style>{`
         @media (max-width: 640px) {
           input, select, button {
             font-size: 16px !important; /* Prevents zoom on mobile */
