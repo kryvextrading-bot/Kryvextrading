@@ -283,7 +283,7 @@ export default function ArbitragePage() {
     if (!isAuthenticated) {
       toast({ 
         title: '🔒 Authentication Required', 
-        description: 'Please login to place real arbitrage trades. You can use demo mode to practice.', 
+        description: 'Please login to place arbitrage trades.', 
         variant: 'destructive' 
       });
       return;
@@ -350,7 +350,7 @@ export default function ArbitragePage() {
     if (!isAuthenticated) {
       toast({ 
         title: '🔒 Authentication Required', 
-        description: 'Please login to place real staking investments. You can use demo mode to practice.', 
+        description: 'Please login to place staking investments.', 
         variant: 'destructive' 
       });
       return;
@@ -409,7 +409,7 @@ export default function ArbitragePage() {
     if (!isAuthenticated) {
       toast({ 
         title: '🔒 Authentication Required', 
-        description: 'Please login to place real trades. You can use demo mode to practice.', 
+        description: 'Please login to place trades.', 
         variant: 'destructive' 
       });
       return;
@@ -1101,115 +1101,6 @@ export default function ArbitragePage() {
           </Tabs>
         </Card>
 
-        {/* Live Arbitrage Opportunities */}
-        <Card className="bg-[#23262F] rounded-2xl shadow border border-[#2B3139] p-4 lg:p-6 mb-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-8 h-8 rounded-full bg-[#F0B90B]/20 flex items-center justify-center">
-              <FaExchangeAlt className="text-[#F0B90B]" />
-            </div>
-            <h2 className="text-lg lg:text-xl font-bold text-[#EAECEF]">Live Arbitrage Opportunities</h2>
-            {loading ? (
-              <div className="flex items-center gap-2 text-[#848E9C]">
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#F0B90B] border-t-transparent" />
-                <span className="text-sm">Updating...</span>
-              </div>
-            ) : (
-              <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                {opportunities.length} Active
-              </Badge>
-            )}
-          </div>
-
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#F0B90B] border-t-transparent" />
-            </div>
-          ) : opportunities.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-4xl mb-3">🔄</div>
-              <div className="text-[#848E9C]">No arbitrage opportunities at the moment</div>
-              <div className="text-xs text-[#5E6673] mt-2">Checking every 30 seconds...</div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {opportunities.map((opp) => (
-                <motion.div
-                  key={opp.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-[#181A20] rounded-xl p-4 border border-[#2B3139] hover:border-[#F0B90B]/50 transition-all"
-                >
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="font-bold text-[#EAECEF]">{opp.pair}</span>
-                        <Badge className="bg-[#F0B90B]/20 text-[#F0B90B] border-[#F0B90B]/30">
-                          Spread ${opp.diff.toFixed(2)}
-                        </Badge>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 text-xs">
-                        <div>
-                          <span className="text-[#848E9C]">Buy</span>
-                          <div className="font-medium text-green-500">{opp.exchangeA}</div>
-                          <div className="text-[#EAECEF]">${opp.priceA.toFixed(2)}</div>
-                        </div>
-                        <div>
-                          <span className="text-[#848E9C]">Sell</span>
-                          <div className="font-medium text-red-500">{opp.exchangeB}</div>
-                          <div className="text-[#EAECEF]">${opp.priceB.toFixed(2)}</div>
-                        </div>
-                      </div>
-                      <div className="mt-2 text-xs">
-                        <span className="text-[#848E9C]">Liquidity</span>
-                        <span className="ml-2 text-[#EAECEF]">{opp.liquidity} {opp.pair.replace('USDT', '')}</span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <div className="text-right">
-                        <div className="text-xs text-[#848E9C]">Est. Profit</div>
-                        <div className="text-lg font-bold text-green-400">${(opp.diff * opp.liquidity).toFixed(2)}</div>
-                      </div>
-                      <Button
-                        onClick={() => handleArb(opp)}
-                        disabled={executing}
-                        className="w-full md:w-auto bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20] font-bold px-6 py-2 rounded-xl"
-                      >
-                        {executing ? (
-                          <div className="flex items-center gap-2">
-                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#181A20] border-t-transparent" />
-                            Executing...
-                          </div>
-                        ) : (
-                          'Execute'
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-          
-          {message && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`mt-4 p-3 rounded-lg border ${
-                messageType === 'success' ? 'bg-green-500/20 border-green-500/30 text-green-400' :
-                messageType === 'error' ? 'bg-red-500/20 border-red-500/30 text-red-400' :
-                'bg-blue-500/20 border-blue-500/30 text-blue-400'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                {messageType === 'success' && <CheckCircle size={16} />}
-                {messageType === 'error' && <AlertTriangle size={16} />}
-                {messageType === 'info' && <Zap size={16} />}
-                {message}
-              </div>
-            </motion.div>
-          )}
-        </Card>
-
         {/* Arbitrage History */}
         <Card className="bg-[#23262F] rounded-2xl shadow border border-[#2B3139] p-4 lg:p-6">
           <div className="flex items-center gap-3 mb-4">
@@ -1421,16 +1312,33 @@ export default function ArbitragePage() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-3 mb-3">
                           <div className="bg-[#23262F] rounded-lg p-2">
                             <div className="text-xs text-[#848E9C] mb-1">Amount</div>
                             <div className="font-semibold text-[#EAECEF] text-sm">${t.amount.toLocaleString()}</div>
                           </div>
                           <div className="bg-[#23262F] rounded-lg p-2">
+                            <div className="text-xs text-[#848E9C] mb-1">Price</div>
+                            <div className="font-semibold text-[#EAECEF] text-sm">${t.details?.price || 'N/A'}</div>
+                          </div>
+                          <div className="bg-[#23262F] rounded-lg p-2">
                             <div className="text-xs text-[#848E9C] mb-1">Date</div>
                             <div className="font-semibold text-[#EAECEF] text-sm">{new Date(t.date).toLocaleDateString()}</div>
                           </div>
+                          <div className="bg-[#23262F] rounded-lg p-2">
+                            <div className="text-xs text-[#848E9C] mb-1">Time</div>
+                            <div className="font-semibold text-[#EAECEF] text-sm">{new Date(t.date).toLocaleTimeString()}</div>
+                          </div>
                         </div>
+
+                        {t.pnl !== undefined && (
+                          <div className="flex justify-between items-center pt-3 border-t border-[#2B3139]">
+                            <div className="text-xs text-[#848E9C]">Result</div>
+                            <div className={`font-bold text-sm ${t.pnl > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {t.pnl > 0 ? '+' : ''}${Math.abs(t.pnl).toFixed(2)}
+                            </div>
+                          </div>
+                        )}
                       </motion.div>
                     ))}
                   </div>
@@ -1442,194 +1350,170 @@ export default function ArbitragePage() {
       </div>
 
       {/* Records Modal */}
-      <Dialog open={recordsOpen} onClose={() => setRecordsOpen(false)} className="fixed z-50 inset-0 flex items-center justify-center">
-        <div className="fixed inset-0 bg-black/80" aria-hidden="true" />
-        <div className="relative bg-[#23262F] rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-hidden border border-[#2B3139]">
-          <div className="sticky top-0 bg-[#23262F] border-b border-[#2B3139] p-4 flex items-center justify-between">
-            <h2 className="text-xl font-bold text-[#F0B90B]">Transaction Records</h2>
-            <button
-              className="p-2 hover:bg-[#2B3139] rounded-lg transition-colors"
-              onClick={() => setRecordsOpen(false)}
-              aria-label="Close"
-            >
-              <X size={20} className="text-[#848E9C]" />
-            </button>
-          </div>
-          
-          <div className="p-4">
-            <div className="flex justify-around gap-2 mb-6 bg-[#181A20] p-1 rounded-xl">
-              {['arbitrage', 'staking', 'quant'].map((tab) => (
-                <button
-                  key={tab}
-                  className={`flex-1 py-2.5 px-1 rounded-lg font-bold text-sm transition-all ${
-                    recordsTab === tab 
-                      ? 'bg-[#F0B90B] text-[#181A20]' 
-                      : 'text-[#848E9C] hover:text-[#EAECEF]'
-                  }`}
-                  onClick={() => setRecordsTab(tab)}
-                >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </button>
-              ))}
+      <Dialog open={recordsOpen} onClose={() => setRecordsOpen(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="bg-[#1E2329] border-[#F0B90B] max-w-4xl w-full max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-[#2B3139]">
+              <h2 className="text-xl font-bold text-[#EAECEF]">Trading Records</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setRecordsOpen(false)}
+                className="text-[#848E9C] hover:text-[#EAECEF]"
+              >
+                <X size={20} />
+              </Button>
             </div>
-          
-            <div className="overflow-y-auto max-h-[400px] custom-scrollbar">
-              {recordsTab === 'arbitrage' && (
-                arbitrageTransactions.length === 0 ? (
-                  <EmptyRecords onClose={() => setRecordsOpen(false)} />
-                ) : (
-                  <div className="space-y-3">
-                    {arbitrageTransactions.map((t) => (
-                      <RecordCard key={t.id} record={t} type="arbitrage" />
-                    ))}
-                  </div>
-                )
-              )}
-              
-              {recordsTab === 'staking' && (
-                stakingTransactions.length === 0 ? (
-                  <EmptyRecords onClose={() => setRecordsOpen(false)} />
-                ) : (
-                  <div className="space-y-3">
-                    {stakingTransactions.map((t) => (
-                      <RecordCard key={t.id} record={t} type="staking" />
-                    ))}
-                  </div>
-                )
-              )}
-              
-              {recordsTab === 'quant' && (
-                tradeTransactions.length === 0 ? (
-                  <EmptyRecords onClose={() => setRecordsOpen(false)} />
-                ) : (
-                  <div className="space-y-3">
-                    {tradeTransactions.map((t) => (
-                      <RecordCard key={t.id} record={t} type="quant" />
-                    ))}
-                  </div>
-                )
-              )}
+            
+            <div className="p-6">
+              <Tabs value={recordsTab} onValueChange={setRecordsTab} className="w-full">
+                <TabsList className="grid grid-cols-3 w-full bg-[#181A20] p-1 rounded-xl mb-6">
+                  <TabsTrigger value="arbitrage" className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20]">
+                    Arbitrage
+                  </TabsTrigger>
+                  <TabsTrigger value="staking" className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20]">
+                    Staking
+                  </TabsTrigger>
+                  <TabsTrigger value="options" className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20]">
+                    Options
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="arbitrage">
+                  {arbitrageTransactions.length === 0 ? (
+                    <EmptyRecords onClose={() => setRecordsOpen(false)} />
+                  ) : (
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+                      {arbitrageTransactions.map((t) => (
+                        <div key={t.id} className="bg-[#181A20] border border-[#2B3139] rounded-xl p-4">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[#F0B90B]/20 flex items-center justify-center">
+                                <FaExchangeAlt className="text-[#F0B90B] text-sm" />
+                              </div>
+                              <div>
+                                <div className="font-bold text-[#EAECEF]">{t.asset}</div>
+                                <div className="text-xs text-[#848E9C]">{new Date(t.date).toLocaleString()}</div>
+                              </div>
+                            </div>
+                            <Badge className={
+                              t.status === 'Completed' ? 'bg-green-500/20 text-green-500' :
+                              t.status === 'In Progress' ? 'bg-yellow-500/20 text-yellow-500' :
+                              'bg-red-500/20 text-red-500'
+                            }>
+                              {t.status}
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <span className="text-[#848E9C]">Amount</span>
+                              <div className="font-medium text-[#EAECEF]">${t.amount.toLocaleString()}</div>
+                            </div>
+                            <div>
+                              <span className="text-[#848E9C]">Duration</span>
+                              <div className="font-medium text-[#EAECEF]">{t.details?.duration || 'N/A'}</div>
+                            </div>
+                            <div>
+                              <span className="text-[#848E9C]">PnL</span>
+                              <div className={`font-medium ${t.pnl && t.pnl > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {t.pnl && t.pnl > 0 ? '+' : ''}${t.pnl?.toFixed(2) || '0.00'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="staking">
+                  {stakingTransactions.length === 0 ? (
+                    <EmptyRecords onClose={() => setRecordsOpen(false)} />
+                  ) : (
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+                      {stakingTransactions.map((t) => (
+                        <div key={t.id} className="bg-[#181A20] border border-[#2B3139] rounded-xl p-4">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[#F0B90B]/20 flex items-center justify-center">
+                                <Shield className="text-[#F0B90B] text-sm" />
+                              </div>
+                              <div>
+                                <div className="font-bold text-[#EAECEF]">Node Staking</div>
+                                <div className="text-xs text-[#848E9C]">{new Date(t.date).toLocaleString()}</div>
+                              </div>
+                            </div>
+                            <Badge className="bg-green-500/20 text-green-500">
+                              {t.status}
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <span className="text-[#848E9C]">Staked</span>
+                              <div className="font-medium text-[#EAECEF]">${t.amount.toLocaleString()}</div>
+                            </div>
+                            <div>
+                              <span className="text-[#848E9C]">APY</span>
+                              <div className="font-medium text-green-400">{(t.details?.apy || 5).toFixed(1)}%</div>
+                            </div>
+                            <div>
+                              <span className="text-[#848E9C]">Earned</span>
+                              <div className="font-medium text-green-400">+${t.pnl?.toFixed(2) || '0.00'}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="options">
+                  {tradeTransactions.length === 0 ? (
+                    <EmptyRecords onClose={() => setRecordsOpen(false)} />
+                  ) : (
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+                      {tradeTransactions.map((t) => (
+                        <div key={t.id} className="bg-[#181A20] border border-[#2B3139] rounded-xl p-4">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[#F0B90B]/20 flex items-center justify-center">
+                                <BarChart3 className="text-[#F0B90B] text-sm" />
+                              </div>
+                              <div>
+                                <div className="font-bold text-[#EAECEF]">{t.asset}</div>
+                                <div className="text-xs text-[#848E9C]">{new Date(t.date).toLocaleString()}</div>
+                              </div>
+                            </div>
+                            <Badge className={
+                              t.pnl && t.pnl > 0 ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'
+                            }>
+                              {t.pnl && t.pnl > 0 ? '+' : ''}{t.pnl?.toFixed(2)} USDT
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <span className="text-[#848E9C]">Amount</span>
+                              <div className="font-medium text-[#EAECEF]">${t.amount.toLocaleString()}</div>
+                            </div>
+                            <div>
+                              <span className="text-[#848E9C]">Side</span>
+                              <div className="font-medium text-[#EAECEF]">{t.details?.side?.toUpperCase() || 'CALL'}</div>
+                            </div>
+                            <div>
+                              <span className="text-[#848E9C]">Price</span>
+                              <div className="font-medium text-[#EAECEF]">${t.details?.price || 'N/A'}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </div>
-          </div>
+          </Card>
         </div>
       </Dialog>
     </div>
   );
 }
-
-// Record Card Component
-function RecordCard({ record, type }: { record: any; type: string }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="bg-[#181A20] rounded-xl p-4 border border-[#2B3139] hover:border-[#F0B90B]/30 transition-all"
-    >
-      {type === 'arbitrage' && (
-        <>
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <span className="font-bold text-[#EAECEF]">{record.asset}</span>
-              <span className="ml-2 text-xs text-[#848E9C]">{new Date(record.date).toLocaleDateString()}</span>
-            </div>
-            <Badge className={record.status === 'In Progress' ? 'bg-yellow-500/20 text-yellow-500' : record.pnl > 0 ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}>
-              {record.status === 'In Progress' ? 'Active' : record.pnl > 0 ? 'Profit' : 'Loss'}
-            </Badge>
-          </div>
-          <div className="flex justify-between text-sm mb-1">
-            <span className="text-[#848E9C]">Amount</span>
-            <span className="font-medium text-[#EAECEF]">${record.amount.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-[#848E9C]">PnL</span>
-            {record.status === 'In Progress' ? (
-              <span className="text-yellow-400">{record.details?.duration ? formatDuration(record.details.duration) : 'Pending'}</span>
-            ) : (
-              <span className={record.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
-                {record.pnl >= 0 ? '+' : ''}{record.pnl?.toFixed(2)} USDT
-              </span>
-            )}
-          </div>
-        </>
-      )}
-      
-      {type === 'staking' && (
-        <>
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <span className="font-bold text-[#EAECEF]">Node Staking</span>
-              <span className="ml-2 text-xs text-[#848E9C]">{new Date(record.date).toLocaleDateString()}</span>
-            </div>
-            <Badge className={record.status === 'active' ? 'bg-green-500/20 text-green-500' : 'bg-yellow-500/20 text-yellow-500'}>
-              {record.status}
-            </Badge>
-          </div>
-          <div className="flex justify-between text-sm mb-1">
-            <span className="text-[#848E9C]">Amount</span>
-            <span className="font-medium text-[#EAECEF]">${record.amount.toLocaleString()}</span>
-          </div>
-          {record.pnl && (
-            <div className="flex justify-between text-sm">
-              <span className="text-[#848E9C]">Earned</span>
-              <span className="text-green-400">+${record.pnl.toFixed(2)} USDT</span>
-            </div>
-          )}
-        </>
-      )}
-      
-      {type === 'quant' && (
-        <>
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <span className="font-bold text-[#EAECEF]">{record.asset}</span>
-              <span className="ml-2 text-xs text-[#848E9C]">{new Date(record.date).toLocaleDateString()}</span>
-            </div>
-            <div className="flex gap-2">
-              <Badge className="bg-[#F0B90B]/20 text-[#F0B90B]">
-                {record.details?.side?.toUpperCase() || 'CALL'}
-              </Badge>
-              <Badge className={record.pnl > 0 ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}>
-                {record.pnl > 0 ? 'Profit' : 'Loss'}
-              </Badge>
-            </div>
-          </div>
-          <div className="flex justify-between text-sm mb-1">
-            <span className="text-[#848E9C]">Amount</span>
-            <span className="font-medium text-[#EAECEF]">${record.amount.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-[#848E9C]">PnL</span>
-            <span className={record.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
-              {record.pnl >= 0 ? '+' : ''}{record.pnl?.toFixed(2)} USDT
-            </span>
-          </div>
-        </>
-      )}
-    </motion.div>
-  );
-}
-
-// Inject custom scrollbar styles
-const styleSheet = document.createElement("style");
-styleSheet.innerText = `
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 4px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: #1E2329;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #2B3139;
-    border-radius: 4px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #F0B90B;
-  }
-  
-  @media (max-width: 640px) {
-    input, select, button {
-      font-size: 16px !important;
-    }
-  }
-`;
-document.head.appendChild(styleSheet);
