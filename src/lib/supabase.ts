@@ -3,7 +3,18 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = 'https://trzvvacsfxfpwuekenfc.supabase.co'
 const supabaseAnonKey = 'sb_publishable_xhmrUNQOfyYeqX44jlSAKA_HVQpKndg'
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+  global: {
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+  },
+})
 
 // Database types
 export interface Database {

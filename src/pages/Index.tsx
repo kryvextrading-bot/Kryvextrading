@@ -369,11 +369,11 @@ export default function Index() {
               <div className="mt-8">
                 <Button 
                   asChild 
-                  className="bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20] font-bold px-6 py-6 rounded-xl"
+                  className="bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20] font-bold px-6 py-6 rounded-xl flex items-center justify-center"
                 >
-                  <Link to="/features">
-                    View All Features
-                    <ChevronRight className="ml-2 h-4 w-4" />
+                  <Link to="/features" className="flex items-center justify-center w-full">
+                    <span className="flex-1 text-center">View All Features</span>
+                    <ChevronRight className="ml-2 h-4 w-4 flex-shrink-0" />
                   </Link>
                 </Button>
               </div>
@@ -415,11 +415,11 @@ export default function Index() {
                   <Button 
                     asChild 
                     size="lg" 
-                    className="w-full bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20] font-bold py-6 rounded-xl text-lg"
+                    className="w-full bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20] font-bold py-6 rounded-xl text-lg flex items-center justify-center"
                   >
-                    <Link to="/register">
-                      Open Your IRA Today
-                      <ArrowRight className="ml-2 h-5 w-5" />
+                    <Link to="/register" className="flex items-center justify-center w-full">
+                      <span className="flex-1 text-center">Open Your IRA Today</span>
+                      <ArrowRight className="ml-2 h-5 w-5 flex-shrink-0" />
                     </Link>
                   </Button>
                   

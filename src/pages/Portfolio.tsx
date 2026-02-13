@@ -310,18 +310,18 @@ export default function Portfolio() {
               <div className="flex gap-2">
                 <Button 
                   variant="outline"
-                  className="border-[#2B3139] text-[#EAECEF] hover:bg-[#23262F] h-10 px-4"
-                  onClick={() => navigate('/analytics')}
+                  className="border-[#2B3139] text-[#EAECEF] hover:bg-[#23262F] h-10 px-4 flex items-center justify-center"
+                  onClick={() => navigate('/dashboard')}
                 >
-                  <BarChart3 size={16} className="mr-2" />
-                  Analytics
+                  <BarChart3 size={16} className="mr-2 flex-shrink-0" />
+                  <span className="flex-1 text-center">Analytics</span>
                 </Button>
                 <Button 
-                  className="bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20] font-bold h-10 px-4"
-                  onClick={() => navigate('/wallet/deposit')}
+                  className="bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20] font-bold h-10 px-4 flex items-center justify-center"
+                  onClick={() => navigate('/wallet')}
                 >
-                  Deposit
-                  <ChevronRight size={16} className="ml-1" />
+                  <span className="flex-1 text-center">Deposit</span>
+                  <ChevronRight size={16} className="ml-1 flex-shrink-0" />
                 </Button>
               </div>
             </div>

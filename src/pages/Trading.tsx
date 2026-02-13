@@ -332,7 +332,10 @@ export default function Trading() {
     return [];
   }, [klineData]);
 
-  const currentPrice = miniChartPrices[miniChartPrices.length - 1] || 0;
+  // Options trading state - moved before currentPrice calculation
+  const [selectedPair, setSelectedPair] = useState({ label: 'BTC/USDT', price: 67000, change: 2.34 });
+
+  const currentPrice = miniChartPrices[miniChartPrices.length - 1] || selectedPair.price || 67000;
 
   // Pairs
   const [futuresPair, setFuturesPair] = useState('BTC/USDT');
@@ -351,32 +354,14 @@ export default function Trading() {
     }
   }, [urlParams, tab]);
 
-  // Order book - mock data
+  // Order book - real data only
   const [orderBook, setOrderBook] = useState<OrderBook>({
-    bids: [
-      { price: 43000.50, amount: 1.2345, total: 43000.50 * 1.2345 },
-      { price: 43000.25, amount: 0.8765, total: 43000.25 * 0.8765 },
-      { price: 43000.00, amount: 1.5432, total: 43000.00 * 1.5432 },
-      { price: 42999.75, amount: 2.1098, total: 42999.75 * 2.1098 },
-      { price: 42999.50, amount: 0.9876, total: 42999.50 * 0.9876 }
-    ],
-    asks: [
-      { price: 43001.00, amount: 1.0987, total: 43001.00 * 1.0987 },
-      { price: 43001.25, amount: 0.7654, total: 43001.25 * 0.7654 },
-      { price: 43001.50, amount: 1.2345, total: 43001.50 * 1.2345 },
-      { price: 43001.75, amount: 0.5432, total: 43001.75 * 0.5432 },
-      { price: 43002.00, amount: 1.8765, total: 43002.00 * 1.8765 }
-    ]
+    bids: [],
+    asks: []
   });
 
   // Recent trades
-  const [recentTrades, setRecentTrades] = useState<Trade[]>([
-    { id: '1', price: 43000.50, amount: 0.1234, total: 43000.50 * 0.1234, side: 'buy', time: Date.now() - 1000 },
-    { id: '2', price: 43000.75, amount: 0.5678, total: 43000.75 * 0.5678, side: 'sell', time: Date.now() - 2000 },
-    { id: '3', price: 43001.00, amount: 0.2345, total: 43001.00 * 0.2345, side: 'buy', time: Date.now() - 3000 },
-    { id: '4', price: 43001.25, amount: 0.8901, total: 43001.25 * 0.8901, side: 'sell', time: Date.now() - 4000 },
-    { id: '5', price: 43000.25, amount: 0.4567, total: 43000.25 * 0.4567, side: 'buy', time: Date.now() - 5000 },
-  ]);
+  const [recentTrades, setRecentTrades] = useState<Trade[]>([]);
 
   // Tab states
   const [activeSpotTab, setActiveSpotTab] = useState<'open' | 'completed' | 'assets'>('open');
@@ -389,14 +374,7 @@ export default function Trading() {
   const [showOrderBook, setShowOrderBook] = useState(true);
   const [showRecentTrades, setShowRecentTrades] = useState(true);
 
-  // Options trading state
-  const tradingPairs: TradingPair[] = [
-    { label: 'BTC/USDT', price: 67000, change: 2.34 },
-    { label: 'ETH/USDT', price: 3200, change: -1.25 },
-    { label: 'SOL/USDT', price: 150, change: 5.67 },
-  ];
   const timeRanges = [60, 120, 240, 360, 600];
-  const [selectedPair, setSelectedPair] = useState<TradingPair>(tradingPairs[0]);
   const [direction, setDirection] = useState<'up' | 'down'>('up');
   const [tradeTime, setTradeTime] = useState(60);
   const [tradeAmount, setTradeAmount] = useState('');
@@ -437,7 +415,7 @@ export default function Trading() {
     if (!isAuthenticated) {
       toast({ 
         title: '🔒 Authentication Required', 
-        description: 'Please login to place real trades. You can use demo mode to practice.', 
+        description: 'Please login to place trades.', 
         variant: 'destructive' 
       });
       return;
@@ -503,7 +481,7 @@ export default function Trading() {
     if (!isAuthenticated) {
       toast({ 
         title: '🔒 Authentication Required', 
-        description: 'Please login to place real trades. You can use demo mode to practice.', 
+        description: 'Please login to place trades.', 
         variant: 'destructive' 
       });
       return;
@@ -573,7 +551,7 @@ export default function Trading() {
     if (!isAuthenticated) {
       toast({ 
         title: '🔒 Authentication Required', 
-        description: 'Please login to place real trades. You can use demo mode to practice.', 
+        description: 'Please login to place trades.', 
         variant: 'destructive' 
       });
       return;
@@ -758,7 +736,7 @@ export default function Trading() {
             </Card>
           </div>
 
-          {/* Desktop Demo Mode Banner for Unauthenticated Users */}
+          {/* Authentication Banner for Unauthenticated Users */}
           <div className="hidden md:block mb-4">
             {!isAuthenticated && (
               <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
@@ -1024,23 +1002,18 @@ export default function Trading() {
                     <div>
                       <label className="text-xs md:text-sm text-[#848E9C] mb-1 block">Trading Pair</label>
                       <div className="grid grid-cols-3 gap-2">
-                        {tradingPairs.map((pair) => (
-                          <button
-                            key={pair.label}
-                            className={`flex flex-col items-center p-3 rounded-xl border transition-all ${
-                              selectedPair.label === pair.label 
-                                ? 'border-[#F0B90B] bg-[#F0B90B]/10' 
-                                : 'border-[#2B3139] bg-[#181A20] hover:border-[#F0B90B]/50'
-                            }`}
-                            onClick={() => setSelectedPair(pair)}
-                          >
-                            <span className="text-xs font-medium text-[#EAECEF] mb-1">{pair.label}</span>
-                            <span className="text-sm font-bold text-[#F0B90B]">${pair.price.toLocaleString()}</span>
-                            <span className={`text-xs ${pair.change && pair.change > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {pair.change && pair.change > 0 ? '+' : ''}{pair.change}%
-                            </span>
-                          </button>
-                        ))}
+                        <button
+                          className={`flex flex-col items-center p-3 rounded-xl border transition-all ${
+                            selectedPair.label === 'BTC/USDT' 
+                              ? 'border-[#F0B90B] bg-[#F0B90B]/10' 
+                              : 'border-[#2B3139] bg-[#181A20] hover:border-[#F0B90B]/50'
+                          }`}
+                          onClick={() => setSelectedPair({ label: 'BTC/USDT', price: 67000, change: 2.34 })}
+                        >
+                          <span className="text-xs font-medium text-[#EAECEF] mb-1">BTC/USDT</span>
+                          <span className="text-sm font-bold text-[#F0B90B]">$67,000</span>
+                          <span className="text-xs text-green-400">+2.34%</span>
+                        </button>
                       </div>
                     </div>
 
@@ -1210,15 +1183,17 @@ export default function Trading() {
                   </div>
 
                   {/* Spread */}
-                  <div className="flex items-center justify-between py-2 px-2 bg-[#2B3139]/30 rounded my-1">
-                    <span className="text-xs text-[#848E9C]">Spread</span>
-                    <span className="text-xs font-mono text-[#EAECEF]">
-                      ${(orderBook.asks[0].price - orderBook.bids[0].price).toFixed(2)}
-                    </span>
-                    <span className="text-xs text-[#848E9C]">
-                      {((orderBook.asks[0].price - orderBook.bids[0].price) / orderBook.bids[0].price * 100).toFixed(2)}%
-                    </span>
-                  </div>
+                  {orderBook.asks.length > 0 && orderBook.bids.length > 0 && (
+                    <div className="flex items-center justify-between py-2 px-2 bg-[#2B3139]/30 rounded my-1">
+                      <span className="text-xs text-[#848E9C]">Spread</span>
+                      <span className="text-xs font-mono text-[#EAECEF]">
+                        ${(orderBook.asks[0].price - orderBook.bids[0].price).toFixed(2)}
+                      </span>
+                      <span className="text-xs text-[#848E9C]">
+                        {((orderBook.asks[0].price - orderBook.bids[0].price) / orderBook.bids[0].price * 100).toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
 
                   {/* Bids */}
                   <div className="space-y-1 mt-2">
@@ -1262,7 +1237,7 @@ export default function Trading() {
 
               {/* Mini Chart - Mobile */}
               <div className="lg:hidden">
-                {/* Demo Mode Banner for Unauthenticated Users */}
+                {/* Authentication Banner for Unauthenticated Users */}
                 {!isAuthenticated && (
                   <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-4">
                     <div className="flex items-center gap-3">
@@ -1379,8 +1354,7 @@ export default function Trading() {
                       }`}
                     >
                       <Clock size={16} />
-                      Open Options ({[...transactions.filter(t => t.type === 'Trade' && t.status === 'Pending'), 
-                        { id: 'mock-1', status: 'Pending' }, { id: 'mock-2', status: 'Pending' }].length})
+                      Open Options ({transactions.filter(t => t.type === 'Trade' && t.status === 'Pending').length})
                     </button>
                     <button
                       onClick={() => setActiveOptionsTab('completed')}
@@ -1475,50 +1449,27 @@ export default function Trading() {
                     {activeOptionsTab === 'open' && (
                       <AnimatePresence>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {[
-                            ...transactions.filter(t => t.type === 'Trade' && t.status === 'Pending'),
-                            // Mock options for demonstration
-                            {
-                              id: 'mock-option-1',
-                              type: 'Trade',
-                              asset: 'BTC/USDT',
-                              amount: 50,
-                              status: 'Pending',
-                              date: new Date().toISOString(),
-                              details: {
-                                side: 'up',
-                                price: 43000,
-                                timeFrame: 120,
-                                profitRate: 0.82,
-                                expectedProfit: 9,
-                                endTime: Date.now() + 120000,
-                              }
-                            },
-                            {
-                              id: 'mock-option-2',
-                              type: 'Trade',
-                              asset: 'ETH/USDT',
-                              amount: 25,
-                              status: 'Pending',
-                              date: new Date().toISOString(),
-                              details: {
-                                side: 'down',
-                                price: 2950,
-                                timeFrame: 240,
-                                profitRate: 0.78,
-                                expectedProfit: 5.5,
-                                endTime: Date.now() + 240000,
-                              }
-                            }
-                          ].map(t => (
-                            <OrderCard
-                              key={t.id}
-                              order={t}
-                              type="option"
-                              onComplete={() => handleCompleteTransaction(t.id)}
-                              onCancel={() => handleCancelTransaction(t.id)}
-                            />
-                          ))}
+                          {transactions.filter(t => t.type === 'Trade' && t.status === 'Pending').length > 0 ? (
+                            transactions.filter(t => t.type === 'Trade' && t.status === 'Pending').map(transaction => (
+                              <OrderCard
+                                key={transaction.id}
+                                order={{
+                                  ...transaction,
+                                  side: 'down',
+                                  price: 2950,
+                                  timeFrame: 240,
+                                  profitRate: 0.78,
+                                  expectedProfit: 5.5,
+                                  endTime: Date.now() + 240000,
+                                }}
+                                type="option"
+                                onComplete={() => handleCompleteTransaction(transaction.id)}
+                                onCancel={() => handleCancelTransaction(transaction.id)}
+                              />
+                            ))
+                          ) : (
+                            <div className="text-center py-8 text-[#848E9C] text-sm">No open options</div>
+                          )}
                         </div>
                       </AnimatePresence>
                     )}

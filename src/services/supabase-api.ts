@@ -35,11 +35,11 @@ class SupabaseApiService {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          data: userData,
-          // Disable email confirmation for development
           options: {
-            data: userData,
-            // Skip email confirmation for development
+            data: {
+              first_name: userData.first_name,
+              last_name: userData.last_name,
+            },
             emailRedirectTo: undefined
           }
         });
@@ -51,35 +51,58 @@ class SupabaseApiService {
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }
+          // Handle user already exists error
+          if (error.status === 422 && error.message.includes('user_already_exists')) {
+            throw new Error('This email is already registered. Please login instead.');
+          }
           throw error;
         }
         
-        // Create user profile
-        const { data: profile, error: profileError } = await supabase
-          .from('users')
-          .insert({
-            email,
-            first_name: userData.first_name || '',
-            last_name: userData.last_name || '',
-            phone: userData.phone || '',
-            status: 'Active', // Set to Active instead of Pending (bypasses email confirmation)
-            kyc_status: 'Verified', // Set to Verified (bypasses email confirmation)
-            account_type: userData.account_type || 'Traditional IRA',
-            account_number: `IRA-2024-${Date.now()}`,
-            balance: 0,
-            registration_date: new Date().toISOString(),
-            two_factor_enabled: false,
-            risk_tolerance: userData.risk_tolerance || 'Moderate',
-            investment_goal: userData.investment_goal || 'Retirement',
-            is_admin: false,
-            credit_score: 0,
-          })
-          .select()
-          .single()
+        // Create user profile (only if signup was successful)
+        if (data.user && !data.user.identities?.length) {
+          // Email confirmation required, don't create profile yet
+          return { user: data.user, profile: null };
+        }
         
-        if (profileError) throw profileError
-        
-        return { user: data.user, profile }
+        if (data.user) {
+          // Try to get/create user profile
+          const { data: profile, error: profileError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', data.user.id)
+            .single()
+          
+          if (profileError && profileError.code !== 'PGRST116') {
+            // Profile doesn't exist or other error, try to create it
+            const { data: newProfile, error: createError } = await supabase
+              .from('users')
+              .insert({
+                id: data.user.id,
+                email,
+                first_name: userData.first_name || '',
+                last_name: userData.last_name || '',
+                phone: userData.phone || '',
+                status: 'Active',
+                kyc_status: 'Verified',
+                account_type: userData.account_type || 'Traditional IRA',
+                account_number: `IRA-2024-${Date.now()}`,
+                balance: 0,
+                registration_date: new Date().toISOString(),
+                two_factor_enabled: false,
+                risk_tolerance: userData.risk_tolerance || 'Moderate',
+                investment_goal: userData.investment_goal || 'Retirement',
+                is_admin: false,
+                credit_score: 0,
+              })
+              .select()
+              .single()
+            
+            if (createError) throw createError;
+            return { user: data.user, profile: newProfile };
+          }
+          
+          return { user: data.user, profile };
+        }
       } catch (error) {
         if (attempt === maxRetries) {
           // If this is the last attempt, throw the error with a user-friendly message

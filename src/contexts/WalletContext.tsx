@@ -173,7 +173,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } catch {}
     }
     return {
-      USDT: 50000,
+      USDT: 0,
       BTC: 0,
       ETH: 0,
       SOL: 0,
@@ -543,27 +543,12 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (Date.now() >= end) {
               // Timer expired, move to Completed state
               updated = true;
-              // Different win rates for different trade types
-              let winRate = 0.7; // Default 70% win rate
-              if (tx.type === 'Arbitrage') winRate = 0.5; // 50% win rate for arbitrage
-              const win = Math.random() < winRate;
-              let pnl = 0;
+              // Remove demo notification logic
               
-              if (win) {
-                if (tx.type === 'Trade') pnl = tx.amount * 0.8;
-                if (tx.type === 'Arbitrage') pnl = tx.amount * 0.20 * (duration / (24*60*60)); // 20% per day
-                if (tx.type === 'Staking') pnl = tx.amount * 0.005 * (duration / (24*60*60)); // 0.5% per day
-                updateBalance(tx.asset === 'USDT' ? 'USDT' : tx.asset.split('/')[0], pnl, 'add');
-              }
+              // Remove mock profit calculation
+              const pnl = 0;
               
-              // Toast notification for completed trade
-              if (notificationsEnabled) {
-                toast({
-                  title: `${tx.type} Completed`,
-                  description: `${tx.type} ${win ? 'Won' : 'Lost'}${win && pnl ? `: +$${pnl.toFixed(2)}` : ''}`,
-                  variant: win ? 'default' : 'destructive',
-                });
-              }
+              // Remove demo notification
               
               return { 
                 ...tx, 
@@ -571,8 +556,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 pnl,
                 details: {
                   ...tx.details,
-                  result: win ? 'Won' : 'Lost',
-                  actualProfit: win ? pnl : -tx.amount,
+                  result: 'Completed',
+                  actualProfit: 0,
                   completedAt: new Date().toISOString()
                 }
               };

@@ -37,12 +37,14 @@ interface Asset {
 
 interface Transaction {
   id: string;
-  type: 'Deposit' | 'Withdrawal' | 'Swap' | 'Trade';
+  type: 'Deposit' | 'Withdrawal' | 'Swap' | 'Trade' | 'Arbitrage' | 'Staking' | 'Options';
   asset: string;
   amount: number;
-  status: 'Pending' | 'Completed' | 'Failed';
+  status: 'Pending' | 'Completed' | 'Failed' | 'In Progress' | 'Win' | 'Loss' | 'Closed';
   date: string;
   details?: any;
+  pnl?: number;
+  category?: 'spot' | 'futures' | 'options' | 'arbitrage' | 'staking';
 }
 
 interface DepositAddress {
@@ -114,19 +116,19 @@ const CRYPTO_ASSETS = [
 ];
 
 const USSTOCKS: Asset[] = [
-  { symbol: 'AAPL', name: 'Apple Inc.', balance: 0, value: 0, change: '+1.2%' },
-  { symbol: 'TSLA', name: 'Tesla Inc.', balance: 0, value: 0, change: '-0.5%' },
-  { symbol: 'GOOGL', name: 'Alphabet Inc.', balance: 0, value: 0, change: '+0.8%' },
+  { symbol: 'AAPL', name: 'Apple Inc.', balance: 0, value: 0 },
+  { symbol: 'TSLA', name: 'Tesla Inc.', balance: 0, value: 0 },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.', balance: 0, value: 0 },
 ];
 
 const FUTURES: Asset[] = [
-  { symbol: 'BTCUSD-PERP', name: 'BTC Perpetual', balance: 0, value: 0, change: '+2.1%' },
-  { symbol: 'ETHUSD-PERP', name: 'ETH Perpetual', balance: 0, value: 0, change: '-1.3%' },
+  { symbol: 'BTCUSD-PERP', name: 'BTC Perpetual', balance: 0, value: 0 },
+  { symbol: 'ETHUSD-PERP', name: 'ETH Perpetual', balance: 0, value: 0 },
 ];
 
 const ETFS: Asset[] = [
-  { symbol: 'SPY', name: 'SPDR S&P 500 ETF', balance: 0, value: 0, change: '+0.3%' },
-  { symbol: 'QQQ', name: 'Invesco QQQ Trust', balance: 0, value: 0, change: '+0.7%' },
+  { symbol: 'SPY', name: 'SPDR S&P 500 ETF', balance: 0, value: 0 },
+  { symbol: 'QQQ', name: 'Invesco QQQ Trust', balance: 0, value: 0 },
 ];
 
 // ==================== HELPER FUNCTIONS ====================
@@ -202,17 +204,19 @@ function QuickAction({ icon, label, onClick, color = 'default' }: QuickActionPro
     <motion.button
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
-      className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#23262F] transition-colors group"
+      transition={{ type: "spring", stiffness: 400, damping: 17 }}
+      className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-[#23262F] transition-colors group cursor-pointer"
       onClick={onClick}
+      style={{ willChange: 'transform' }}
     >
       <div className={`
-        w-12 h-12 rounded-full flex items-center justify-center
+        w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200
         ${color === 'primary' ? 'bg-[#F0B90B]/20 text-[#F0B90B] group-hover:bg-[#F0B90B]/30' : 
           'bg-[#2B3139] text-[#EAECEF] group-hover:bg-[#3A3F4A]'}
       `}>
         {icon}
       </div>
-      <span className="text-xs font-medium text-[#EAECEF]">{label}</span>
+      <span className="text-xs font-medium text-[#EAECEF] select-none">{label}</span>
     </motion.button>
   );
 }
@@ -413,6 +417,23 @@ export default function WalletPage() {
     swapError: '',
     swapFromSymbol: '',
   });
+
+  // Optimized click handlers for QuickAction buttons
+  const handleDepositClick = useCallback(() => {
+    setModal('deposit');
+  }, []);
+
+  const handleWithdrawClick = useCallback(() => {
+    setModal('withdraw');
+  }, []);
+
+  const handleSwapClick = useCallback(() => {
+    setModal('swap');
+  }, []);
+
+  const handleSendClick = useCallback(() => {
+    setModal('send');
+  }, []);
 
   // Fetch prices
   const fetchPrices = useCallback(async () => {
@@ -623,7 +644,6 @@ export default function WalletPage() {
 
   // Portfolio stats
   const totalAssets = portfolio.length;
-  const totalChange = 2.4; // Mock data - replace with real calculation
 
   return (
     <div className="min-h-screen bg-[#181A20] pb-24">
@@ -814,9 +834,9 @@ export default function WalletPage() {
                 ≈ {formatCurrency(totalValue)} USD
               </div>
             </div>
-            <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+            <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30">
               <TrendingUp size={12} className="mr-1" />
-              +{totalChange}%
+              0%
             </Badge>
           </div>
         </Card>
@@ -826,23 +846,23 @@ export default function WalletPage() {
           <QuickAction 
             icon={<ArrowDownLeft size={20} />}
             label="Deposit"
-            onClick={() => setModal('deposit')}
+            onClick={handleDepositClick}
             color="primary"
           />
           <QuickAction 
             icon={<ArrowUpRight size={20} />}
             label="Withdraw"
-            onClick={() => setModal('withdraw')}
+            onClick={handleWithdrawClick}
           />
           <QuickAction 
             icon={<RefreshCw size={20} />}
             label="Swap"
-            onClick={() => setModal('swap')}
+            onClick={handleSwapClick}
           />
           <QuickAction 
             icon={<Send size={20} />}
             label="Send"
-            onClick={() => setModal('send')}
+            onClick={handleSendClick}
           />
         </div>
 
