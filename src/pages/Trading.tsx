@@ -48,6 +48,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import OrderPlacementForm from '@/components/trading/OrderPlacementForm';
 import OrderManagementTabs from '@/components/trading/OrderManagementTabs';
 import { OrderProvider, useOrderContext } from '@/contexts/OrderContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -283,6 +284,7 @@ export default function Trading() {
   } = useWallet();
   
   const { placeOrder, openOrders, closedOrders, modifyOrder } = useOrderContext();
+  const { isAuthenticated } = useAuth();
 
   // Spot state
   const [spotPair, setSpotPair] = useState('BTC/USDT');
@@ -369,11 +371,11 @@ export default function Trading() {
 
   // Recent trades
   const [recentTrades, setRecentTrades] = useState<Trade[]>([
-    { price: 43000.50, amount: 0.1234, total: 43000.50 * 0.1234, side: 'buy', time: Date.now() - 1000 },
-    { price: 43000.75, amount: 0.5678, total: 43000.75 * 0.5678, side: 'sell', time: Date.now() - 2000 },
-    { price: 43001.00, amount: 0.2345, total: 43001.00 * 0.2345, side: 'buy', time: Date.now() - 3000 },
-    { price: 43001.25, amount: 0.8901, total: 43001.25 * 0.8901, side: 'sell', time: Date.now() - 4000 },
-    { price: 43000.25, amount: 0.4567, total: 43000.25 * 0.4567, side: 'buy', time: Date.now() - 5000 },
+    { id: '1', price: 43000.50, amount: 0.1234, total: 43000.50 * 0.1234, side: 'buy', time: Date.now() - 1000 },
+    { id: '2', price: 43000.75, amount: 0.5678, total: 43000.75 * 0.5678, side: 'sell', time: Date.now() - 2000 },
+    { id: '3', price: 43001.00, amount: 0.2345, total: 43001.00 * 0.2345, side: 'buy', time: Date.now() - 3000 },
+    { id: '4', price: 43001.25, amount: 0.8901, total: 43001.25 * 0.8901, side: 'sell', time: Date.now() - 4000 },
+    { id: '5', price: 43000.25, amount: 0.4567, total: 43000.25 * 0.4567, side: 'buy', time: Date.now() - 5000 },
   ]);
 
   // Tab states
@@ -431,6 +433,16 @@ export default function Trading() {
 
   // Spot Trading Handler
   const handleSpotTrade = async (side: 'buy' | 'sell', pair: string, amountRaw: number | string, priceRaw: number | string) => {
+    // Check authentication
+    if (!isAuthenticated) {
+      toast({ 
+        title: '🔒 Authentication Required', 
+        description: 'Please login to place real trades. You can use demo mode to practice.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     const amount = Number(amountRaw);
     let price = Number(priceRaw);
     
@@ -487,6 +499,16 @@ export default function Trading() {
 
   // Futures Trading Handler
   const handleFuturesTrade = async (side: 'buy' | 'sell', pair: string, amountRaw: number | string, priceRaw: number | string) => {
+    // Check authentication
+    if (!isAuthenticated) {
+      toast({ 
+        title: '🔒 Authentication Required', 
+        description: 'Please login to place real trades. You can use demo mode to practice.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     const amount = Number(amountRaw);
     let price = Number(priceRaw);
     
@@ -547,6 +569,16 @@ export default function Trading() {
 
   // Options Trading Handler
   const handleOptionsTrade = async (side: 'up' | 'down', pair: string, amountRaw: number | string) => {
+    // Check authentication
+    if (!isAuthenticated) {
+      toast({ 
+        title: '🔒 Authentication Required', 
+        description: 'Please login to place real trades. You can use demo mode to practice.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     const amount = Number(amountRaw);
     
     if (!amount || isNaN(amount) || amount <= 0) {
@@ -676,28 +708,22 @@ export default function Trading() {
                   <Settings size={20} className="text-[#848E9C]" />
                 </button>
               </div>
-            </div>
-            
-            {/* Mobile Tabs */}
-            <div className="mt-3">
-              <Tabs value={tab} onValueChange={v => setTab(v as any)} className="w-full">
-                <TabsList className="grid grid-cols-3 w-full bg-[#1E2329] p-1 rounded-xl">
-                  <TabsTrigger value="spot" className="text-sm md:text-base data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg">
-                    Spot
-                  </TabsTrigger>
-                  <TabsTrigger value="futures" className="text-sm md:text-base data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg">
-                    Futures
-                  </TabsTrigger>
-                  <TabsTrigger value="option" className="text-sm md:text-base data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg">
-                    Option
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
           </div>
         </div>
+      </div>
 
-        <div className="container mx-auto px-3 py-4">
+      <div className="container mx-auto px-3 py-4">
+        {/* Pair Selector Modal */}
+        <EnhancedPairSelectorModal
+          open={pairSelectorOpen}
+          onClose={() => setPairSelectorOpen(false)}
+          currentTab={getCurrentTab()}
+          onSelectPair={pair => {
+            if (tab === 'spot') setSpotPair(pair.name);
+            if (tab === 'futures') setFuturesPair(pair.name);
+            if (tab === 'option') setOptionsPair(pair.name);
+          }}
+        />
           {/* Pair Selector Modal */}
           <EnhancedPairSelectorModal
             open={pairSelectorOpen}
@@ -724,6 +750,21 @@ export default function Trading() {
               <div className="text-xs text-[#848E9C]">Volume</div>
               <div className="font-bold text-[#EAECEF]">$1.2B</div>
             </Card>
+          </div>
+
+          {/* Desktop Demo Mode Banner for Unauthenticated Users */}
+          <div className="hidden md:block mb-4">
+            {!isAuthenticated && (
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-yellow-400">View Only Mode</p>
+                    <p className="text-xs text-yellow-300 mt-1">You're viewing the trading interface in read-only mode. <a href="/login" className="underline hover:text-yellow-200">Login</a> to place real trades.</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Main Trading Layout */}
@@ -1215,6 +1256,18 @@ export default function Trading() {
 
               {/* Mini Chart - Mobile */}
               <div className="lg:hidden">
+                {/* Demo Mode Banner for Unauthenticated Users */}
+                {!isAuthenticated && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mx-3 md:mx-0 mb-4">
+                    <div className="flex items-center gap-3">
+                      <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-yellow-400">View Only Mode</p>
+                        <p className="text-xs text-yellow-300 mt-1">You're viewing the trading interface in read-only mode. <a href="/login" className="underline hover:text-yellow-200">Login</a> to place real trades.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {miniChartPrices.length > 0 && (
                   <Card className="bg-[#1E2329] border border-[#2B3139] p-3">
                     <div className="flex items-center justify-between mb-2">
@@ -1226,7 +1279,23 @@ export default function Trading() {
                 )}
               </div>
             </div>
-          </div>
+
+            {/* Mobile Tabs */}
+            <div className="mt-3">
+              <Tabs value={tab} onValueChange={v => setTab(v as any)} className="w-full">
+                <TabsList className="grid grid-cols-3 w-full bg-[#1E2329] p-1 rounded-xl">
+                  <TabsTrigger value="spot" className="text-sm md:text-base data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg">
+                    Spot
+                  </TabsTrigger>
+                  <TabsTrigger value="futures" className="text-sm md:text-base data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg">
+                    Futures
+                  </TabsTrigger>
+                  <TabsTrigger value="option" className="text-sm md:text-base data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg">
+                    Option
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
 
           {/* Order Management Section */}
           <div className="mt-6 order-4">
@@ -1478,30 +1547,7 @@ export default function Trading() {
           </div>
         </div>
       </div>
-
-      {/* Custom Scrollbar Styles */}
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
-          height: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #1E2329;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #2B3139;
-          border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #F0B90B;
-        }
-        
-        @media (max-width: 640px) {
-          input, select, button {
-            font-size: 16px !important;
-          }
-        }
-      `}</style>
+    </div>
     </ErrorBoundary>
   );
 }

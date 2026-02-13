@@ -126,6 +126,7 @@ export default function Register() {
         first_name: formData.firstName,
         last_name: formData.lastName,
         email: formData.email,
+        password: formData.password,
         phone: '',
       });
       
@@ -136,9 +137,23 @@ export default function Register() {
       
       navigate('/dashboard');
     } catch (error) {
+      let errorMessage = "Failed to create account. Please try again.";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('rate limit') || error.message.includes('Too many registration attempts')) {
+          errorMessage = "⏱️ Too many registration attempts. Please wait a few minutes before trying again.";
+        } else if (error.message.includes('User already registered')) {
+          errorMessage = "📧 This email is already registered. Please try logging in instead.";
+        } else if (error.message.includes('Password should be')) {
+          errorMessage = "🔑 Password requirements not met. Please choose a stronger password.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
         title: "❌ Registration Failed",
-        description: error instanceof Error ? error.message : "Failed to create account. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

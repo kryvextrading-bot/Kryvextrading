@@ -14,7 +14,7 @@ interface AuthContextType {
   userRole: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (userData: Partial<User>) => Promise<void>;
+  register: (userData: Partial<User> & { password: string }) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<User>) => Promise<void>;
 }
@@ -41,9 +41,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Check if user is already logged in on app start
     const checkUser = async () => {
       try {
-        const { profile } = await supabaseApi.getCurrentUser();
-        if (profile) {
-          setUser(profile);
+        const result = await supabaseApi.getCurrentUser();
+        if (result && result.profile) {
+          setUser(result.profile);
         }
       } catch (error) {
         console.error('Failed to check current user:', error);
@@ -70,12 +70,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const register = async (userData: Partial<User>) => {
+  const register = async (userData: Partial<User> & { password: string }) => {
     try {
       setIsLoading(true);
+      
+      if (!userData.email || !userData.password) {
+        throw new Error('Email and password are required');
+      }
+      
       const { profile } = await supabaseApi.signUp(
-        userData.email || '',
-        'temp-password', // This should come from a form field
+        userData.email,
+        userData.password,
         userData
       );
       if (profile) {

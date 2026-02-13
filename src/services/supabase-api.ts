@@ -27,39 +27,68 @@ class SupabaseApiService {
   }
 
   async signUp(email: string, password: string, userData: Partial<User>) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
+    const maxRetries = 3;
+    const baseDelay = 1000; // 1 second
     
-    if (error) throw error
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        
+        if (error) {
+          // Handle rate limiting specifically
+          if (error.status === 429 && attempt < maxRetries) {
+            const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          throw error;
+        }
+        
+        // Create user profile
+        const { data: profile, error: profileError } = await supabase
+          .from('users')
+          .insert({
+            email,
+            first_name: userData.first_name || '',
+            last_name: userData.last_name || '',
+            phone: userData.phone || '',
+            status: 'Pending',
+            kyc_status: 'Pending',
+            account_type: userData.account_type || 'Traditional IRA',
+            account_number: `IRA-2024-${Date.now()}`,
+            balance: 0,
+            registration_date: new Date().toISOString(),
+            two_factor_enabled: false,
+            risk_tolerance: userData.risk_tolerance || 'Moderate',
+            investment_goal: userData.investment_goal || 'Retirement',
+            is_admin: false,
+            credit_score: 0,
+          })
+          .select()
+          .single()
+        
+        if (profileError) throw profileError
+        
+        return { user: data.user, profile }
+      } catch (error) {
+        if (attempt === maxRetries) {
+          // If this is the last attempt, throw the error with a user-friendly message
+          if (error instanceof Error && error.message.includes('rate limit')) {
+            throw new Error('Too many registration attempts. Please wait a few minutes before trying again.');
+          }
+          throw error;
+        }
+        // For other errors on non-final attempts, wait and retry
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, baseDelay * attempt));
+        }
+      }
+    }
     
-    // Create user profile
-    const { data: profile, error: profileError } = await supabase
-      .from('users')
-      .insert({
-        email,
-        first_name: userData.first_name || '',
-        last_name: userData.last_name || '',
-        phone: userData.phone || '',
-        status: 'Pending',
-        kyc_status: 'Pending',
-        account_type: userData.account_type || 'Traditional IRA',
-        account_number: `IRA-2024-${Date.now()}`,
-        balance: 0,
-        registration_date: new Date().toISOString(),
-        two_factor_enabled: false,
-        risk_tolerance: userData.risk_tolerance || 'Moderate',
-        investment_goal: userData.investment_goal || 'Retirement',
-        is_admin: false,
-        credit_score: 0,
-      })
-      .select()
-      .single()
-    
-    if (profileError) throw profileError
-    
-    return { user: data.user, profile }
+    throw new Error('Registration failed after multiple attempts. Please try again later.');
   }
 
   async signOut() {

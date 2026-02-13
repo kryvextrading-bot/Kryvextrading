@@ -1129,7 +1129,7 @@ INSERT INTO public.investments (type, name, description, min_investment, expecte
     ('ai-arbitrage', 'DeFi Yield Pool', 'AI-powered DeFi arbitrage pool.', 2000, 12.0, '3 months', 'high')
 ON CONFLICT DO NOTHING;
 
--- Create admin user (you should change the password after first login)
+-- Create admin user (you should change password after first login)
 INSERT INTO public.users (email, first_name, last_name, status, kyc_status, account_type, account_number, balance, registration_date, two_factor_enabled, risk_tolerance, investment_goal, is_admin, admin_role)
 VALUES (
     'admin@kryvextrading.com',
@@ -1146,6 +1146,25 @@ VALUES (
     'Admin',
     true,
     'superadmin'
+) ON CONFLICT (email) DO NOTHING;
+
+-- Create demo user for testing
+INSERT INTO public.users (email, first_name, last_name, status, kyc_status, account_type, account_number, balance, registration_date, two_factor_enabled, risk_tolerance, investment_goal, is_admin, admin_role)
+VALUES (
+    'user@kryvextrading.com',
+    'Demo',
+    'User',
+    'Active',
+    'Verified',
+    'Traditional IRA',
+    'USER-0001',
+    10000,
+    NOW(),
+    false,
+    'Moderate',
+    'Retirement',
+    false,
+    NULL
 ) ON CONFLICT (email) DO NOTHING;
 
 -- Grant necessary permissions

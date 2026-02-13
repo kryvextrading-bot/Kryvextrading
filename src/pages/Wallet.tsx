@@ -4,7 +4,7 @@ import {
   Briefcase, UserCircle, ArrowRight, Copy, QrCode, Clock, 
   TrendingUp, ArrowUpRight, ArrowDownLeft, RefreshCw, 
   MoreVertical, ChevronRight, Settings, History, X, CheckCircle,
-  AlertTriangle, Info, Globe, Shield, Zap, Award, Star
+  AlertTriangle, Info, Globe, Shield, Zap, Award, Star, CreditCard, LogOut
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -348,7 +348,7 @@ export default function WalletPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { 
     balances,
     portfolio, 
@@ -372,6 +372,21 @@ export default function WalletPage() {
   const [showRecordsModal, setShowRecordsModal] = useState<boolean>(false);
   const [addAssetModal, setAddAssetModal] = useState<boolean>(false);
   const [addAssetSymbol, setAddAssetSymbol] = useState<string>('USDT');
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifOpen || profileOpen) {
+        const target = event.target as Element;
+        if (!target.closest('[data-dropdown]')) {
+          setNotifOpen(false);
+          setProfileOpen(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [notifOpen, profileOpen]);
   const [activeTab, setActiveTab] = useState<string>('crypto');
 
   const [modalState, setModalState] = useState<ModalState>({
@@ -632,6 +647,7 @@ export default function WalletPage() {
             <button 
               className="relative p-2 hover:bg-[#23262F] rounded-lg transition-colors"
               onClick={() => setNotifOpen(!notifOpen)}
+              data-dropdown
             >
               <Bell size={20} className="text-[#EAECEF]" />
               <span className="absolute top-1 right-1 w-2 h-2 bg-[#F0B90B] rounded-full animate-pulse"></span>
@@ -639,14 +655,134 @@ export default function WalletPage() {
             <button 
               className="w-8 h-8 bg-[#F0B90B] rounded-lg flex items-center justify-center hover:bg-yellow-400 transition-colors"
               onClick={() => setProfileOpen(!profileOpen)}
+              data-dropdown
             >
               <span className="text-sm font-bold text-[#181A20]">
-                {user?.firstName?.[0] || user?.email?.[0] || 'U'}
+                {user?.first_name?.[0] || user?.email?.[0] || 'U'}
               </span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* Notifications Dropdown */}
+      {notifOpen && (
+        <div className="absolute top-16 right-20 w-80 bg-[#1E2329] border border-[#2B3139] rounded-xl shadow-xl z-50" data-dropdown>
+          <div className="p-4 border-b border-[#2B3139]">
+            <h3 className="font-semibold text-[#EAECEF]">Notifications</h3>
+          </div>
+          <div className="max-h-96 overflow-y-auto">
+            <div className="p-4 space-y-3">
+              <div className="flex items-start gap-3 p-3 bg-[#23262F] rounded-lg">
+                <div className="w-2 h-2 bg-[#F0B90B] rounded-full mt-2"></div>
+                <div className="flex-1">
+                  <p className="text-sm text-[#EAECEF] font-medium">New deposit received</p>
+                  <p className="text-xs text-[#848E9C] mt-1">1,000 USDT has been added to your wallet</p>
+                  <p className="text-xs text-[#5E6673] mt-2">2 hours ago</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-[#23262F] rounded-lg">
+                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                <div className="flex-1">
+                  <p className="text-sm text-[#EAECEF] font-medium">KYC verification completed</p>
+                  <p className="text-xs text-[#848E9C] mt-1">Your account is now fully verified</p>
+                  <p className="text-xs text-[#5E6673] mt-2">1 day ago</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-[#23262F] rounded-lg">
+                <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                <div className="flex-1">
+                  <p className="text-sm text-[#EAECEF] font-medium">Trading bonus credited</p>
+                  <p className="text-xs text-[#848E9C] mt-1">$50 bonus has been added to your account</p>
+                  <p className="text-xs text-[#5E6673] mt-2">3 days ago</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="p-3 border-t border-[#2B3139]">
+            <button className="text-xs text-[#F0B90B] hover:text-yellow-400 transition-colors">
+              Mark all as read
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Dropdown */}
+      {profileOpen && (
+        <div className="absolute top-16 right-4 w-64 bg-[#1E2329] border border-[#2B3139] rounded-xl shadow-xl z-50" data-dropdown>
+          <div className="p-4 border-b border-[#2B3139]">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#F0B90B] rounded-full flex items-center justify-center">
+                <span className="text-sm font-bold text-[#181A20]">
+                  {user?.first_name?.[0] || user?.email?.[0] || 'U'}
+                </span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-[#EAECEF]">
+                  {user?.first_name && user?.last_name 
+                    ? `${user.first_name} ${user.last_name}` 
+                    : user?.email || 'User'
+                  }
+                </p>
+                <p className="text-xs text-[#848E9C]">{user?.email}</p>
+              </div>
+            </div>
+          </div>
+          <div className="py-2">
+            <button 
+              className="w-full px-4 py-2 text-left text-sm text-[#EAECEF] hover:bg-[#23262F] transition-colors flex items-center gap-3"
+              onClick={() => {
+                navigate('/account');
+                setProfileOpen(false);
+              }}
+            >
+              <User size={16} className="text-[#848E9C]" />
+              Profile Settings
+            </button>
+            <button 
+              className="w-full px-4 py-2 text-left text-sm text-[#EAECEF] hover:bg-[#23262F] transition-colors flex items-center gap-3"
+              onClick={() => {
+                navigate('/security');
+                setProfileOpen(false);
+              }}
+            >
+              <Shield size={16} className="text-[#848E9C]" />
+              Security
+            </button>
+            <button 
+              className="w-full px-4 py-2 text-left text-sm text-[#EAECEF] hover:bg-[#23262F] transition-colors flex items-center gap-3"
+              onClick={() => {
+                navigate('/payment-methods');
+                setProfileOpen(false);
+              }}
+            >
+              <CreditCard size={16} className="text-[#848E9C]" />
+              Payment Methods
+            </button>
+            <button 
+              className="w-full px-4 py-2 text-left text-sm text-[#EAECEF] hover:bg-[#23262F] transition-colors flex items-center gap-3"
+              onClick={() => {
+                navigate('/transaction-history');
+                setProfileOpen(false);
+              }}
+            >
+              <History size={16} className="text-[#848E9C]" />
+              Transaction History
+            </button>
+            <div className="border-t border-[#2B3139] my-2"></div>
+            <button 
+              className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-[#23262F] transition-colors flex items-center gap-3"
+              onClick={() => {
+                logout();
+                setProfileOpen(false);
+              }}
+            >
+              <LogOut size={16} />
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="px-4 py-4 space-y-4">

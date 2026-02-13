@@ -262,25 +262,6 @@ export default function Login() {
                 </Link>
               </p>
             </div>
-
-            {/* Demo Credentials - Mobile Optimized */}
-            <div className="mt-6 pt-6 border-t border-[#2B3139]">
-              <p className="text-xs text-center text-[#5E6673] mb-3">
-                ⚡ Demo credentials for testing
-              </p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-[#1E2329] rounded-lg p-2">
-                  <div className="text-[#848E9C]">User</div>
-                  <div className="text-[#EAECEF] font-mono truncate">user@demo.com</div>
-                  <div className="text-[#848E9C] text-[10px]">••••••••</div>
-                </div>
-                <div className="bg-[#1E2329] rounded-lg p-2">
-                  <div className="text-[#848E9C]">Admin</div>
-                  <div className="text-[#EAECEF] font-mono truncate">admin@demo.com</div>
-                  <div className="text-[#848E9C] text-[10px]">••••••••</div>
-                </div>
-              </div>
-            </div>
           </Card>
         </motion.div>
 

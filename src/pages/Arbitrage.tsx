@@ -170,7 +170,7 @@ const EmptyRecords = ({ onClose }: { onClose: () => void }) => (
 // ==================== MAIN COMPONENT ====================
 export default function ArbitragePage() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { 
     balances, 
     transactions, 
@@ -280,6 +280,15 @@ export default function ArbitragePage() {
 
   // Handlers
   const handleStartArbitrage = async () => {
+    if (!isAuthenticated) {
+      toast({ 
+        title: '🔒 Authentication Required', 
+        description: 'Please login to place real arbitrage trades. You can use demo mode to practice.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     if (!selectedProduct || !investmentAmount) {
       toast({ 
         title: 'Error', 
@@ -338,6 +347,15 @@ export default function ArbitragePage() {
   };
 
   const handleStartStaking = async () => {
+    if (!isAuthenticated) {
+      toast({ 
+        title: '🔒 Authentication Required', 
+        description: 'Please login to place real staking investments. You can use demo mode to practice.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     const amount = Number(stakingAmount);
     
     if (!stakingAmount || isNaN(amount) || amount <= 0) {
@@ -388,6 +406,15 @@ export default function ArbitragePage() {
   };
 
   const handleBuy = async () => {
+    if (!isAuthenticated) {
+      toast({ 
+        title: '🔒 Authentication Required', 
+        description: 'Please login to place real trades. You can use demo mode to practice.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     const amount = Number(tradeAmount);
     
     if (!tradeAmount || isNaN(amount) || amount <= 0) {
@@ -497,6 +524,19 @@ export default function ArbitragePage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* View Only Mode Banner for Unauthenticated Users */}
+      {!isAuthenticated && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mx-4 mb-4">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-yellow-400">View Only Mode</p>
+              <p className="text-xs text-yellow-300 mt-1">You're viewing the arbitrage interface in read-only mode. <a href="/login" className="underline hover:text-yellow-200">Login</a> to place real trades.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Header */}
       <div className="sticky top-0 z-30 bg-[#181A20]/95 backdrop-blur border-b border-[#2B3139] lg:hidden">
