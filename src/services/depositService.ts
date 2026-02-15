@@ -4,17 +4,17 @@ export interface DepositRequest {
   id?: string;
   user_id: string;
   user_email: string;
-  user_name?: string;
+  user_name?: string | null;
   amount: number;
   currency: string;
   network: string;
   address: string;
   status: 'Pending' | 'Approved' | 'Rejected' | 'Processing' | 'Completed';
-  proof_url?: string;
-  proof_file_name?: string;
-  admin_notes?: string;
-  processed_by?: string;
-  processed_at?: string;
+  proof_url?: string | null;
+  proof_file_name?: string | null;
+  admin_notes?: string | null;
+  processed_by?: string | null;
+  processed_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -62,12 +62,70 @@ export interface AdminActionLog {
 }
 
 class DepositService {
-  // Create a new deposit request
-  async createDepositRequest(depositRequest: Omit<DepositRequest, 'id' | 'created_at' | 'updated_at'>): Promise<{ success: boolean; data?: DepositRequest; error?: string }> {
+  // Create a new deposit request with optional file upload
+  async createDepositRequest(
+    depositRequest: Omit<DepositRequest, 'id' | 'created_at' | 'updated_at'>,
+    proofFile?: File
+  ): Promise<{ success: boolean; data?: DepositRequest; error?: string }> {
     try {
+      console.log(' [DepositService] Creating deposit request:', depositRequest);
+
+      // Handle file upload if provided
+      let proofUrl: string | null = null;
+      let proofFileName: string | null = null;
+
+      if (proofFile) {
+        console.log(' [DepositService] Uploading proof file...');
+        console.log(' [DepositService] File details:', {
+          name: proofFile.name,
+          type: proofFile.type,
+          size: proofFile.size,
+          lastModified: proofFile.lastModified
+        });
+        
+        const fileName = `${depositRequest.user_id}/${Date.now()}-${proofFile.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('deposit-proofs')
+          .upload(fileName, proofFile, {
+            upsert: true,
+            cacheControl: '3600'
+            // Remove contentType - let Supabase auto-detect
+          });
+        
+        if (uploadError) {
+          console.error('❌ [DepositService] File upload error:', uploadError);
+          console.error('❌ [DepositService] Error details:', {
+            message: uploadError.message,
+            code: uploadError.statusCode
+          });
+          
+          // Don't fail the entire request - continue without file upload
+          console.log('⚠️ [DepositService] Continuing without file upload...');
+          // Don't return error, just continue with null values for file
+        } else {
+          // Get public URL
+          const { data: publicUrlData } = supabase.storage
+            .from('deposit-proofs')
+            .getPublicUrl(fileName);
+          
+          proofUrl = publicUrlData.publicUrl;
+          proofFileName = proofFile.name;
+          console.log('✅ [DepositService] File uploaded successfully:', proofUrl);
+        }
+      }
+
+      // Prepare the deposit request with file info
+      const requestWithFile = {
+        ...depositRequest,
+        proof_url: proofUrl,
+        proof_file_name: proofFileName,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
       const { data, error } = await supabase
         .from('deposit_requests')
-        .insert([depositRequest])
+        .insert([requestWithFile])
         .select()
         .single();
 
@@ -76,6 +134,7 @@ class DepositService {
         return { success: false, error: error.message };
       }
 
+      console.log('✅ [DepositService] Deposit request created successfully:', data);
       return { success: true, data };
     } catch (error) {
       console.error('Unexpected error creating deposit request:', error);

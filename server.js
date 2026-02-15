@@ -18,7 +18,16 @@ const supabaseKey = process.env.SUPABASE_ANON_KEY || 'your-anon-key';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'], // Your Vite frontend URLs
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
+// Handle preflight requests
+app.options('*', cors());
+
 app.use(express.json());
 
 // Configure multer for file uploads
@@ -132,6 +141,16 @@ const cryptoPrices = [
     marketCap: 356000000000
   }
 ];
+
+// Test endpoints for debugging
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Server is working' });
+});
+
+app.post('/api/test-post', (req, res) => {
+  console.log('Test POST endpoint hit with body:', req.body);
+  res.json({ message: 'POST is working', body: req.body });
+});
 
 // Routes
 app.get('/api/health', (req, res) => {

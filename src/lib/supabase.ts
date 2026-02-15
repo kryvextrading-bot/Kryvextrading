@@ -268,6 +268,28 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['trading_pairs']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['trading_pairs']['Row']>
       }
+      deposit_requests: {
+        Row: {
+          id: string
+          user_id: string
+          user_email: string
+          user_name: string | null
+          amount: number
+          currency: string
+          network: string
+          address: string
+          status: 'Pending' | 'Approved' | 'Rejected' | 'Processing' | 'Completed'
+          proof_url: string | null
+          proof_file_name: string | null
+          admin_notes: string | null
+          processed_by: string | null
+          processed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['deposit_requests']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['deposit_requests']['Row']>
+      }
     }
   }
 }

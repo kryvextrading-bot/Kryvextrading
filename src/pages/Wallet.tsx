@@ -29,18 +29,17 @@ import { useMarketData } from '@/contexts/MarketDataContext';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { Separator } from '@/components/ui/separator';
 
 // Services
 import { walletService } from '@/services/walletService';
-import { transactionService } from '@/services/transactionService';
-import { adminService } from '@/services/adminService';
 import { tradingDataService } from '@/services/trading-data-service';
+import { depositService } from '@/services/depositService';
 import { supabase } from '@/lib/supabase';
 
 // Types
@@ -100,6 +99,7 @@ interface ModalState {
   // Deposit
   depositNetwork: string;
   depositAmount: string;
+  depositAddress: string;
   depositProof: File | null;
   depositProofUrl: string;
   
@@ -659,6 +659,8 @@ export default function WalletPage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'value' | 'balance' | 'name'>('value');
   const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [depositRequests, setDepositRequests] = useState<any[]>([]);
+  const [showDepositModal, setShowDepositModal] = useState<boolean>(false);
 
   // Modal state
   const [modalState, setModalState] = useState<ModalState>({
@@ -666,6 +668,7 @@ export default function WalletPage() {
     error: '',
     depositNetwork: 'ERC20',
     depositAmount: '',
+    depositAddress: '',
     depositProof: null,
     depositProofUrl: '',
     withdrawAddress: '',
@@ -690,6 +693,7 @@ export default function WalletPage() {
       error: '',
       depositNetwork: 'ERC20',
       depositAmount: '',
+      depositAddress: '',
       depositProof: null,
       depositProofUrl: '',
       withdrawAddress: '',
@@ -800,107 +804,95 @@ export default function WalletPage() {
     setShowTransferModal(true);
   }, []);
 
-  // Handle deposit request submission
+  // Handle deposit request submission using direct Supabase
   const handleDepositRequest = async () => {
     if (!selectedAsset) return;
 
     const amount = parseFloat(modalState.depositAmount);
-    if (isNaN(amount) || amount <= 0) {
+    const network = modalState.depositNetwork;
+    const address = modalState.depositAddress;
+    const proofFile = modalState.depositProof;
+
+    // Validation
+    if (!amount || amount <= 0) {
       setModalState(s => ({ ...s, error: 'Please enter a valid amount' }));
       return;
     }
 
-    const network = NETWORKS[selectedAsset.symbol]?.find(n => n.name === modalState.depositNetwork);
     if (!network) {
       setModalState(s => ({ ...s, error: 'Please select a network' }));
       return;
     }
 
-    if (amount < network.minDeposit) {
-      setModalState(s => ({ ...s, error: `Minimum deposit is ${network.minDeposit} ${selectedAsset.symbol}` }));
+    if (!proofFile) {
+      setModalState(s => ({ ...s, error: 'Please upload proof of payment' }));
       return;
     }
 
-    if (!modalState.depositProof) {
-      setModalState(s => ({ ...s, error: 'Please upload payment proof' }));
-      return;
-    }
+    setModalState(s => ({ ...s, isSubmitting: true, error: '' }));
 
     try {
-      setModalState(s => ({ ...s, isSubmitting: true, error: '' }));
-
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('amount', modalState.depositAmount);
-      formData.append('currency', selectedAsset.symbol);
-      formData.append('network', modalState.depositNetwork);
-      formData.append('address', network.address);
-      formData.append('proof', modalState.depositProof);
-      formData.append('userId', user?.id || '');
-      formData.append('userEmail', user?.email || '');
-      formData.append('userName', `${user?.first_name || ''} ${user?.last_name || ''}`.trim());
-
-      // Submit deposit request
-      const response = await fetch(`${process.env.SUPABASE_URL}/functions/v1/deposit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.access_token || ''}`,
-        },
-        body: JSON.stringify({
-          amount: modalState.depositAmount,
-          currency: selectedAsset.symbol,
-          network: modalState.depositNetwork,
-          address: network.address
-        }),
+      console.log('🚀 [Wallet] Submitting deposit request via Supabase:', {
+        amount,
+        currency: selectedAsset.symbol,
+        network,
+        hasProof: !!proofFile
       });
 
-      if (!response.ok) {
-        let error;
-        try {
-          error = await response.json();
-        } catch (parseError) {
-          // If response is not JSON, use status text or create generic error
-          error = { 
-            message: response.statusText || `HTTP ${response.status}: Request failed` 
-          };
-        }
-        throw new Error(error.message || 'Failed to submit deposit request');
+      console.log('🔍 [Wallet] Debug - proofFile details:', {
+        file: proofFile,
+        name: proofFile?.name,
+        type: proofFile?.type,
+        size: proofFile?.size,
+        isFile: proofFile instanceof File
+      });
+
+      // Get the platform's deposit address for the selected network
+      const platformAddress = NETWORKS[selectedAsset.symbol]?.find(n => n.name === network)?.address || '';
+
+      console.log('🔍 [Wallet] Debug - platformAddress:', platformAddress);
+
+      const result = await depositService.createDepositRequest({
+        user_id: user?.id || '',
+        user_email: user?.email || '',
+        user_name: `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || user?.email || '',
+        amount: amount,
+        currency: selectedAsset.symbol,
+        network: network,
+        address: platformAddress, // Use platform address, not user input
+        status: 'Pending'
+      }, proofFile);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to submit deposit request');
       }
 
-      const result = await response.json();
+      console.log('✅ [Wallet] Deposit request created successfully:', result.data);
 
-      // Add transaction record
-      addTransaction({
-        id: result.id || Date.now().toString(),
-        type: 'Deposit',
-        asset: selectedAsset.symbol,
-        amount,
-        status: 'Pending',
-        date: new Date().toISOString(),
-        details: { 
-          network: modalState.depositNetwork,
-          address: network.address,
-          requestId: result.id 
-        },
-        metadata: {
-          network: modalState.depositNetwork,
-          address: network.address
-        }
-      });
+      // Update local state
+      setDepositRequests(prev => [result.data!, ...prev]);
 
+      // Show success message
       toast({
         title: "Deposit Request Submitted",
         description: `Your deposit request for ${amount} ${selectedAsset.symbol} has been submitted for review.`,
       });
 
       // Reset and close modal
-      setModal(null);
+      setShowDepositModal(false);
       resetModalState();
 
+      // Redirect back to wallet page using React Router
+      setTimeout(() => {
+        navigate('/wallet');
+      }, 2000);
+
     } catch (error) {
-      console.error('Deposit request error:', error);
-      setModalState(s => ({ ...s, error: error instanceof Error ? error.message : 'Failed to submit deposit request' }));
+      console.error('❌ [Wallet] Deposit request error:', error);
+      setModalState(s => ({ 
+        ...s, 
+        error: error instanceof Error ? error.message : 'Failed to submit deposit request' 
+      }));
     } finally {
       setModalState(s => ({ ...s, isSubmitting: false }));
     }
@@ -2297,7 +2289,12 @@ export default function WalletPage() {
               
               {/* Deposit Address */}
               <div>
-                <Label className="block text-sm text-[#848E9C] mb-2">Deposit Address</Label>
+                <Label className="block text-sm text-[#848E9C] mb-2">Platform Deposit Address</Label>
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 mb-3">
+                  <p className="text-xs text-blue-400 font-medium">
+                    💡 Copy this address and send your {selectedAsset.symbol} to deposit funds
+                  </p>
+                </div>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 bg-[#23262F] rounded-xl px-4 py-3 text-xs text-[#EAECEF] font-mono break-all border border-[#2B3139]">
                     {NETWORKS[selectedAsset.symbol]?.find(n => n.name === modalState.depositNetwork)?.address || ''}
@@ -2312,8 +2309,8 @@ export default function WalletPage() {
                       setModalState(s => ({ ...s, copied: 'address' }));
                       setTimeout(() => setModalState(s => ({ ...s, copied: '' })), 2000);
                       toast({
-                        title: 'Copied!',
-                        description: 'Address copied to clipboard',
+                        title: 'Address Copied!',
+                        description: 'Platform deposit address copied to clipboard',
                       });
                     }}
                   >
