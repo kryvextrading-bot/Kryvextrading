@@ -1,4 +1,4 @@
-import { Home, TrendingUp, Wallet, User, CreditCard, Settings, Shuffle } from 'lucide-react';
+import { Home, TrendingUp, Wallet, User, CreditCard, Settings, Shuffle, ArrowUpDown } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,7 @@ const navigationItems = [
   { href: '/trading', icon: TrendingUp, label: 'Trading' },
   { href: '/arbitrage', icon: Shuffle, label: 'Arbitrage' },
   { href: '/wallet', icon: Wallet, label: 'Wallet' },
+  { href: '/wallet-transfer', icon: ArrowUpDown, label: 'Transfer' },
   { href: '/portfolio', icon: CreditCard, label: 'Portfolio' },
   { href: '/account', icon: User, label: 'Account' },
 ];

@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+// TransactionHistory.tsx - Fixed with proper wallet integration and admin controls
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowDownLeft, 
@@ -12,19 +13,50 @@ import {
   CheckCircle,
   Clock,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Copy,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Crown,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  PieChart,
+  BarChart3,
+  Wallet,
+  Activity,
+  Zap,
+  Shield,
+  HelpCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 
+// Hooks
+import { useAuth } from '@/contexts/AuthContext';
+import { useWallet } from '@/contexts/WalletContext';
+
+// Services
+import { transactionService } from '@/services/transactionService';
+import { walletService } from '@/services/walletService';
+
+// Utils
+import { formatCurrency, formatPrice, formatPercentage } from '@/utils/tradingCalculations';
+
+// Types
 interface Transaction {
   id: string;
-  type: 'deposit' | 'withdrawal' | 'swap' | 'trade' | 'staking' | 'options';
-  status: 'completed' | 'pending' | 'failed';
+  userId: string;
+  type: 'deposit' | 'withdrawal' | 'swap' | 'trade' | 'staking' | 'options' | 'fee' | 'funding' | 'referral' | 'airdrop';
+  status: 'completed' | 'pending' | 'processing' | 'failed' | 'cancelled';
   amount: number;
   currency: string;
   fromCurrency?: string;
@@ -33,156 +65,334 @@ interface Transaction {
   date: string;
   txHash?: string;
   fee?: number;
+  metadata?: {
+    direction?: 'up' | 'down';
+    leverage?: number;
+    timeFrame?: number;
+    payout?: number;
+    expiresAt?: number;
+    shouldWin?: boolean;
+    outcome?: 'win' | 'loss';
+    pnl?: number;
+    orderType?: string;
+    positionId?: string;
+  };
+  confirmations?: number;
+  network?: string;
+  address?: string;
 }
+
+// Constants
+const ITEMS_PER_PAGE = 20;
 
 export default function TransactionHistory() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, isAuthenticated } = useAuth();
+  const { balances, refreshBalances, getBalance } = useWallet();
+
+  // State
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [dateRange, setDateRange] = useState<string>('all');
+  const [showBalances, setShowBalances] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [customDateRange, setCustomDateRange] = useState<{ start?: Date; end?: Date }>({});
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'type'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // Sample transaction data
-  const [transactions] = useState<Transaction[]>([
-    {
-      id: '1',
-      type: 'deposit',
-      status: 'completed',
-      amount: 1000,
-      currency: 'USDT',
-      description: 'Bank deposit',
-      date: '2024-01-15T10:30:00Z',
-      txHash: '0x1234...5678',
-      fee: 2.5
-    },
-    {
-      id: '2',
-      type: 'trade',
-      status: 'completed',
-      amount: 0.05,
-      currency: 'BTC',
-      description: 'BTC/USDT trade',
-      date: '2024-01-14T15:45:00Z',
-      fee: 0.0001
-    },
-    {
-      id: '3',
-      type: 'withdrawal',
-      status: 'pending',
-      amount: 500,
-      currency: 'USDT',
-      description: 'Bank withdrawal',
-      date: '2024-01-13T09:20:00Z',
-      fee: 5
-    },
-    {
-      id: '4',
-      type: 'swap',
-      status: 'completed',
-      amount: 100,
-      currency: 'ETH',
-      fromCurrency: 'USDT',
-      toCurrency: 'ETH',
-      description: 'USDT to ETH swap',
-      date: '2024-01-12T14:15:00Z',
-      fee: 0.5
-    },
-    {
-      id: '5',
-      type: 'staking',
-      status: 'completed',
-      amount: 1000,
-      currency: 'USDT',
-      description: 'Staking reward',
-      date: '2024-01-10T12:00:00Z'
-    },
-    {
-      id: '6',
-      type: 'options',
-      status: 'failed',
-      amount: 100,
-      currency: 'USDT',
-      description: 'Options trade - BTC Call',
-      date: '2024-01-08T16:30:00Z',
-      fee: 2
+  // Load transactions
+  useEffect(() => {
+    if (user?.id) {
+      loadTransactions();
     }
-  ]);
+  }, [user?.id]);
 
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(transaction => {
-      const matchesSearch = transaction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           transaction.currency.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           transaction.id.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesType = filterType === 'all' || transaction.type === filterType;
-      const matchesStatus = filterStatus === 'all' || transaction.status === filterStatus;
-      
-      return matchesSearch && matchesType && matchesStatus;
+  const loadTransactions = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setLoading(true);
+      const data = await transactionService.getUserTransactions(user.id);
+      setTransactions(data);
+      await refreshBalances();
+    } catch (error) {
+      console.error('Failed to load transactions:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load transaction history",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadTransactions();
+    setRefreshing(false);
+    toast({
+      title: "Refreshed",
+      description: "Transaction history updated",
     });
-  }, [transactions, searchTerm, filterType, filterStatus]);
-
-  const getTransactionIcon = (type: string) => {
-    switch (type) {
-      case 'deposit':
-        return <ArrowDownLeft className="w-4 h-4" />;
-      case 'withdrawal':
-        return <ArrowUpRight className="w-4 h-4" />;
-      case 'swap':
-        return <ArrowRightLeft className="w-4 h-4" />;
-      case 'trade':
-        return <TrendingUp className="w-4 h-4" />;
-      case 'staking':
-        return <CheckCircle className="w-4 h-4" />;
-      case 'options':
-        return <TrendingUp className="w-4 h-4" />;
-      default:
-        return <Clock className="w-4 h-4" />;
-    }
   };
 
-  const getTransactionColor = (type: string) => {
-    switch (type) {
-      case 'deposit':
-        return 'bg-green-500/20 text-green-400 border-green-500/30';
-      case 'withdrawal':
-        return 'bg-red-500/20 text-red-400 border-red-500/30';
-      case 'swap':
-        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      case 'trade':
-        return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
-      case 'staking':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
-      case 'options':
-        return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
-      default:
-        return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
-    }
+  // Filter and sort transactions
+  const filteredTransactions = useMemo(() => {
+    let filtered = transactions.filter(transaction => {
+      // Search filter
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const matches = 
+          transaction.description.toLowerCase().includes(term) ||
+          transaction.currency.toLowerCase().includes(term) ||
+          transaction.id.toLowerCase().includes(term) ||
+          (transaction.txHash && transaction.txHash.toLowerCase().includes(term)) ||
+          (transaction.address && transaction.address.toLowerCase().includes(term));
+        
+        if (!matches) return false;
+      }
+      
+      // Type filter
+      if (filterType !== 'all' && transaction.type !== filterType) {
+        return false;
+      }
+      
+      // Status filter
+      if (filterStatus !== 'all' && transaction.status !== filterStatus) {
+        return false;
+      }
+      
+      // Date filter
+      if (dateRange !== 'all') {
+        const txDate = new Date(transaction.date);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        
+        switch (dateRange) {
+          case 'today':
+            const today = new Date(now);
+            if (txDate < today || txDate > new Date(today.getTime() + 86400000)) return false;
+            break;
+          case 'week':
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            if (txDate < weekAgo) return false;
+            break;
+          case 'month':
+            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            if (txDate < monthAgo) return false;
+            break;
+          case 'year':
+            const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+            if (txDate < yearAgo) return false;
+            break;
+          case 'custom':
+            if (customDateRange.start && txDate < customDateRange.start) return false;
+            if (customDateRange.end && txDate > customDateRange.end) return false;
+            break;
+        }
+      }
+      
+      return true;
+    });
+
+    // Sort
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'date':
+          comparison = new Date(b.date).getTime() - new Date(a.date).getTime();
+          break;
+        case 'amount':
+          comparison = b.amount - a.amount;
+          break;
+        case 'type':
+          comparison = a.type.localeCompare(b.type);
+          break;
+      }
+      
+      return sortOrder === 'desc' ? comparison : -comparison;
+    });
+
+    return filtered;
+  }, [transactions, searchTerm, filterType, filterStatus, dateRange, customDateRange, sortBy, sortOrder]);
+
+  // Pagination
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredTransactions.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredTransactions, currentPage]);
+
+  const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE);
+
+  // Statistics
+  const stats = useMemo(() => {
+    const total = filteredTransactions.length;
+    const completed = filteredTransactions.filter(t => t.status === 'completed').length;
+    const pending = filteredTransactions.filter(t => t.status === 'pending' || t.status === 'processing').length;
+    const failed = filteredTransactions.filter(t => t.status === 'failed' || t.status === 'cancelled').length;
+    
+    const totalDeposits = filteredTransactions
+      .filter(t => t.type === 'deposit' && t.status === 'completed')
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    const totalWithdrawals = filteredTransactions
+      .filter(t => t.type === 'withdrawal' && t.status === 'completed')
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    const totalFees = filteredTransactions
+      .filter(t => t.fee)
+      .reduce((sum, t) => sum + (t.fee || 0), 0);
+      
+    const totalPnl = filteredTransactions
+      .filter(t => t.metadata?.pnl)
+      .reduce((sum, t) => sum + (t.metadata?.pnl || 0), 0);
+      
+    const wins = filteredTransactions
+      .filter(t => t.metadata?.outcome === 'win').length;
+      
+    const losses = filteredTransactions
+      .filter(t => t.metadata?.outcome === 'loss').length;
+      
+    // Group by currency
+    const byCurrency = filteredTransactions.reduce((acc, t) => {
+      if (!acc[t.currency]) {
+        acc[t.currency] = { deposits: 0, withdrawals: 0, trades: 0, volume: 0 };
+      }
+      if (t.type === 'deposit') acc[t.currency].deposits += t.amount;
+      if (t.type === 'withdrawal') acc[t.currency].withdrawals += t.amount;
+      if (t.type === 'trade') {
+        acc[t.currency].trades++;
+        acc[t.currency].volume += t.amount;
+      }
+      return acc;
+    }, {} as Record<string, { deposits: number; withdrawals: number; trades: number; volume: number }>);
+    
+    return {
+      total,
+      completed,
+      pending,
+      failed,
+      totalDeposits,
+      totalWithdrawals,
+      totalFees,
+      totalPnl,
+      wins,
+      losses,
+      winRate: wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0,
+      byCurrency
+    };
+  }, [filteredTransactions]);
+
+  // Get transaction icon and color
+  const getTransactionConfig = (type: string) => {
+    const configs: Record<string, { icon: JSX.Element; color: string; label: string }> = {
+      deposit: {
+        icon: <ArrowDownLeft className="w-4 h-4" />,
+        color: 'bg-green-500/20 text-green-400 border-green-500/30',
+        label: 'Deposit'
+      },
+      withdrawal: {
+        icon: <ArrowUpRight className="w-4 h-4" />,
+        color: 'bg-red-500/20 text-red-400 border-red-500/30',
+        label: 'Withdrawal'
+      },
+      swap: {
+        icon: <ArrowRightLeft className="w-4 h-4" />,
+        color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+        label: 'Swap'
+      },
+      trade: {
+        icon: <TrendingUp className="w-4 h-4" />,
+        color: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+        label: 'Trade'
+      },
+      staking: {
+        icon: <Zap className="w-4 h-4" />,
+        color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+        label: 'Staking'
+      },
+      options: {
+        icon: <Activity className="w-4 h-4" />,
+        color: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+        label: 'Options'
+      },
+      fee: {
+        icon: <Wallet className="w-4 h-4" />,
+        color: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+        label: 'Fee'
+      },
+      funding: {
+        icon: <RefreshCw className="w-4 h-4" />,
+        color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+        label: 'Funding'
+      },
+      referral: {
+        icon: <Crown className="w-4 h-4" />,
+        color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+        label: 'Referral'
+      },
+      airdrop: {
+        icon: <Calendar className="w-4 h-4" />,
+        color: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
+        label: 'Airdrop'
+      }
+    };
+    
+    return configs[type] || {
+      icon: <HelpCircle className="w-4 h-4" />,
+      color: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+      label: type
+    };
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusConfig = (status: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="w-4 h-4 text-green-400" />;
+        return {
+          icon: <CheckCircle className="w-4 h-4" />,
+          color: 'bg-green-500/20 text-green-400 border-green-500/30',
+          label: 'Completed'
+        };
       case 'pending':
-        return <Clock className="w-4 h-4 text-yellow-400" />;
+        return {
+          icon: <Clock className="w-4 h-4" />,
+          color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+          label: 'Pending'
+        };
+      case 'processing':
+        return {
+          icon: <RefreshCw className="w-4 h-4 animate-spin" />,
+          color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+          label: 'Processing'
+        };
       case 'failed':
-        return <XCircle className="w-4 h-4 text-red-400" />;
+        return {
+          icon: <XCircle className="w-4 h-4" />,
+          color: 'bg-red-500/20 text-red-400 border-red-500/30',
+          label: 'Failed'
+        };
+      case 'cancelled':
+        return {
+          icon: <XCircle className="w-4 h-4" />,
+          color: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+          label: 'Cancelled'
+        };
       default:
-        return <AlertCircle className="w-4 h-4 text-gray-400" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-green-500/20 text-green-400 border-green-500/30';
-      case 'pending':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
-      case 'failed':
-        return 'bg-red-500/20 text-red-400 border-red-500/30';
-      default:
-        return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+        return {
+          icon: <AlertCircle className="w-4 h-4" />,
+          color: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+          label: status
+        };
     }
   };
 
@@ -197,16 +407,127 @@ export default function TransactionHistory() {
     });
   };
 
-  const handleExport = () => {
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHour = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHour / 24);
+
+    if (diffSec < 60) return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHour < 24) return `${diffHour}h ago`;
+    if (diffDay < 7) return `${diffDay}d ago`;
+    return formatDate(dateString);
+  };
+
+  const handleExport = (format: 'csv' | 'json' = 'csv') => {
+    try {
+      if (format === 'csv') {
+        const headers = [
+          'ID',
+          'Type',
+          'Status',
+          'Amount',
+          'Currency',
+          'From/To',
+          'Description',
+          'Date',
+          'TX Hash',
+          'Fee',
+          'Network',
+          'Address'
+        ].join(',');
+
+        const rows = filteredTransactions.map(tx => [
+          tx.id,
+          tx.type,
+          tx.status,
+          tx.amount,
+          tx.currency,
+          tx.fromCurrency ? `${tx.fromCurrency}→${tx.toCurrency}` : '',
+          `"${tx.description.replace(/"/g, '""')}"`,
+          new Date(tx.date).toISOString(),
+          tx.txHash || '',
+          tx.fee || '',
+          tx.network || '',
+          tx.address || ''
+        ].join(','));
+
+        const csv = [headers, ...rows].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        toast({
+          title: "Export Successful",
+          description: `Exported ${filteredTransactions.length} transactions to CSV`,
+        });
+      } else {
+        const json = JSON.stringify(filteredTransactions, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `transactions_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        toast({
+          title: "Export Successful",
+          description: `Exported ${filteredTransactions.length} transactions to JSON`,
+        });
+      }
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export transactions",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const copyToClipboard = (text: string, description: string) => {
+    navigator.clipboard.writeText(text);
     toast({
-      title: "Export Started",
-      description: "Your transaction history is being exported to CSV.",
+      title: "Copied",
+      description: `${description} copied to clipboard`,
     });
   };
 
+  const viewTransactionDetails = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    setShowDetails(true);
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#0B0E11] flex items-center justify-center p-4">
+        <Card className="bg-[#181A20] border-[#2B3139] p-8 max-w-md text-center">
+          <Shield className="w-16 h-16 text-[#F0B90B] mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-[#EAECEF] mb-2">Authentication Required</h2>
+          <p className="text-[#848E9C] mb-6">Please log in to view your transaction history</p>
+          <Button
+            className="bg-[#F0B90B] text-[#181A20] hover:bg-yellow-400 w-full"
+            onClick={() => navigate('/login')}
+          >
+            Log In
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0B0E11] p-4 md:p-6">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <Button 
@@ -217,168 +538,788 @@ export default function TransactionHistory() {
             ← Back to Wallet
           </Button>
           
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-[#F0B90B] rounded-full flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-[#181A20]" />
+                <FileText className="w-6 h-6 text-[#181A20]" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-[#EAECEF]">Transaction History</h1>
                 <p className="text-[#848E9C]">View and manage all your transaction records</p>
               </div>
             </div>
-            <Button 
-              onClick={handleExport}
-              variant="outline"
-              className="border-[#2B3139] text-[#EAECEF] hover:bg-[#2B3139]"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Export CSV
-            </Button>
+            
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="border-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]"
+                onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+              >
+                {viewMode === 'list' ? <BarChart3 className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+              </Button>
+              
+              <Select onValueChange={(value: 'csv' | 'json') => handleExport(value)}>
+                <SelectTrigger className="w-32 bg-[#1E2329] border-[#2B3139] text-[#EAECEF]">
+                  <SelectValue placeholder="Export" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="csv">CSV</SelectItem>
+                  <SelectItem value="json">JSON</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Button
+                variant="outline"
+                className="border-[#2B3139] text-[#EAECEF] hover:bg-[#2B3139]"
+                onClick={handleRefresh}
+                disabled={refreshing}
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
           </div>
+        </div>
+
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <Card className="bg-[#181A20] border-[#2B3139] p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-[#848E9C]">Total Balance</p>
+                <p className="text-xl font-bold text-[#EAECEF]">
+                  {showBalances ? formatCurrency(getBalance('USDT')) : '••••••'}
+                </p>
+              </div>
+              <Wallet className="w-8 h-8 text-[#F0B90B] opacity-50" />
+            </div>
+          </Card>
+
+          <Card className="bg-[#181A20] border-[#2B3139] p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-[#848E9C]">Deposits</p>
+                <p className="text-xl font-bold text-green-400">
+                  {showBalances ? formatCurrency(stats.totalDeposits) : '••••••'}
+                </p>
+              </div>
+              <ArrowDownLeft className="w-8 h-8 text-green-400 opacity-50" />
+            </div>
+          </Card>
+
+          <Card className="bg-[#181A20] border-[#2B3139] p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-[#848E9C]">Withdrawals</p>
+                <p className="text-xl font-bold text-red-400">
+                  {showBalances ? formatCurrency(stats.totalWithdrawals) : '••••••'}
+                </p>
+              </div>
+              <ArrowUpRight className="w-8 h-8 text-red-400 opacity-50" />
+            </div>
+          </Card>
+
+          <Card className="bg-[#181A20] border-[#2B3139] p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-[#848E9C]">Total P&L</p>
+                <p className={`text-xl font-bold ${stats.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {showBalances ? (
+                    <>{stats.totalPnl >= 0 ? '+' : ''}{formatCurrency(stats.totalPnl)}</>
+                  ) : '••••••'}
+                </p>
+              </div>
+              <TrendingUp className={`w-8 h-8 ${stats.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'} opacity-50`} />
+            </div>
+          </Card>
         </div>
 
         {/* Filters */}
-        <Card className="bg-[#181A20] border-[#2B3139] p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#848E9C]" />
-              <Input
-                placeholder="Search transactions..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-[#1E2329] border-[#2B3139] text-[#EAECEF]"
-              />
+        <Card className="bg-[#181A20] border-[#2B3139] p-4 mb-6">
+          <div className="flex flex-col lg:flex-row gap-3">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#848E9C]" />
+                <Input
+                  placeholder="Search by ID, hash, address..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-10 bg-[#1E2329] border-[#2B3139] text-[#EAECEF]"
+                />
+              </div>
             </div>
             
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="bg-[#1E2329] border-[#2B3139] text-[#EAECEF]">
-                <SelectValue placeholder="All Types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="deposit">Deposits</SelectItem>
-                <SelectItem value="withdrawal">Withdrawals</SelectItem>
-                <SelectItem value="trade">Trades</SelectItem>
-                <SelectItem value="swap">Swaps</SelectItem>
-                <SelectItem value="staking">Staking</SelectItem>
-                <SelectItem value="options">Options</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap gap-2">
+              <Select value={filterType} onValueChange={(value) => {
+                setFilterType(value);
+                setCurrentPage(1);
+              }}>
+                <SelectTrigger className="w-32 bg-[#1E2329] border-[#2B3139] text-[#EAECEF]">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="deposit">Deposit</SelectItem>
+                  <SelectItem value="withdrawal">Withdrawal</SelectItem>
+                  <SelectItem value="trade">Trade</SelectItem>
+                  <SelectItem value="swap">Swap</SelectItem>
+                  <SelectItem value="options">Options</SelectItem>
+                  <SelectItem value="staking">Staking</SelectItem>
+                  <SelectItem value="fee">Fee</SelectItem>
+                  <SelectItem value="funding">Funding</SelectItem>
+                  <SelectItem value="referral">Referral</SelectItem>
+                  <SelectItem value="airdrop">Airdrop</SelectItem>
+                </SelectContent>
+              </Select>
 
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="bg-[#1E2329] border-[#2B3139] text-[#EAECEF]">
-                <SelectValue placeholder="All Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-              </SelectContent>
-            </Select>
+              <Select value={filterStatus} onValueChange={(value) => {
+                setFilterStatus(value);
+                setCurrentPage(1);
+              }}>
+                <SelectTrigger className="w-32 bg-[#1E2329] border-[#2B3139] text-[#EAECEF]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
 
-            <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger className="bg-[#1E2329] border-[#2B3139] text-[#EAECEF]">
-                <SelectValue placeholder="All Time" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="week">This Week</SelectItem>
-                <SelectItem value="month">This Month</SelectItem>
-                <SelectItem value="year">This Year</SelectItem>
-              </SelectContent>
-            </Select>
+              <Select value={dateRange} onValueChange={(value) => {
+                setDateRange(value);
+                setCurrentPage(1);
+              }}>
+                <SelectTrigger className="w-32 bg-[#1E2329] border-[#2B3139] text-[#EAECEF]">
+                  <SelectValue placeholder="Date" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="year">This Year</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+                <SelectTrigger className="w-32 bg-[#1E2329] border-[#2B3139] text-[#EAECEF]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date">Date</SelectItem>
+                  <SelectItem value="amount">Amount</SelectItem>
+                  <SelectItem value="type">Type</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="border border-[#2B3139] bg-[#1E2329]"
+                onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+              >
+                {sortOrder === 'desc' ? '↓' : '↑'}
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="border border-[#2B3139] bg-[#1E2329]"
+                onClick={() => {
+                  setSearchTerm('');
+                  setFilterType('all');
+                  setFilterStatus('all');
+                  setDateRange('all');
+                  setCustomDateRange({});
+                  setCurrentPage(1);
+                }}
+              >
+                <XCircle className="w-4 h-4 text-[#848E9C]" />
+              </Button>
+            </div>
           </div>
+
+          {/* Custom date range */}
+          {dateRange === 'custom' && (
+            <div className="mt-3 flex gap-2">
+              <Input
+                type="date"
+                className="flex-1 bg-[#1E2329] border-[#2B3139] text-[#EAECEF]"
+                onChange={(e) => setCustomDateRange(prev => ({ 
+                  ...prev, 
+                  start: e.target.value ? new Date(e.target.value) : undefined 
+                }))}
+              />
+              <Input
+                type="date"
+                className="flex-1 bg-[#1E2329] border-[#2B3139] text-[#EAECEF]"
+                onChange={(e) => setCustomDateRange(prev => ({ 
+                  ...prev, 
+                  end: e.target.value ? new Date(e.target.value) : undefined 
+                }))}
+              />
+            </div>
+          )}
         </Card>
 
         {/* Transaction List */}
-        <div className="space-y-3">
-          {filteredTransactions.map((transaction) => (
-            <Card key={transaction.id} className="bg-[#181A20] border-[#2B3139] p-6 hover:bg-[#1E2329] transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={`p-3 rounded-lg border ${getTransactionColor(transaction.type)}`}>
-                    {getTransactionIcon(transaction.type)}
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <RefreshCw className="w-8 h-8 text-[#F0B90B] animate-spin" />
+          </div>
+        ) : filteredTransactions.length === 0 ? (
+          <Card className="bg-[#181A20] border-[#2B3139] p-12 text-center">
+            <FileText className="w-16 h-16 text-[#848E9C] mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-[#EAECEF] mb-2">No Transactions Found</h3>
+            <p className="text-[#848E9C] max-w-md mx-auto">
+              {searchTerm || filterType !== 'all' || filterStatus !== 'all' || dateRange !== 'all'
+                ? "No transactions match your current filters. Try adjusting them."
+                : "You haven't made any transactions yet. Start trading to see your history."}
+            </p>
+          </Card>
+        ) : viewMode === 'list' ? (
+          // List View
+          <div className="space-y-3">
+            <AnimatePresence>
+              {paginatedTransactions.map((transaction, index) => {
+                const typeConfig = getTransactionConfig(transaction.type);
+                const statusConfig = getStatusConfig(transaction.status);
+                
+                return (
+                  <motion.div
+                    key={transaction.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <Card className="bg-[#181A20] border-[#2B3139] p-4 hover:bg-[#1E2329] transition-colors cursor-pointer"
+                          onClick={() => viewTransactionDetails(transaction)}>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-4">
+                          <div className={`p-3 rounded-lg border ${typeConfig.color}`}>
+                            {typeConfig.icon}
+                          </div>
+                          
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-medium text-[#EAECEF] capitalize">
+                                {typeConfig.label}
+                              </h3>
+                              <Badge className={`text-xs ${statusConfig.color}`}>
+                                {statusConfig.icon}
+                                <span className="ml-1 capitalize">{statusConfig.label}</span>
+                              </Badge>
+                              {transaction.metadata?.shouldWin && (
+                                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                                  <Crown className="w-3 h-3 mr-1" />
+                                  Force Win
+                                </Badge>
+                              )}
+                            </div>
+                            
+                            <p className="text-sm text-[#848E9C] mb-2">{transaction.description}</p>
+                            
+                            <div className="flex flex-wrap gap-3 text-xs">
+                              {transaction.txHash && (
+                                <button
+                                  className="text-[#5E6673] hover:text-[#F0B90B] flex items-center gap-1"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyToClipboard(transaction.txHash!, 'Transaction hash');
+                                  }}
+                                >
+                                  <span className="font-mono">
+                                    {transaction.txHash.slice(0, 10)}...{transaction.txHash.slice(-8)}
+                                  </span>
+                                  <Copy className="w-3 h-3" />
+                                </button>
+                              )}
+                              
+                              {transaction.address && (
+                                <button
+                                  className="text-[#5E6673] hover:text-[#F0B90B] flex items-center gap-1"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyToClipboard(transaction.address!, 'Address');
+                                  }}
+                                >
+                                  <span className="font-mono">
+                                    {transaction.address.slice(0, 8)}...{transaction.address.slice(-6)}
+                                  </span>
+                                  <Copy className="w-3 h-3" />
+                                </button>
+                              )}
+                              
+                              <span className="text-[#5E6673]">
+                                {formatRelativeTime(transaction.date)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="text-right">
+                          <div className={`text-lg font-semibold ${
+                            transaction.type === 'deposit' || transaction.type === 'staking' || transaction.type === 'referral' || transaction.type === 'airdrop'
+                              ? 'text-green-400'
+                              : transaction.type === 'withdrawal'
+                                ? 'text-red-400'
+                                : 'text-[#EAECEF]'
+                          }`}>
+                            {transaction.type === 'deposit' || transaction.type === 'staking' || transaction.type === 'referral' || transaction.type === 'airdrop'
+                              ? '+'
+                              : transaction.type === 'withdrawal'
+                                ? '-'
+                                : ''}
+                            {transaction.amount} {transaction.currency}
+                          </div>
+                          
+                          {transaction.fromCurrency && transaction.toCurrency && (
+                            <div className="text-xs text-[#848E9C] mt-1">
+                              {transaction.fromCurrency} → {transaction.toCurrency}
+                            </div>
+                          )}
+                          
+                          {transaction.fee ? (
+                            <div className="text-xs text-[#848E9C] mt-1">
+                              Fee: {transaction.fee} {transaction.currency}
+                            </div>
+                          ) : transaction.metadata?.pnl ? (
+                            <div className={`text-xs mt-1 ${transaction.metadata.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              P&L: {transaction.metadata.pnl >= 0 ? '+' : ''}{formatCurrency(transaction.metadata.pnl)}
+                            </div>
+                          ) : null}
+                          
+                          {transaction.confirmations !== undefined && (
+                            <div className="text-xs text-[#848E9C] mt-1">
+                              {transaction.confirmations} confirmations
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        ) : (
+          // Grid View
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <AnimatePresence>
+              {paginatedTransactions.map((transaction, index) => {
+                const typeConfig = getTransactionConfig(transaction.type);
+                const statusConfig = getStatusConfig(transaction.status);
+                
+                return (
+                  <motion.div
+                    key={transaction.id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <Card className="bg-[#181A20] border-[#2B3139] p-4 hover:bg-[#1E2329] transition-colors cursor-pointer h-full"
+                          onClick={() => viewTransactionDetails(transaction)}>
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className={`p-2 rounded-lg border ${typeConfig.color}`}>
+                          {typeConfig.icon}
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-medium text-[#EAECEF] capitalize">{typeConfig.label}</h3>
+                          <Badge className={`text-xs ${statusConfig.color}`}>
+                            {statusConfig.icon}
+                            <span className="ml-1 capitalize">{statusConfig.label}</span>
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      <p className="text-sm text-[#848E9C] mb-3 line-clamp-2">{transaction.description}</p>
+                      
+                      <div className="mb-3">
+                        <div className={`text-xl font-bold ${
+                          transaction.type === 'deposit' || transaction.type === 'staking' || transaction.type === 'referral' || transaction.type === 'airdrop'
+                            ? 'text-green-400'
+                            : transaction.type === 'withdrawal'
+                              ? 'text-red-400'
+                              : 'text-[#EAECEF]'
+                        }`}>
+                          {transaction.type === 'deposit' || transaction.type === 'staking' || transaction.type === 'referral' || transaction.type === 'airdrop'
+                            ? '+'
+                            : transaction.type === 'withdrawal'
+                              ? '-'
+                              : ''}
+                          {transaction.amount} {transaction.currency}
+                        </div>
+                        
+                        {transaction.metadata?.pnl && (
+                          <div className={`text-sm ${transaction.metadata.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            P&L: {transaction.metadata.pnl >= 0 ? '+' : ''}{formatCurrency(transaction.metadata.pnl)}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="text-xs text-[#5E6673]">
+                        {formatDate(transaction.date)}
+                      </div>
+                      
+                      {transaction.txHash && (
+                        <button
+                          className="mt-2 text-xs text-[#5E6673] hover:text-[#F0B90B] flex items-center gap-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(transaction.txHash!, 'Transaction hash');
+                          }}
+                        >
+                          <span className="font-mono">
+                            {transaction.txHash.slice(0, 10)}...{transaction.txHash.slice(-8)}
+                          </span>
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      )}
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {filteredTransactions.length > 0 && (
+          <div className="mt-6 flex items-center justify-between">
+            <div className="text-xs text-[#848E9C]">
+              Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredTransactions.length)} of {filteredTransactions.length}
+            </div>
+            
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 border border-[#2B3139]"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum = currentPage;
+                if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                if (pageNum > 0 && pageNum <= totalPages) {
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? 'default' : 'ghost'}
+                      size="sm"
+                      className={`h-8 w-8 p-0 ${
+                        currentPage === pageNum 
+                          ? 'bg-[#F0B90B] text-[#181A20] hover:bg-yellow-400' 
+                          : 'border border-[#2B3139]'
+                      }`}
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                }
+                return null;
+              })}
+              
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 border border-[#2B3139]"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Summary by Currency */}
+        {Object.keys(stats.byCurrency).length > 0 && (
+          <Card className="bg-[#181A20] border-[#2B3139] p-6 mt-6">
+            <h3 className="text-lg font-semibold text-[#EAECEF] mb-4">Summary by Asset</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(stats.byCurrency).map(([currency, data]) => (
+                <div key={currency} className="bg-[#1E2329] rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-[#EAECEF]">{currency}</span>
+                    <Badge className="bg-[#2B3139] text-[#848E9C]">{data.trades} trades</Badge>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-medium text-[#EAECEF] capitalize">{transaction.type}</h3>
-                      <Badge className={`text-xs ${getStatusColor(transaction.status)}`}>
-                        {getStatusIcon(transaction.status)}
-                        <span className="ml-1 capitalize">{transaction.status}</span>
-                      </Badge>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-[#848E9C] text-xs">Deposits</span>
+                      <div className="text-green-400 font-medium">
+                        {showBalances ? formatCurrency(data.deposits) : '••••••'}
+                      </div>
                     </div>
-                    <p className="text-sm text-[#848E9C]">{transaction.description}</p>
-                    {transaction.txHash && (
-                      <p className="text-xs text-[#5E6673] mt-1">
-                        Tx: {transaction.txHash}
-                      </p>
+                    <div>
+                      <span className="text-[#848E9C] text-xs">Withdrawals</span>
+                      <div className="text-red-400 font-medium">
+                        {showBalances ? formatCurrency(data.withdrawals) : '••••••'}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-[#848E9C] text-xs">Volume</span>
+                      <div className="text-[#EAECEF] font-medium">
+                        {showBalances ? formatCurrency(data.volume) : '••••••'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
+
+      {/* Transaction Details Modal */}
+      {showDetails && selectedTransaction && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-[#181A20] border border-[#2B3139] rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          >
+            <div className="p-4 border-b border-[#2B3139] flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-[#EAECEF]">Transaction Details</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowDetails(false)}
+              >
+                <XCircle className="h-5 w-5 text-[#848E9C]" />
+              </Button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Header with type and status */}
+              <div className="flex items-center gap-3">
+                <div className={`p-3 rounded-lg border ${getTransactionConfig(selectedTransaction.type).color}`}>
+                  {getTransactionConfig(selectedTransaction.type).icon}
+                </div>
+                <div>
+                  <h4 className="text-xl font-bold text-[#EAECEF] capitalize">
+                    {getTransactionConfig(selectedTransaction.type).label}
+                  </h4>
+                  <Badge className={`mt-1 ${getStatusConfig(selectedTransaction.status).color}`}>
+                    {getStatusConfig(selectedTransaction.status).icon}
+                    <span className="ml-1 capitalize">{selectedTransaction.status}</span>
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Transaction ID */}
+              <div>
+                <div className="text-xs text-[#848E9C] mb-1">Transaction ID</div>
+                <div className="text-sm text-[#EAECEF] font-mono break-all flex items-center gap-2">
+                  {selectedTransaction.id}
+                  <button
+                    onClick={() => copyToClipboard(selectedTransaction.id, 'Transaction ID')}
+                    className="text-[#848E9C] hover:text-[#F0B90B]"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Amount and Currency */}
+              <div className="bg-[#1E2329] rounded-lg p-4">
+                <div className="text-xs text-[#848E9C] mb-1">Amount</div>
+                <div className={`text-2xl font-bold ${
+                  selectedTransaction.type === 'deposit' || selectedTransaction.type === 'staking' || selectedTransaction.type === 'referral' || selectedTransaction.type === 'airdrop'
+                    ? 'text-green-400'
+                    : selectedTransaction.type === 'withdrawal'
+                      ? 'text-red-400'
+                      : 'text-[#EAECEF]'
+                }`}>
+                  {selectedTransaction.type === 'deposit' || selectedTransaction.type === 'staking' || selectedTransaction.type === 'referral' || selectedTransaction.type === 'airdrop'
+                    ? '+'
+                    : selectedTransaction.type === 'withdrawal'
+                      ? '-'
+                      : ''}
+                  {selectedTransaction.amount} {selectedTransaction.currency}
+                </div>
+              </div>
+
+              {/* Details Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-[#848E9C]">Date</div>
+                  <div className="text-sm text-[#EAECEF]">{formatDate(selectedTransaction.date)}</div>
+                </div>
+                
+                <div>
+                  <div className="text-xs text-[#848E9C]">Network</div>
+                  <div className="text-sm text-[#EAECEF]">{selectedTransaction.network || 'Mainnet'}</div>
+                </div>
+
+                {selectedTransaction.fromCurrency && selectedTransaction.toCurrency && (
+                  <>
+                    <div>
+                      <div className="text-xs text-[#848E9C]">From</div>
+                      <div className="text-sm text-[#EAECEF]">{selectedTransaction.fromCurrency}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-[#848E9C]">To</div>
+                      <div className="text-sm text-[#EAECEF]">{selectedTransaction.toCurrency}</div>
+                    </div>
+                  </>
+                )}
+
+                {selectedTransaction.fee && (
+                  <div>
+                    <div className="text-xs text-[#848E9C]">Fee</div>
+                    <div className="text-sm text-[#EAECEF]">{selectedTransaction.fee} {selectedTransaction.currency}</div>
+                  </div>
+                )}
+
+                {selectedTransaction.confirmations !== undefined && (
+                  <div>
+                    <div className="text-xs text-[#848E9C]">Confirmations</div>
+                    <div className="text-sm text-[#EAECEF]">{selectedTransaction.confirmations}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Addresses */}
+              {selectedTransaction.address && (
+                <div>
+                  <div className="text-xs text-[#848E9C] mb-1">Address</div>
+                  <div className="text-sm text-[#EAECEF] font-mono break-all flex items-center gap-2">
+                    {selectedTransaction.address}
+                    <button
+                      onClick={() => copyToClipboard(selectedTransaction.address!, 'Address')}
+                      className="text-[#848E9C] hover:text-[#F0B90B]"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Transaction Hash */}
+              {selectedTransaction.txHash && (
+                <div>
+                  <div className="text-xs text-[#848E9C] mb-1">Transaction Hash</div>
+                  <div className="text-sm text-[#EAECEF] font-mono break-all flex items-center gap-2">
+                    {selectedTransaction.txHash}
+                    <button
+                      onClick={() => copyToClipboard(selectedTransaction.txHash!, 'Transaction hash')}
+                      className="text-[#848E9C] hover:text-[#F0B90B]"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                    <a
+                      href={`https://etherscan.io/tx/${selectedTransaction.txHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#848E9C] hover:text-[#F0B90B]"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Description */}
+              <div>
+                <div className="text-xs text-[#848E9C] mb-1">Description</div>
+                <div className="text-sm text-[#EAECEF]">{selectedTransaction.description}</div>
+              </div>
+
+              {/* Metadata */}
+              {selectedTransaction.metadata && Object.keys(selectedTransaction.metadata).length > 0 && (
+                <div className="bg-[#1E2329] rounded-lg p-3">
+                  <h4 className="text-sm font-medium text-[#EAECEF] mb-2">Additional Details</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    {selectedTransaction.metadata.direction && (
+                      <>
+                        <span className="text-[#848E9C]">Direction:</span>
+                        <span className={selectedTransaction.metadata.direction === 'up' ? 'text-green-400' : 'text-red-400'}>
+                          {selectedTransaction.metadata.direction.toUpperCase()}
+                        </span>
+                      </>
+                    )}
+                    {selectedTransaction.metadata.leverage && (
+                      <>
+                        <span className="text-[#848E9C]">Leverage:</span>
+                        <span className="text-[#F0B90B]">{selectedTransaction.metadata.leverage}x</span>
+                      </>
+                    )}
+                    {selectedTransaction.metadata.timeFrame && (
+                      <>
+                        <span className="text-[#848E9C]">Time Frame:</span>
+                        <span className="text-[#EAECEF]">{selectedTransaction.metadata.timeFrame}s</span>
+                      </>
+                    )}
+                    {selectedTransaction.metadata.payout && (
+                      <>
+                        <span className="text-[#848E9C]">Payout:</span>
+                        <span className="text-green-400">{formatCurrency(selectedTransaction.metadata.payout)}</span>
+                      </>
+                    )}
+                    {selectedTransaction.metadata.pnl && (
+                      <>
+                        <span className="text-[#848E9C]">P&L:</span>
+                        <span className={selectedTransaction.metadata.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
+                          {selectedTransaction.metadata.pnl >= 0 ? '+' : ''}{formatCurrency(selectedTransaction.metadata.pnl)}
+                        </span>
+                      </>
+                    )}
+                    {selectedTransaction.metadata.shouldWin !== undefined && (
+                      <>
+                        <span className="text-[#848E9C]">Force Win:</span>
+                        <Badge className={selectedTransaction.metadata.shouldWin ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-500/20 text-gray-400'}>
+                          {selectedTransaction.metadata.shouldWin ? 'Enabled' : 'Disabled'}
+                        </Badge>
+                      </>
                     )}
                   </div>
                 </div>
-                
-                <div className="text-right">
-                  <div className="text-lg font-semibold text-[#EAECEF]">
-                    {transaction.type === 'deposit' || transaction.type === 'staking' ? '+' : '-'}
-                    {transaction.amount} {transaction.currency}
-                  </div>
-                  {transaction.fee && (
-                    <p className="text-xs text-[#848E9C]">
-                      Fee: {transaction.fee} {transaction.currency}
-                    </p>
-                  )}
-                  <p className="text-xs text-[#5E6673] mt-1">
-                    {formatDate(transaction.date)}
-                  </p>
-                </div>
-              </div>
-            </Card>
-          ))}
+              )}
+            </div>
+
+            <div className="p-4 border-t border-[#2B3139] flex justify-end gap-2">
+              <Button
+                variant="outline"
+                className="border-[#2B3139] text-[#848E9C]"
+                onClick={() => setShowDetails(false)}
+              >
+                Close
+              </Button>
+              <Button
+                className="bg-[#F0B90B] text-[#181A20] hover:bg-yellow-400"
+                onClick={() => {
+                  copyToClipboard(selectedTransaction.id, 'Transaction ID');
+                }}
+              >
+                Copy ID
+              </Button>
+            </div>
+          </motion.div>
         </div>
-
-        {filteredTransactions.length === 0 && (
-          <Card className="bg-[#181A20] border-[#2B3139] p-12 text-center">
-            <Calendar className="w-12 h-12 text-[#848E9C] mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-[#EAECEF] mb-2">No Transactions Found</h3>
-            <p className="text-[#848E9C]">
-              {searchTerm || filterType !== 'all' || filterStatus !== 'all'
-                ? "No transactions match your current filters."
-                : "You haven't made any transactions yet."}
-            </p>
-          </Card>
-        )}
-
-        {/* Summary Stats */}
-        <Card className="bg-[#181A20] border-[#2B3139] p-6 mt-6">
-          <h3 className="text-lg font-semibold text-[#EAECEF] mb-4">Summary</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <p className="text-sm text-[#848E9C]">Total Transactions</p>
-              <p className="text-xl font-bold text-[#EAECEF]">{filteredTransactions.length}</p>
-            </div>
-            <div>
-              <p className="text-sm text-[#848E9C]">Completed</p>
-              <p className="text-xl font-bold text-green-400">
-                {filteredTransactions.filter(t => t.status === 'completed').length}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-[#848E9C]">Pending</p>
-              <p className="text-xl font-bold text-yellow-400">
-                {filteredTransactions.filter(t => t.status === 'pending').length}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-[#848E9C]">Failed</p>
-              <p className="text-xl font-bold text-red-400">
-                {filteredTransactions.filter(t => t.status === 'failed').length}
-              </p>
-            </div>
-          </div>
-        </Card>
-      </div>
+      )}
     </div>
   );
 }

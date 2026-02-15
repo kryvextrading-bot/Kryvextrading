@@ -1,52 +1,14 @@
-// API Service Layer for Swan IRA Platform
+// API Service Layer for Swan IRA Platform - Clean Version
 // This handles all backend communication and data management
 
-import { Investment } from '@/types';
+import { supabase } from '@/lib/supabase';
+import { adminApiService } from './admin-api';
 
 // API Configuration
 const API_BASE_URL = 'http://localhost:3001';
 
-export interface User {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  status: 'Active' | 'Pending' | 'Suspended';
-  kycStatus: 'Verified' | 'Pending' | 'Rejected';
-  accountType: 'Traditional IRA' | 'Roth IRA';
-  accountNumber: string;
-  balance: number;
-  lastLogin: string;
-  registrationDate: string;
-  twoFactorEnabled: boolean;
-  riskTolerance: 'Conservative' | 'Moderate' | 'Aggressive';
-  investmentGoal: 'Retirement' | 'Wealth Building' | 'Tax Savings';
-  isAdmin?: boolean;
-  creditScore?: number;
-  adminRole?: 'admin' | 'superadmin' | 'finance' | 'support';
-  kyc?: {
-    documents: { type: string; url: string; uploadedAt: string }[];
-    submittedAt: string;
-    verifiedAt?: string;
-    notes?: string;
-  };
-}
-
-export interface Transaction {
-  id: string;
-  userId: string;
-  userEmail: string;
-  type: 'Buy' | 'Sell' | 'Deposit' | 'Withdrawal';
-  asset: string;
-  amount: string;
-  value: number;
-  status: 'Completed' | 'Pending' | 'Failed';
-  date: string;
-  fee: number;
-}
-
-export interface CryptoPrice {
+// Price data interfaces
+export interface PriceData {
   symbol: string;
   name: string;
   price: number;
@@ -55,650 +17,411 @@ export interface CryptoPrice {
   marketCap: number;
 }
 
+// Stub functions for price data (to be implemented with real APIs)
+export async function getStockPrices(): Promise<PriceData[]> {
+  // TODO: Implement with real stock API
+  return [];
+}
+
+export async function getForexPrices(): Promise<PriceData[]> {
+  // TODO: Implement with real forex API
+  return [];
+}
+
+export async function getEtfPrices(): Promise<PriceData[]> {
+  // TODO: Implement with real ETF API
+  return [];
+}
+
+export async function getCryptoPrices(): Promise<PriceData[]> {
+  // TODO: Implement with real crypto API
+  return [];
+}
+
+export interface User {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  status: "Active" | "Pending" | "Suspended";
+  kycStatus: "Pending" | "Verified" | "Rejected";
+  accountType: "Traditional IRA" | "Roth IRA";
+  accountNumber: string;
+  balance: number;
+  lastLogin: string;
+  registrationDate: string;
+  twoFactorEnabled: boolean;
+  riskTolerance: "Conservative" | "Moderate" | "Aggressive";
+  investmentGoal: "Retirement" | "Wealth Building" | "Tax Savings";
+  isAdmin: boolean;
+  adminRole?: "finance" | "admin" | "superadmin" | "support";
+  creditScore: number;
+  mfaEnabled: boolean;
+}
+
+export interface Transaction {
+  id: string;
+  userId: string;
+  userEmail: string;
+  type: string;
+  asset: string;
+  amount: number;
+  value: number;
+  status: string;
+  date: string;
+  fee: number;
+  details: any;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SystemSettings {
-  general: {
-    platformName: string;
-    supportEmail: string;
-    maintenanceMode: boolean;
-    registrationEnabled: boolean;
-    maxLoginAttempts: number;
-    sessionTimeout: number;
-  };
-  security: {
-    twoFactorRequired: boolean;
-    passwordMinLength: number;
-    requireSpecialChars: boolean;
-    requireNumbers: boolean;
-    requireUppercase: boolean;
-    maxPasswordAge: number;
-    rateLimitEnabled: boolean;
-    rateLimitRequests: number;
-    rateLimitWindow: number;
-  };
-  trading: {
-    tradingEnabled: boolean;
-    minTradeAmount: number;
-    maxTradeAmount: number;
-    autoApprovalLimit: number;
-    requireKycForLargeTrades: boolean;
-    largeTradeThreshold: number;
-  };
+  maintenance: boolean;
+  maintenanceMessage: string;
+  tradingEnabled: boolean;
+  newRegistrations: boolean;
+  kycRequired: boolean;
+  twoFactorRequired: boolean;
+  maxWithdrawalAmount: number;
+  supportedAssets: string[];
+}
+
+export interface AuditLog {
+  id: string;
+  action: string;
+  details: string;
+  timestamp: string;
+  adminId: string;
+}
+
+export interface SecurityEvent {
+  id: string;
+  type: string;
+  severity: "low" | "medium" | "high" | "critical";
+  description: string;
+  timestamp: string;
+  resolved: boolean;
+}
+
+export interface DashboardStats {
+  totalUsers: number;
+  activeUsers: number;
+  totalTransactions: number;
+  totalVolume: number;
+  pendingKYC: number;
+  systemStatus: "healthy" | "warning" | "critical";
 }
 
 // Mock data for development
 const mockUsers: User[] = [
   {
-    id: '1',
-    firstName: 'John',
-    lastName: 'Doe',
-    email: 'john.doe@email.com',
-    phone: '+1 (555) 123-4567',
-    status: 'Active',
-    kycStatus: 'Verified',
-    kyc: {
-      documents: [
-        { type: 'ID Card', url: '/uploads/john-idcard.pdf', uploadedAt: '2024-07-10' },
-        { type: 'Proof of Address', url: '/uploads/john-address.pdf', uploadedAt: '2024-07-10' }
-      ],
-      submittedAt: '2024-07-10',
-      verifiedAt: '2024-07-11',
-      notes: 'All documents verified.'
-    },
-    accountType: 'Traditional IRA',
-    accountNumber: 'IRA-2024-001234',
-    balance: 45230.50,
-    lastLogin: '2 hours ago',
-    registrationDate: '2024-01-15',
+    id: "1",
+    firstName: "John",
+    lastName: "Doe",
+    email: "john.doe@email.com",
+    phone: "+1234567890",
+    status: "Active",
+    kycStatus: "Verified",
+    accountType: "Traditional IRA",
+    accountNumber: "IRA123456789",
+    balance: 50000,
+    lastLogin: "2024-01-15T10:30:00Z",
+    registrationDate: "2023-06-15T09:00:00Z",
     twoFactorEnabled: true,
-    riskTolerance: 'Moderate',
-    investmentGoal: 'Retirement',
-    isAdmin: true,
-    adminRole: 'admin'
+    riskTolerance: "Moderate",
+    investmentGoal: "Retirement",
+    isAdmin: false,
+    creditScore: 750,
+    mfaEnabled: true
   },
   {
-    id: '2',
-    firstName: 'Jane',
-    lastName: 'Smith',
-    email: 'jane.smith@email.com',
-    phone: '+1 (555) 234-5678',
-    status: 'Pending',
-    kycStatus: 'Pending',
-    kyc: {
-      documents: [
-        { type: 'ID Card', url: '/uploads/jane-idcard.pdf', uploadedAt: '2024-07-12' }
-      ],
-      submittedAt: '2024-07-12',
-      notes: 'Awaiting proof of address.'
-    },
-    accountType: 'Roth IRA',
-    accountNumber: 'IRA-2024-001235',
-    balance: 12450.00,
-    lastLogin: '1 day ago',
-    registrationDate: '2024-01-20',
+    id: "2",
+    firstName: "Jane",
+    lastName: "Smith",
+    email: "jane.smith@email.com",
+    phone: "+1234567891",
+    status: "Pending",
+    kycStatus: "Pending",
+    accountType: "Roth IRA",
+    accountNumber: "ROTH987654321",
+    balance: 25000,
+    lastLogin: "2024-01-10T15:45:00Z",
+    registrationDate: "2023-08-20T14:30:00Z",
     twoFactorEnabled: false,
-    riskTolerance: 'Conservative',
-    investmentGoal: 'Wealth Building'
+    riskTolerance: "Conservative",
+    investmentGoal: "Wealth Building",
+    isAdmin: false,
+    creditScore: 680,
+    mfaEnabled: false
   },
   {
-    id: '3',
-    firstName: 'Alice',
-    lastName: 'Admin',
-    email: 'alice.admin@email.com',
-    phone: '+1 (555) 999-8888',
-    status: 'Active',
-    kycStatus: 'Verified',
-    kyc: {
-      documents: [
-        { type: 'Passport', url: '/uploads/alice-passport.pdf', uploadedAt: '2024-07-09' }
-      ],
-      submittedAt: '2024-07-09',
-      verifiedAt: '2024-07-10',
-      notes: 'Passport verified.'
-    },
-    accountType: 'Roth IRA',
-    accountNumber: 'IRA-2024-001236',
-    balance: 99999.99,
-    lastLogin: 'just now',
-    registrationDate: '2024-07-15',
+    id: "99",
+    firstName: "Admin",
+    lastName: "Laurent",
+    email: "admin@swan-ira.com",
+    phone: "+1234567899",
+    status: "Active",
+    kycStatus: "Verified",
+    accountType: "Admin",
+    accountNumber: "ADMIN001",
+    balance: 0,
+    lastLogin: "2024-01-16T08:00:00Z",
+    registrationDate: "2023-01-01T00:00:00Z",
     twoFactorEnabled: true,
-    riskTolerance: 'Aggressive',
-    investmentGoal: 'Wealth Building',
+    riskTolerance: "Moderate",
+    investmentGoal: "Retirement",
     isAdmin: true,
-    adminRole: 'superadmin'
+    adminRole: "superadmin",
+    creditScore: 850,
+    mfaEnabled: true
   }
 ];
 
 const mockTransactions: Transaction[] = [
   {
-    id: 'TXN-001',
-    userId: '1',
-    userEmail: 'john.doe@email.com',
-    type: 'Buy',
-    asset: 'Bitcoin',
-    amount: '0.5 BTC',
-    value: 23450.00,
-    status: 'Completed',
-    date: '2024-01-15 14:30:00',
-    fee: 12.50
+    id: "1",
+    userId: "1",
+    userEmail: "john.doe@email.com",
+    type: "buy",
+    asset: "BTC",
+    amount: 0.5,
+    value: 25000,
+    status: "completed",
+    date: "2024-01-15T10:30:00Z",
+    fee: 25,
+    details: { exchange: "Coinbase", price: 50000 },
+    created_at: "2024-01-15T10:30:00Z",
+    updated_at: "2024-01-15T10:35:00Z"
   },
   {
-    id: 'TXN-002',
-    userId: '2',
-    userEmail: 'jane.smith@email.com',
-    type: 'Sell',
-    asset: 'Ethereum',
-    amount: '2.5 ETH',
-    value: 7890.00,
-    status: 'Pending',
-    date: '2024-01-15 13:45:00',
-    fee: 8.75
+    id: "2",
+    userId: "2",
+    userEmail: "jane.smith@email.com",
+    type: "sell",
+    asset: "ETH",
+    amount: 2,
+    value: 4000,
+    status: "pending",
+    date: "2024-01-16T14:20:00Z",
+    fee: 8,
+    details: { exchange: "Kraken", price: 2000 },
+    created_at: "2024-01-16T14:20:00Z",
+    updated_at: "2024-01-16T14:20:00Z"
   }
 ];
 
-const mockCryptoPrices: CryptoPrice[] = [
-  {
-    symbol: 'BTC',
-    name: 'Bitcoin',
-    price: 117727.00,
-    change24h: 0.70,
-    volume24h: 48163307000,
-    marketCap: 2300000000000
-  },
-  {
-    symbol: 'ETH',
-    name: 'Ethereum',
-    price: 2967.59,
-    change24h: 0.59,
-    volume24h: 48596018000,
-    marketCap: 356000000000
-  }
-];
-
-// Add mock credit score data
-let mockCreditScores: Record<string, number> = {
-  '1': 100,
-  '2': 85
+const mockSystemSettings: SystemSettings = {
+  maintenance: false,
+  maintenanceMessage: "",
+  tradingEnabled: true,
+  newRegistrations: true,
+  kycRequired: true,
+  twoFactorRequired: false,
+  maxWithdrawalAmount: 10000,
+  supportedAssets: ["BTC", "ETH", "LTC", "BCH", "ADA"]
 };
 
-// --- Investment Mock Data ---
-const mockInvestments: Investment[] = [
+const mockAuditLogs: AuditLog[] = [
   {
-    id: '1',
-    type: 'quant-trading',
-    name: 'Crypto Growth Fund',
-    description: 'A diversified crypto fund with algorithmic trading.',
-    minInvestment: 1000,
-    expectedReturn: 8.5,
-    duration: '12 months',
-    riskLevel: 'medium',
-    icon: ''
+    id: "1",
+    action: "User Login",
+    details: "Admin user logged in successfully",
+    timestamp: "2024-01-16T08:00:00Z",
+    adminId: "99"
   },
   {
-    id: '2',
-    type: 'node-staking',
-    name: 'Stablecoin Staking',
-    description: 'Stake stablecoins for steady returns.',
-    minInvestment: 500,
-    expectedReturn: 5.2,
-    duration: '6 months',
-    riskLevel: 'low',
-    icon: ''
-  },
-  {
-    id: '3',
-    type: 'ai-arbitrage',
-    name: 'DeFi Yield Pool',
-    description: 'AI-powered DeFi arbitrage pool.',
-    minInvestment: 2000,
-    expectedReturn: 12.0,
-    duration: '3 months',
-    riskLevel: 'high',
-    icon: ''
+    id: "2",
+    action: "User Update",
+    details: "Updated user KYC status",
+    timestamp: "2024-01-15T16:30:00Z",
+    adminId: "99"
   }
 ];
 
-// --- Alpha Vantage and Twelve Data utilities ---
-const ALPHA_VANTAGE_KEY = import.meta.env.VITE_ALPHA_VANTAGE_KEY;
-const TWELVE_DATA_KEY = import.meta.env.VITE_TWELVE_DATA_KEY;
+const mockSecurityEvents: SecurityEvent[] = [
+  {
+    id: "1",
+    type: "Failed Login Attempt",
+    severity: "medium",
+    description: "Multiple failed login attempts detected",
+    timestamp: "2024-01-16T07:45:00Z",
+    resolved: false
+  }
+];
 
-async function fetchAlphaVantageStock(symbol: string) {
-  const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_KEY}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  const quote = data["Global Quote"];
+const mockDashboardStats: DashboardStats = {
+  totalUsers: 3,
+  activeUsers: 2,
+  totalTransactions: 2,
+  totalVolume: 29000,
+  pendingKYC: 1,
+  systemStatus: "healthy"
+};
+
+// Helper function to transform Supabase user data to our User interface
+function transformSupabaseUser(supabaseUser: any): User {
   return {
-    symbol,
-    name: symbol,
-    price: parseFloat(quote["05. price"]),
-    change: parseFloat(quote["10. change percent"]?.replace('%','')),
+    id: supabaseUser.id,
+    firstName: supabaseUser.first_name || '',
+    lastName: supabaseUser.last_name || '',
+    email: supabaseUser.email || '',
+    phone: supabaseUser.phone || '',
+    status: supabaseUser.status || 'Pending',
+    kycStatus: supabaseUser.kyc_status || 'Pending',
+    accountType: supabaseUser.account_type || 'Traditional IRA',
+    accountNumber: supabaseUser.account_number || '',
+    balance: supabaseUser.balance || 0,
+    lastLogin: supabaseUser.last_login || '',
+    registrationDate: supabaseUser.created_at || '',
+    twoFactorEnabled: supabaseUser.two_factor_enabled || false,
+    riskTolerance: supabaseUser.risk_tolerance || 'Moderate',
+    investmentGoal: supabaseUser.investment_goal || 'Retirement',
+    isAdmin: supabaseUser.is_admin || false,
+    adminRole: supabaseUser.admin_role,
+    creditScore: supabaseUser.credit_score || 700,
+    mfaEnabled: supabaseUser.mfa_enabled || false
   };
 }
 
-async function fetchAlphaVantageForex(pair: string) {
-  // pair: "EUR/USD" => "EURUSD"
-  const from = pair.split('/')[0];
-  const to = pair.split('/')[1];
-  const url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${from}&to_currency=${to}&apikey=${ALPHA_VANTAGE_KEY}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  const rate = data["Realtime Currency Exchange Rate"];
+// Helper function to transform Supabase transaction data
+function transformSupabaseTransaction(supabaseTransaction: any): Transaction {
   return {
-    symbol: pair,
-    name: pair,
-    price: parseFloat(rate["5. Exchange Rate"]),
-    change: 0, // Alpha Vantage does not provide change % for FX
+    id: supabaseTransaction.id,
+    userId: supabaseTransaction.user_id,
+    userEmail: supabaseTransaction.user_email,
+    type: supabaseTransaction.type,
+    asset: supabaseTransaction.asset,
+    amount: supabaseTransaction.amount,
+    value: supabaseTransaction.value,
+    status: supabaseTransaction.status,
+    date: supabaseTransaction.date || supabaseTransaction.created_at,
+    fee: supabaseTransaction.fee || 0,
+    details: supabaseTransaction.details || {},
+    created_at: supabaseTransaction.created_at,
+    updated_at: supabaseTransaction.updated_at
   };
 }
 
-async function fetchAlphaVantageEtf(symbol: string) {
-  // ETFs are fetched like stocks
-  return fetchAlphaVantageStock(symbol);
-}
+export class ApiService {
+  private baseUrl: string;
 
-async function fetchTwelveDataQuote(symbol: string) {
-  const url = `https://api.twelvedata.com/quote?symbol=${symbol}&apikey=${TWELVE_DATA_KEY}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  return {
-    symbol,
-    name: data.name || symbol,
-    price: parseFloat(data.price),
-    change: parseFloat(data.percent_change),
-  };
-}
-
-export async function getStockPrices(symbols: string[]): Promise<any[]> {
-  const results: any[] = [];
-  for (const symbol of symbols) {
-    try {
-      results.push(await fetchAlphaVantageStock(symbol));
-    } catch {
-      try {
-        results.push(await fetchTwelveDataQuote(symbol));
-      } catch {
-        results.push({ symbol, name: symbol, price: 0, change: 0 });
-      }
-    }
-  }
-  return results;
-}
-
-export async function getForexPrices(pairs: string[]): Promise<any[]> {
-  const results: any[] = [];
-  for (const pair of pairs) {
-    try {
-      results.push(await fetchAlphaVantageForex(pair));
-    } catch {
-      try {
-        // Twelve Data uses e.g. "EUR/USD"
-        results.push(await fetchTwelveDataQuote(pair));
-      } catch {
-        results.push({ symbol: pair, name: pair, price: 0, change: 0 });
-      }
-    }
-  }
-  return results;
-}
-
-export async function getEtfPrices(symbols: string[]): Promise<any[]> {
-  const results: any[] = [];
-  for (const symbol of symbols) {
-    try {
-      results.push(await fetchAlphaVantageEtf(symbol));
-    } catch {
-      try {
-        results.push(await fetchTwelveDataQuote(symbol));
-      } catch {
-        results.push({ symbol, name: symbol, price: 0, change: 0 });
-      }
-    }
-  }
-  return results;
-}
-
-// API Service Class
-class ApiService {
-  private baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-  private token: string | null = null;
-
-  // Authentication
-  setToken(token: string) {
-    this.token = token;
-    localStorage.setItem('authToken', token);
+  constructor(baseUrl: string = API_BASE_URL) {
+    this.baseUrl = baseUrl;
   }
 
-  getToken(): string | null {
-    if (!this.token) {
-      this.token = localStorage.getItem('authToken');
-    }
-    return this.token;
-  }
-
-  clearToken() {
-    this.token = null;
-    localStorage.removeItem('authToken');
-  }
-
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    const token = this.getToken();
     
-    const config: RequestInit = {
+    const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
       ...options,
-    };
+    });
 
-    try {
-      const response = await fetch(url, config);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('API request failed:', error);
-      throw error;
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+
+    return await response.json();
   }
 
-  // User Management
+  // User Management - Using Supabase via adminApiService
   async getUsers(): Promise<User[]> {
-    // In production, this would be: return this.request<User[]>('/users');
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockUsers), 500);
-    });
+    try {
+      const response = await adminApiService.getUsers();
+      return response.data.map(transformSupabaseUser);
+    } catch (error) {
+      console.error('Error fetching users from Supabase:', error);
+      throw error;
+    }
   }
 
   async getUser(id: string): Promise<User> {
-    const user = mockUsers.find(u => u.id === id);
-    if (!user) throw new Error('User not found');
-    
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(user), 300);
-    });
-  }
-
-  async updateUser(id: string, data: Partial<User>): Promise<User> {
-    const userIndex = mockUsers.findIndex(u => u.id === id);
-    if (userIndex === -1) throw new Error('User not found');
-    
-    mockUsers[userIndex] = { ...mockUsers[userIndex], ...data };
-    
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockUsers[userIndex]), 300);
-    });
-  }
-
-  async deleteUser(id: string): Promise<void> {
-    const userIndex = mockUsers.findIndex(u => u.id === id);
-    if (userIndex === -1) throw new Error('User not found');
-    
-    mockUsers.splice(userIndex, 1);
-    
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(), 300);
-    });
-  }
-
-  // Transaction Management
-  async getTransactions(): Promise<Transaction[]> {
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockTransactions), 500);
-    });
-  }
-
-  async getTransaction(id: string): Promise<Transaction> {
-    const transaction = mockTransactions.find(t => t.id === id);
-    if (!transaction) throw new Error('Transaction not found');
-    
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(transaction), 300);
-    });
-  }
-
-  async approveTransaction(id: string, status: 'approved' | 'rejected'): Promise<Transaction> {
-    const transactionIndex = mockTransactions.findIndex(t => t.id === id);
-    if (transactionIndex === -1) throw new Error('Transaction not found');
-    
-    mockTransactions[transactionIndex].status = status === 'approved' ? 'Completed' : 'Failed';
-    
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockTransactions[transactionIndex]), 300);
-    });
-  }
-
-  async rejectTransaction(id: string): Promise<Transaction> {
-    const transactionIndex = mockTransactions.findIndex(t => t.id === id);
-    if (transactionIndex === -1) throw new Error('Transaction not found');
-    
-    mockTransactions[transactionIndex].status = 'Failed';
-    
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockTransactions[transactionIndex]), 300);
-    });
-  }
-
-  // Crypto Data
-  async getCryptoPrices(): Promise<CryptoPrice[]> {
     try {
-      // Fetch live prices from CoinGecko
-      const response = await fetch('/api/coingecko/prices?ids=bitcoin,ethereum,tether&vs_currencies=usd&include_24hr_change=true&include_market_cap=true&include_24hr_vol=true');
-      const data = await response.json();
-      return [
-        {
-          symbol: 'BTC',
-          name: 'Bitcoin',
-          price: data.bitcoin.usd,
-          change24h: data.bitcoin.usd_24h_change || 0,
-          volume24h: data.bitcoin.usd_24h_vol || 0,
-          marketCap: data.bitcoin.usd_market_cap || 0,
-        },
-        {
-          symbol: 'ETH',
-          name: 'Ethereum',
-          price: data.ethereum.usd,
-          change24h: data.ethereum.usd_24h_change || 0,
-          volume24h: data.ethereum.usd_24h_vol || 0,
-          marketCap: data.ethereum.usd_market_cap || 0,
-        },
-        {
-          symbol: 'USDT',
-          name: 'Tether',
-          price: data.tether.usd,
-          change24h: data.tether.usd_24h_change || 0,
-          volume24h: data.tether.usd_24h_vol || 0,
-          marketCap: data.tether.usd_market_cap || 0,
-        },
-      ];
+      const supabaseUser = await adminApiService.getUserById(id);
+      if (!supabaseUser) throw new Error('User not found');
+      return transformSupabaseUser(supabaseUser);
     } catch (error) {
-      // Fallback to mock data if API fails
-      return new Promise((resolve) => {
-        setTimeout(() => resolve(mockCryptoPrices), 500);
-      });
-    }
-  }
-
-  async getCryptoPrice(symbol: string): Promise<CryptoPrice> {
-    const crypto = mockCryptoPrices.find(c => c.symbol === symbol);
-    if (!crypto) throw new Error('Crypto not found');
-    
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(crypto), 300);
-    });
-  }
-
-  /**
-   * Fetches prices for given symbols from multiple exchanges (Binance, KuCoin, OKX, CoinGecko fallback).
-   * Returns an object: { exchange: { symbol: price, ... }, ... }
-   * Example: { binance: { BTCUSDT: 60000 }, kucoin: { BTCUSDT: 60100 }, ... }
-   */
-  async getMultiExchangePrices(symbols: string[]): Promise<{ [exchange: string]: { [symbol: string]: number } }> {
-    const result: { [exchange: string]: { [symbol: string]: number } } = {};
-    // Binance
-    try {
-      const binancePrices: { [symbol: string]: number } = {};
-      for (const symbol of symbols) {
-        const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
-        const data = await res.json();
-        binancePrices[symbol] = parseFloat(data.price);
-      }
-      result['binance'] = binancePrices;
-    } catch {}
-    // KuCoin
-    try {
-      const kucoinPrices: { [symbol: string]: number } = {};
-      for (const symbol of symbols) {
-        const res = await fetch(`/api/kucoin/orderbook?symbol=${symbol}`);
-        const data = await res.json();
-        kucoinPrices[symbol] = parseFloat(data.data.price);
-      }
-      result['kucoin'] = kucoinPrices;
-    } catch {}
-    // OKX
-    try {
-      const okxPrices: { [symbol: string]: number } = {};
-      for (const symbol of symbols) {
-        // OKX uses e.g. BTC-USDT
-        const okxSymbol = symbol.replace('USDT', '-USDT');
-        const res = await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${okxSymbol}`);
-        const data = await res.json();
-        okxPrices[symbol] = parseFloat(data.data?.[0]?.last || '0');
-      }
-      result['okx'] = okxPrices;
-    } catch {}
-    // CoinGecko fallback
-    try {
-      const ids = symbols.map(s => s.startsWith('BTC') ? 'bitcoin' : s.startsWith('ETH') ? 'ethereum' : s.startsWith('SOL') ? 'solana' : '').filter(Boolean).join(',');
-      if (ids) {
-        const res = await fetch(`http://localhost:3001/api/coingecko/prices?ids=${ids}&vs_currencies=usd`);
-        const data = await res.json();
-        const cgPrices: { [symbol: string]: number } = {};
-        if (symbols.includes('BTCUSDT')) cgPrices['BTCUSDT'] = data.bitcoin?.usd;
-        if (symbols.includes('ETHUSDT')) cgPrices['ETHUSDT'] = data.ethereum?.usd;
-        if (symbols.includes('SOLUSDT')) cgPrices['SOLUSDT'] = data.solana?.usd;
-        result['coingecko'] = cgPrices;
-      }
-    } catch {}
-    return result;
-  }
-
-  // System Settings
-  async getSystemSettings(): Promise<SystemSettings> {
-    const defaultSettings: SystemSettings = {
-      general: {
-        platformName: 'Swan IRA',
-        supportEmail: 'support@swan-ira.com',
-        maintenanceMode: false,
-        registrationEnabled: true,
-        maxLoginAttempts: 5,
-        sessionTimeout: 30
-      },
-      security: {
-        twoFactorRequired: true,
-        passwordMinLength: 8,
-        requireSpecialChars: true,
-        requireNumbers: true,
-        requireUppercase: true,
-        maxPasswordAge: 90,
-        rateLimitEnabled: true,
-        rateLimitRequests: 100,
-        rateLimitWindow: 15
-      },
-      trading: {
-        tradingEnabled: true,
-        minTradeAmount: 10,
-        maxTradeAmount: 100000,
-        autoApprovalLimit: 1000,
-        requireKycForLargeTrades: true,
-        largeTradeThreshold: 10000
-      }
-    };
-
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(defaultSettings), 500);
-    });
-  }
-
-  async updateSystemSettings(settings: Partial<SystemSettings>): Promise<SystemSettings> {
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(settings as SystemSettings), 300);
-    });
-  }
-
-  // Authentication
-  async login(email: string, password: string): Promise<{ token: string; user: User }> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Login failed');
-      }
-
-      const result = await response.json();
-      this.setToken(result.token);
-      return result;
-    } catch (error) {
-      console.error('Login API error:', error);
+      console.error('Error fetching user from Supabase:', error);
       throw error;
     }
   }
 
-  async register(userData: Partial<User>): Promise<{ token: string; user: User }> {
-    // Generate a new user object with all required fields
-    const newUser: User = {
-      id: (Math.max(0, ...mockUsers.map(u => +u.id || 0)) + 1).toString(),
-      firstName: userData.firstName || '',
-      lastName: userData.lastName || '',
-      email: userData.email || '',
-      phone: userData.phone || '',
-      status: 'Pending',
-      kycStatus: 'Pending',
-      accountType: 'Roth IRA',
-      accountNumber: `IRA-2024-00${Math.floor(1000 + Math.random() * 9000)}`,
-      balance: 0,
-      lastLogin: 'just now',
-      registrationDate: new Date().toISOString().slice(0, 10),
-      twoFactorEnabled: false,
-      riskTolerance: 'Moderate',
-      investmentGoal: 'Wealth Building',
-      isAdmin: false,
-      creditScore: 0,
-      adminRole: undefined,
-      kyc: {
-        documents: [],
-        submittedAt: '',
-        notes: '',
-      },
-    };
-    mockUsers.push(newUser);
-    // Simulate token
-    const token = `mock-token-${newUser.id}`;
-    this.setToken(token);
-    return new Promise((resolve) => {
-      setTimeout(() => resolve({ token, user: newUser }), 300);
-    });
+  async updateUser(id: string, data: Partial<User>): Promise<User> {
+    try {
+      // Transform the data to Supabase format
+      const supabaseData: any = {
+        first_name: data.firstName,
+        last_name: data.lastName,
+        email: data.email,
+        phone: data.phone,
+        status: data.status,
+        kyc_status: data.kycStatus,
+        account_type: data.accountType,
+        account_number: data.accountNumber,
+        balance: data.balance,
+        last_login: data.lastLogin,
+        two_factor_enabled: data.twoFactorEnabled,
+        risk_tolerance: data.riskTolerance,
+        investment_goal: data.investmentGoal,
+        is_admin: data.isAdmin,
+        admin_role: data.adminRole,
+        credit_score: data.creditScore,
+        mfa_enabled: data.mfaEnabled
+      };
+      
+      // Remove undefined values
+      Object.keys(supabaseData).forEach(key => {
+        if (supabaseData[key] === undefined) delete supabaseData[key];
+      });
+      
+      const updatedUser = await adminApiService.updateUser(id, supabaseData);
+      return transformSupabaseUser(updatedUser);
+    } catch (error) {
+      console.error('Error updating user in Supabase:', error);
+      throw error;
+    }
   }
 
-  async logout(): Promise<void> {
-    this.clearToken();
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(), 300);
-    });
+  async deleteUser(id: string): Promise<void> {
+    try {
+      await adminApiService.deleteUser(id);
+    } catch (error) {
+      console.error('Error deleting user from Supabase:', error);
+      throw error;
+    }
   }
 
-  // Dashboard Statistics
+  // Transaction Management - Using Supabase via adminApiService
+  async getTransactions(): Promise<Transaction[]> {
+    try {
+      const response = await adminApiService.getTransactions();
+      return response.data.map(transformSupabaseTransaction);
+    } catch (error) {
+      console.error('Error fetching transactions from Supabase:', error);
+      throw error;
+    }
+  }
+
+  async getTransaction(id: string): Promise<Transaction> {
+    try {
+      const supabaseTransactions = await adminApiService.getTransactions();
+      const supabaseTransaction = supabaseTransactions.find(t => t.id === id);
+      if (!supabaseTransaction) throw new Error('Transaction not found');
+      return transformSupabaseTransaction(supabaseTransaction);
+    } catch (error) {
+      console.error('Error fetching transaction from Supabase:', error);
+      throw error;
+    }
+  }
+
+  // Dashboard Statistics - Using Supabase via adminApiService
   async getDashboardStats(): Promise<{
     totalUsers: number;
     activeUsers: number;
@@ -706,390 +429,114 @@ class ApiService {
     pendingTransactions: number;
     totalBalance: number;
   }> {
-    const totalUsers = mockUsers.length;
-    const activeUsers = mockUsers.filter(u => u.status === 'Active').length;
-    const totalVolume = mockTransactions.reduce((sum, t) => sum + t.value, 0);
-    const pendingTransactions = mockTransactions.filter(t => t.status === 'Pending').length;
-    const totalBalance = mockUsers.reduce((sum, u) => sum + u.balance, 0);
-
-    return new Promise((resolve) => {
-      setTimeout(() => resolve({
-        totalUsers,
-        activeUsers,
-        totalVolume,
-        pendingTransactions,
-        totalBalance
-      }), 500);
-    });
-  }
-
-  // Audit Logs
-  async getAuditLogs(): Promise<any[]> {
-    return new Promise((resolve) => {
-      setTimeout(() => resolve([]), 500);
-    });
-  }
-
-  // Security Events
-  async getSecurityEvents(): Promise<any[]> {
-    return new Promise((resolve) => {
-      setTimeout(() => resolve([]), 500);
-    });
-  }
-
-  // Spot Order Management
-  async getSpotOrders(): Promise<any[]> {
-    return this.request<any[]>('/spotOrders');
-  }
-  async createSpotOrder(order: any): Promise<any> {
-    return this.request<any>('/spotOrders', {
-      method: 'POST',
-      body: JSON.stringify(order),
-    });
-  }
-  async updateSpotOrder(id: string, order: any): Promise<any> {
-    return this.request<any>(`/spotOrders/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(order),
-    });
-  }
-  async deleteSpotOrder(id: string): Promise<void> {
-    return this.request<void>(`/spotOrders/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  // Futures Order Management
-  async getFuturesOrders(): Promise<any[]> {
-    return this.request<any[]>('/futuresOrders');
-  }
-  async createFuturesOrder(order: any): Promise<any> {
-    return this.request<any>('/futuresOrders', {
-      method: 'POST',
-      body: JSON.stringify(order),
-    });
-  }
-  async updateFuturesOrder(id: string, order: any): Promise<any> {
-    return this.request<any>(`/futuresOrders/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(order),
-    });
-  }
-  async deleteFuturesOrder(id: string): Promise<void> {
-    return this.request<void>(`/futuresOrders/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  // Options Order Management
-  async getOptionsOrders(): Promise<any[]> {
-    return this.request<any[]>('/optionsOrders');
-  }
-  async createOptionsOrder(order: any): Promise<any> {
-    return this.request<any>('/optionsOrders', {
-      method: 'POST',
-      body: JSON.stringify(order),
-    });
-  }
-  async updateOptionsOrder(id: string, order: any): Promise<any> {
-    return this.request<any>(`/optionsOrders/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(order),
-    });
-  }
-  async deleteOptionsOrder(id: string): Promise<void> {
-    return this.request<void>(`/optionsOrders/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  async getCreditScore(userId: string): Promise<number> {
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockCreditScores[userId] ?? 0), 300);
-    });
-  }
-  async setCreditScore(userId: string, score: number): Promise<void> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        mockCreditScores[userId] = score;
-        resolve();
-      }, 300);
-    });
-  }
-
-  /**
-   * Fetch all investment products (mock)
-   */
-  async getInvestments(): Promise<Investment[]> {
-    return new Promise((resolve) => setTimeout(() => resolve([...mockInvestments]), 400));
-  }
-
-  /**
-   * Create a new investment product (mock)
-   */
-  async createInvestment(investment: Omit<Investment, 'id'>): Promise<Investment> {
-    const newInvestment: Investment = { ...investment, id: (Math.max(0, ...mockInvestments.map(i => +i.id)) + 1).toString() };
-    mockInvestments.push(newInvestment);
-    return new Promise((resolve) => setTimeout(() => resolve(newInvestment), 400));
-  }
-
-  /**
-   * Update an investment product (mock)
-   */
-  async updateInvestment(id: string, investment: Partial<Investment>): Promise<Investment> {
-    const idx = mockInvestments.findIndex(i => i.id === id);
-    if (idx === -1) throw new Error('Investment not found');
-    mockInvestments[idx] = { ...mockInvestments[idx], ...investment };
-    return new Promise((resolve) => setTimeout(() => resolve(mockInvestments[idx]), 400));
-  }
-
-  /**
-   * Delete an investment product (mock)
-   */
-  async deleteInvestment(id: string): Promise<void> {
-    const idx = mockInvestments.findIndex(i => i.id === id);
-    if (idx === -1) throw new Error('Investment not found');
-    mockInvestments.splice(idx, 1);
-    return new Promise((resolve) => setTimeout(() => resolve(), 400));
-  }
-
-  /**
-   * Admin: Set all trades for a user as win or loss
-   */
-  async setUserTradesWinLoss(userId: string, outcome: 'win' | 'loss'): Promise<void> {
-    mockTransactions.forEach(t => {
-      const type = (t.type || '').toLowerCase();
-      if (t.userId === userId && (type === 'buy' || type === 'sell' || type === 'trade')) {
-        t.status = 'Completed';
-        // Optionally, you could add a custom field to mock data for win/loss if needed
-      }
-    });
-    return new Promise(resolve => setTimeout(resolve, 300));
-  }
-
-  // Wallet Management
-  async getWalletRequests(): Promise<any[]> {
-    return new Promise((resolve) => {
-      setTimeout(() => resolve([]), 500);
-    });
-  }
-
-  async approveWalletRequest(requestId: string): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, 300));
-  }
-
-  async rejectWalletRequest(requestId: string, notes: string): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, 300));
-  }
-
-  async processWalletRequest(requestId: string): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, 300));
-  }
-
-  // Admin Fund Management
-  async adminAddFunds(userId: string, amount: number, currency: string, reason: string): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, 500));
-  }
-
-  async adminRemoveFunds(userId: string, amount: number, currency: string, reason: string): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, 500));
-  }
-
-  async getUserWalletBalances(userId: string): Promise<any[]> {
-    return new Promise(resolve => {
-      setTimeout(() => resolve([]), 300);
-    });
-  }
-
-  /**
-   * Admin: Add funds to a user's wallet
-   */
-  async addFundsToUser(userId: string, amount: number): Promise<void> {
-    const user = mockUsers.find(u => u.id === userId);
-    if (user) user.balance += amount;
-    return new Promise(resolve => setTimeout(resolve, 300));
-  }
-
-  /**
-   * Admin: Withdraw funds from a user's wallet
-   */
-  async withdrawFundsFromUser(userId: string, amount: number): Promise<void> {
-    const user = mockUsers.find(u => u.id === userId);
-    if (user) user.balance = Math.max(0, user.balance - amount);
-    return new Promise(resolve => setTimeout(resolve, 300));
-  }
-
-  /**
-   * Admin: Create audit log entry
-   */
-  async createAuditLog(entry: {
-    userId: string;
-    action: string;
-    details: string;
-    adminId: string;
-  }): Promise<void> {
-    console.log('📝 [API] Creating audit log:', entry);
-    return new Promise(resolve => setTimeout(resolve, 300));
-  }
-
-  /**
-   * Admin: Reset user password
-   */
-  async resetUserPassword(userId: string): Promise<void> {
-    console.log('🔑 [API] Resetting password for user:', userId);
-    return new Promise(resolve => setTimeout(resolve, 300));
-  }
-
-  /**
-   * Admin: Get user KYC documents
-   */
-  async getUserKycDocuments(userId: string): Promise<any[]> {
-    const user = mockUsers.find(u => u.id === userId);
-    if (!user) throw new Error('User not found');
-    
-    // Mock KYC documents
-    const documents = [
-      {
-        id: '1',
-        type: 'passport',
-        name: 'Passport Copy',
-        status: 'verified',
-        uploadDate: '2024-01-15',
-        url: '/documents/passport.pdf'
-      },
-      {
-        id: '2',
-        type: 'id_card',
-        name: 'National ID Card',
-        status: 'verified',
-        uploadDate: '2024-01-10',
-        url: '/documents/id_card.pdf'
-      },
-      {
-        id: '3',
-        type: 'proof_of_address',
-        name: 'Proof of Address',
-        status: 'pending',
-        uploadDate: '2024-01-20',
-        url: '/documents/address_proof.pdf'
-      }
-    ];
-    
-    return new Promise(resolve => setTimeout(() => resolve(documents), 300));
-  }
-
-  /**
-   * Admin: Get user audit logs
-   */
-  async getUserAuditLogs(userId: string): Promise<any[]> {
-    console.log('📋 [API] Getting audit logs for user:', userId);
-    
-    // Mock audit logs
-    const logs = [
-      {
-        id: '1',
-        action: 'suspend',
-        details: 'User suspended due to policy violation',
-        timestamp: '2024-01-15T10:30:00Z',
-        adminId: 'admin-001'
-      },
-      {
-        id: '2',
-        action: 'kyc_approve',
-        details: 'KYC documents approved',
-        timestamp: '2024-01-14T15:20:00Z',
-        adminId: 'admin-001'
-      },
-      {
-        id: '3',
-        action: 'credit_adjustment',
-        details: 'Credit score increased by 50 points',
-        timestamp: '2024-01-13T09:15:00Z',
-        adminId: 'admin-001'
-      }
-    ];
-    
-    return new Promise(resolve => setTimeout(() => resolve(logs), 300));
-  }
-
-  /**
-   * Admin: Get all users with enhanced data
-   */
-  async getAllUsersEnhanced(): Promise<User[]> {
-    console.log('👥 [API] Getting all enhanced user data...');
-    
-    // Enhanced user data with additional fields
-    const enhancedUsers = mockUsers.map(user => ({
-      ...user,
-      creditScore: user.creditScore || Math.floor(Math.random() * 300) + 400,
-      kycStatus: user.kycStatus || 'Pending',
-      accountType: user.accountType || 'Standard',
-      accountNumber: user.accountNumber || '',
-      lastLogin: user.lastLogin || '2024-01-10T14:30:00Z',
-      registrationDate: user.registrationDate || '2023-06-15T10:00:00Z',
-      documents: user.documents || [],
-      auditLogs: []
-    }));
-    
-    return new Promise(resolve => setTimeout(() => resolve(enhancedUsers), 300));
-  }
-
-  /**
-   * Admin: Suspend user
-   */
-  async suspendUser(userId: string, reason: string): Promise<void> {
-    console.log('🚫 [API] Suspending user:', { userId, reason });
-    const user = mockUsers.find(u => u.id === userId);
-    if (user) {
-      user.status = 'Suspended';
-      user.suspensionReason = reason;
-      user.suspendedAt = new Date().toISOString();
+    try {
+      const stats = await adminApiService.getDashboardStats();
+      return {
+        totalUsers: stats.users?.total || 0,
+        activeUsers: stats.users?.active || 0,
+        totalVolume: stats.trading?.totalVolume || 0,
+        pendingTransactions: stats.transactions?.pending || 0,
+        totalBalance: stats.users?.totalBalance || 0
+      };
+    } catch (error) {
+      console.error('Error fetching dashboard stats from Supabase:', error);
+      // Return empty stats instead of mock data
+      return {
+        totalUsers: 0,
+        activeUsers: 0,
+        totalVolume: 0,
+        pendingTransactions: 0,
+        totalBalance: 0
+      };
     }
-    return new Promise(resolve => setTimeout(resolve, 300));
   }
 
-  /**
-   * Admin: Unsuspend user
-   */
-  async unsuspendUser(userId: string): Promise<void> {
-    console.log('✅ [API] Unsuspending user:', userId);
-    const user = mockUsers.find(u => u.id === userId);
-    if (user) {
-      user.status = 'Active';
-      user.suspensionReason = null;
-      user.suspendedAt = null;
+  // System Settings - Using Supabase via adminApiService
+  async getSystemSettings(): Promise<SystemSettings> {
+    try {
+      const settings = await adminApiService.getSystemSettings();
+      return {
+        maintenance: settings.maintenance,
+        maintenanceMessage: settings.maintenance_message,
+        tradingEnabled: settings.trading_enabled,
+        newRegistrations: settings.new_registrations,
+        kycRequired: settings.kyc_required,
+        twoFactorRequired: settings.two_factor_required,
+        maxWithdrawalAmount: settings.max_withdrawal_amount,
+        supportedAssets: settings.supported_assets || []
+      };
+    } catch (error) {
+      console.error('Error fetching system settings from Supabase:', error);
+      throw error;
     }
-    return new Promise(resolve => setTimeout(resolve, 300));
   }
 
-  /**
-   * Admin: Update KYC status
-   */
-  async updateKycStatus(userId: string, status: string): Promise<void> {
-    console.log('📋 [API] Updating KYC status:', { userId, status });
-    const user = mockUsers.find(u => u.id === userId);
-    if (user) {
-      user.kycStatus = status;
-      user.kycUpdatedAt = new Date().toISOString();
+  // Audit Logs - Using Supabase via adminApiService
+  async getAuditLogs(): Promise<AuditLog[]> {
+    try {
+      const logs = await adminApiService.getAuditLogs();
+      // Handle both array and paginated response formats
+      const logsArray = Array.isArray(logs) ? logs : logs?.data || [];
+      return logsArray.map(log => ({
+        id: log.id,
+        action: log.action,
+        details: log.details,
+        timestamp: log.timestamp,
+        adminId: log.admin_id
+      }));
+    } catch (error) {
+      console.error('Error fetching audit logs from Supabase:', error);
+      return [];
     }
-    return new Promise(resolve => setTimeout(resolve, 300));
   }
 
-  /**
-   * Admin: Update credit score
-   */
-  async updateCreditScore(userId: string, score: number): Promise<void> {
-    console.log('📈 [API] Updating credit score:', { userId, score });
-    const user = mockUsers.find(u => u.id === userId);
-    if (user) {
-      user.creditScore = score;
-      user.creditScoreUpdatedAt = new Date().toISOString();
+  // Security Events - Using Supabase via adminApiService
+  async getSecurityEvents(): Promise<SecurityEvent[]> {
+    try {
+      const events = await adminApiService.getSecurityEvents();
+      return events.map(event => ({
+        id: event.id,
+        type: event.type,
+        severity: event.severity,
+        description: event.description,
+        timestamp: event.timestamp,
+        resolved: event.resolved
+      }));
+    } catch (error) {
+      console.error('Error fetching security events from Supabase:', error);
+      throw error;
     }
-    return new Promise(resolve => setTimeout(resolve, 300));
   }
 
+  // Multi-exchange price data for arbitrage
+  async getMultiExchangePrices(pairs: string[]): Promise<Record<string, Record<string, number>>> {
+    // Mock implementation for development
+    const mockPrices: Record<string, Record<string, number>> = {};
+    
+    // Generate mock prices for each pair
+    pairs.forEach(pair => {
+      const basePrice = pair === 'BTCUSDT' ? 95000 + Math.random() * 5000 : 
+                       pair === 'ETHUSDT' ? 3500 + Math.random() * 200 : 
+                       100 + Math.random() * 50;
+      
+      mockPrices[pair] = {
+        'Binance': basePrice * (1 + (Math.random() - 0.5) * 0.002),
+        'Coinbase': basePrice * (1 + (Math.random() - 0.5) * 0.003),
+        'Kraken': basePrice * (1 + (Math.random() - 0.5) * 0.0025),
+        'Bybit': basePrice * (1 + (Math.random() - 0.5) * 0.0018),
+        'OKX': basePrice * (1 + (Math.random() - 0.5) * 0.0022)
+      };
+    });
+    
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    return mockPrices;
+  }
 }
 
-// Export singleton instance
+// Create and export singleton instance
 export const apiService = new ApiService();
-export default apiService; 
+
+// Also export as default for compatibility
+export default apiService;

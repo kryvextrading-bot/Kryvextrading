@@ -1,12 +1,18 @@
 import React from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import type { Asset } from '@/contexts/WalletContext';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 import { formatCurrency } from '@/utils/formatCurrency';
 
+// Generic portfolio asset interface
+interface PortfolioAsset {
+  symbol: string;
+  name: string;
+  value: number;
+}
+
 const COLORS = ['#facc15', '#6366f1', '#10b981', '#f472b6', '#f87171', '#34d399', '#60a5fa', '#fbbf24'];
 
-export default function AssetAllocationPieChart({ portfolio }: { portfolio: Asset[] }) {
+export default function AssetAllocationPieChart({ portfolio }: { portfolio: PortfolioAsset[] }) {
   const { currency } = useUserSettings();
   
   // Filter out invalid assets

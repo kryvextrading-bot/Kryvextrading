@@ -15,6 +15,7 @@ import { Database } from '@/lib/supabase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import { createMockWebSocket } from '@/services/websocket';
 import { 
   Search, 
   Filter, 
@@ -273,8 +274,8 @@ const AnomalyDetectionCard = ({ transactions }: { transactions: Transaction[] })
       // Detect rapid succession from same user
       const userTimestamps: Record<string, Date[]> = {};
       transactions.forEach(t => {
-        if (!userTimestamps[t.userId]) userTimestamps[t.userId] = [];
-        userTimestamps[t.userId].push(new Date(t.timestamp));
+        if (!userTimestamps[t.user_id]) userTimestamps[t.user_id] = [];
+        userTimestamps[t.user_id].push(new Date(t.date || t.created_at));
       });
 
       Object.entries(userTimestamps).forEach(([userId, timestamps]) => {
@@ -466,7 +467,7 @@ export function TransactionManagement() {
   
   // Real-time updates
   const [liveUpdates, setLiveUpdates] = useState(true);
-  const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
+  const [wsConnection, setWsConnection] = useState<any>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const wsReconnectAttempts = useRef(0);
@@ -477,18 +478,19 @@ export function TransactionManagement() {
     if (!liveUpdates) return;
 
     try {
-      const ws = new WebSocket('wss://api.swanira.com/admin/transactions');
+      // Use mock WebSocket service for development
+      const ws = createMockWebSocket('ws://supabase-realtime/admin/transactions');
       
-      ws.onopen = () => {
+      ws.addEventListener('open', () => {
         console.log('WebSocket connected');
         wsReconnectAttempts.current = 0;
         toast({
           title: "Live Updates Active",
           description: "Real-time transaction monitoring enabled",
         });
-      };
+      });
 
-      ws.onmessage = (event) => {
+      ws.addEventListener('message', (event) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
           setLastUpdate(new Date());
@@ -503,7 +505,7 @@ export function TransactionManagement() {
                 setAlerts(prev => [{
                   id: Date.now().toString(),
                   type: newTx.riskLevel === 'critical' ? 'critical' : 'warning',
-                  message: `High-risk ${newTx.type} detected: ${newTx.amount} ${newTx.currency} by ${newTx.userName}`,
+                  message: `High-risk ${newTx.type} detected: ${newTx.amount} ${newTx.currency || 'USD'} by ${newTx.user_email || 'Unknown'}`,
                   transactionId: newTx.id,
                   timestamp: new Date().toISOString(),
                   acknowledged: false
@@ -511,10 +513,10 @@ export function TransactionManagement() {
               }
               
               // Show toast for large transactions
-              if (newTx.amount > 100000) {
+              if (newTx.value > 100000) {
                 toast({
                   title: "Large Transaction Detected",
-                  description: `${newTx.amount} ${newTx.currency} ${newTx.type} by ${newTx.userName}`,
+                  description: `${newTx.value} ${newTx.type} by ${newTx.user_email || 'Unknown'}`,
                 });
               }
               break;
@@ -554,24 +556,24 @@ export function TransactionManagement() {
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error);
         }
-      };
+      });
 
-      ws.onerror = (error) => {
+      ws.addEventListener('error', (error) => {
         console.error('WebSocket error:', error);
         toast({
           title: "Connection Error",
           description: "Failed to establish real-time connection",
           variant: "destructive",
         });
-      };
+      });
 
-      ws.onclose = () => {
+      ws.addEventListener('close', () => {
         console.log('WebSocket disconnected');
         if (liveUpdates && wsReconnectAttempts.current < maxReconnectAttempts) {
           wsReconnectAttempts.current++;
           setTimeout(connectWebSocket, 2000 * wsReconnectAttempts.current);
         }
-      };
+      });
 
       setWsConnection(ws);
     } catch (error) {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   TrendingUp, 
@@ -18,56 +18,188 @@ import {
   Activity,
   Award,
   Target,
-  AlertTriangle
+  AlertTriangle,
+  Zap,
+  Gauge,
+  Sparkles,
+  Crown,
+  History,
+  Download,
+  Filter,
+  Calendar,
+  ArrowLeftRight,
+  LineChart,
+  Info,
+  Copy,
+  ExternalLink,
+  Grid,
+  List,
+  BookOpen,
+  Rocket,
+  Gift,
+  Share2,
+  Play,
+  Pause
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
-import { useToast } from '@/hooks/use-toast';
-import PortfolioValueChart from '@/components/PortfolioValueChart';
-import AssetAllocationPieChart from '@/components/AssetAllocationPieChart';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedTrading } from '@/hooks/useUnifiedTrading';
+import { useToast, toast } from '@/hooks/use-toast';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 import { useMarketData } from '@/contexts/MarketDataContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { motion } from 'framer-motion';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Separator } from '@/components/ui/separator';
+import PortfolioValueChart from '@/components/PortfolioValueChart';
+import AssetAllocationPieChart from '@/components/AssetAllocationPieChart';
+import { formatCurrency, formatPrice, formatPercentage } from '@/utils/tradingCalculations';
 
-// Performance Metric Card Component
-function MetricCard({ title, value, change, icon, subValue, isPositive }: any) {
-  return (
-    <Card className="bg-[#1E2329] border border-[#2B3139] p-4 hover:border-[#F0B90B]/50 transition-all">
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[#F0B90B]/10 flex items-center justify-center">
-            {icon}
-          </div>
-          <span className="text-xs text-[#848E9C]">{title}</span>
-        </div>
-        {change !== undefined && (
-          <Badge className={`${isPositive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} border-0`}>
-            {isPositive ? <TrendingUp size={10} className="mr-1" /> : <TrendingDown size={10} className="mr-1" />}
-            {change}%
-          </Badge>
-        )}
-      </div>
-      <div className="space-y-1">
-        <div className="text-xl font-bold text-[#EAECEF] font-mono">{value}</div>
-        {subValue && <div className="text-xs text-[#848E9C]">{subValue}</div>}
-      </div>
-    </Card>
-  );
+// ==================== TYPES ====================
+interface PortfolioAsset {
+  symbol: string;
+  name: string;
+  balance: number;
+  locked: number;
+  value: number;
+  price: number;
+  change24h: number;
+  allocation: number;
+  pnl?: number;
+  pnlPercentage?: number;
+  buyPrice?: number;
 }
 
-// Asset Allocation Item Component
-function AllocationItem({ asset, index }: { asset: any; index: number }) {
-  const colors = ['#F0B90B', '#3B82F6', '#10B981', '#8B5CF6', '#EC4899'];
+interface PerformanceMetric {
+  label: string;
+  value: number;
+  change: number;
+  isPositive: boolean;
+  icon: React.ReactNode;
+  tooltip: string;
+}
+
+interface PeriodReturn {
+  period: string;
+  value: number;
+  percentage: number;
+  isPositive: boolean;
+}
+
+interface TradingActivity {
+  id: string;
+  type: 'spot' | 'futures' | 'options' | 'arbitrage' | 'staking';
+  asset: string;
+  amount: number;
+  pnl?: number;
+  status: string;
+  timestamp: string;
+  metadata?: any;
+}
+
+// ==================== ANIMATION VARIANTS ====================
+const fadeInUp = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.5 }
+};
+
+const scaleIn = {
+  initial: { opacity: 0, scale: 0.9 },
+  animate: { opacity: 1, scale: 1 },
+  transition: { duration: 0.3 }
+};
+
+const slideInLeft = {
+  initial: { opacity: 0, x: -20 },
+  animate: { opacity: 1, x: 0 },
+  transition: { duration: 0.3 }
+};
+
+const slideInRight = {
+  initial: { opacity: 0, x: 20 },
+  animate: { opacity: 1, x: 0 },
+  transition: { duration: 0.3 }
+};
+
+const staggerContainer = {
+  animate: {
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+// ==================== COMPONENTS ====================
+
+// Metric Card Component
+const MetricCard = ({ title, value, change, icon, tooltip, color = 'default', loading = false }: any) => {
+  const isPositive = change !== undefined && change >= 0;
+  
+  if (loading) {
+    return (
+      <Card className="bg-[#1E2329] border border-[#2B3139] p-4">
+        <Skeleton className="h-4 w-24 mb-2" />
+        <Skeleton className="h-8 w-32" />
+      </Card>
+    );
+  }
   
   return (
-    <div className="flex items-center justify-between py-3 border-b border-[#2B3139] last:border-0">
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <Card className="bg-gradient-to-br from-[#1E2329] to-[#2B3139] border border-[#2B3139] p-4 hover:border-[#F0B90B]/50 transition-all group">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-lg bg-[#F0B90B]/10 flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                    {icon}
+                  </div>
+                  <span className="text-xs text-[#848E9C]">{title}</span>
+                </div>
+                {change !== undefined && (
+                  <Badge className={`${isPositive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} border-0`}>
+                    {isPositive ? <TrendingUp size={10} className="mr-1" /> : <TrendingDown size={10} className="mr-1" />}
+                    {Math.abs(change).toFixed(2)}%
+                  </Badge>
+                )}
+              </div>
+              <div className="space-y-1">
+                <div className="text-xl font-bold text-[#EAECEF] font-mono">{value}</div>
+                {tooltip && <div className="text-xs text-[#848E9C]">{tooltip}</div>}
+              </div>
+            </Card>
+          </motion.div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="text-xs">{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+};
+
+// Asset Allocation Item
+const AllocationItem = ({ asset, index, hideBalances }: { asset: PortfolioAsset; index: number; hideBalances: boolean }) => {
+  const colors = ['#F0B90B', '#3B82F6', '#10B981', '#8B5CF6', '#EC4899', '#F97316', '#06B6D4', '#6366F1'];
+  
+  return (
+    <motion.div 
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.05 }}
+      className="flex items-center justify-between py-3 border-b border-[#2B3139] last:border-0 hover:bg-[#23262F]/50 transition-colors px-2 rounded-lg"
+    >
       <div className="flex items-center gap-3">
         <div 
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold"
+          className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold"
           style={{ backgroundColor: `${colors[index % colors.length]}20`, color: colors[index % colors.length] }}
         >
           {asset.symbol.charAt(0)}
@@ -78,15 +210,20 @@ function AllocationItem({ asset, index }: { asset: any; index: number }) {
         </div>
       </div>
       <div className="text-right">
-        <div className="text-sm font-medium text-[#EAECEF]">{asset.percentage.toFixed(1)}%</div>
-        <div className="text-xs text-[#848E9C]">${asset.value.toFixed(2)}</div>
+        <div className="text-sm font-medium text-[#EAECEF]">{asset.allocation.toFixed(1)}%</div>
+        <div className="text-xs text-[#848E9C]">{hideBalances ? '••••' : `$${asset.value.toFixed(2)}`}</div>
+        {asset.pnl !== undefined && (
+          <div className={`text-xs ${asset.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {asset.pnl >= 0 ? '+' : ''}{asset.pnl.toFixed(2)} ({asset.pnlPercentage?.toFixed(1)}%)
+          </div>
+        )}
       </div>
-    </div>
+    </motion.div>
   );
-}
+};
 
-// Holdings Table Component
-function HoldingsTable({ portfolio, hideBalances }: { portfolio: any[]; hideBalances: boolean }) {
+// Holdings Table
+const HoldingsTable = ({ assets, hideBalances }: { assets: PortfolioAsset[]; hideBalances: boolean }) => {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -94,15 +231,23 @@ function HoldingsTable({ portfolio, hideBalances }: { portfolio: any[]; hideBala
           <tr className="text-[#848E9C] border-b border-[#2B3139]">
             <th className="text-left py-3 font-medium">Asset</th>
             <th className="text-right py-3 font-medium">Balance</th>
+            <th className="text-right py-3 font-medium">Locked</th>
             <th className="text-right py-3 font-medium">Price</th>
             <th className="text-right py-3 font-medium">Value</th>
             <th className="text-right py-3 font-medium">Allocation</th>
             <th className="text-right py-3 font-medium">24h Change</th>
+            <th className="text-right py-3 font-medium">P&L</th>
           </tr>
         </thead>
         <tbody>
-          {portfolio.map((asset) => (
-            <tr key={asset.symbol} className="border-b border-[#2B3139] hover:bg-[#23262F] transition-colors">
+          {assets.map((asset, index) => (
+            <motion.tr 
+              key={asset.symbol}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+              className="border-b border-[#2B3139] hover:bg-[#23262F] transition-colors"
+            >
               <td className="py-3">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-[#2B3139] flex items-center justify-center text-sm">
@@ -117,8 +262,11 @@ function HoldingsTable({ portfolio, hideBalances }: { portfolio: any[]; hideBala
               <td className="text-right font-mono text-[#EAECEF]">
                 {hideBalances ? '••••••' : asset.balance.toFixed(6)}
               </td>
+              <td className="text-right font-mono text-[#F0B90B]">
+                {hideBalances ? '••••••' : asset.locked.toFixed(6)}
+              </td>
               <td className="text-right font-mono text-[#EAECEF]">
-                ${asset.price?.toFixed(2) || '0.00'}
+                ${asset.price.toFixed(2)}
               </td>
               <td className="text-right font-mono text-[#EAECEF]">
                 ${asset.value.toFixed(2)}
@@ -128,87 +276,369 @@ function HoldingsTable({ portfolio, hideBalances }: { portfolio: any[]; hideBala
                   <div className="w-16 bg-[#2B3139] rounded-full h-1.5">
                     <div 
                       className="bg-[#F0B90B] h-1.5 rounded-full" 
-                      style={{ width: `${asset.percentage}%` }}
+                      style={{ width: `${asset.allocation}%` }}
                     />
                   </div>
-                  <span className="text-[#EAECEF] text-xs">{asset.percentage.toFixed(1)}%</span>
+                  <span className="text-[#EAECEF] text-xs">{asset.allocation.toFixed(1)}%</span>
                 </div>
               </td>
               <td className="text-right">
-                <Badge className={asset.change > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}>
-                  {asset.change > 0 ? '+' : ''}{asset.change || 0}%
+                <Badge className={asset.change24h >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}>
+                  {asset.change24h >= 0 ? '+' : ''}{asset.change24h.toFixed(2)}%
                 </Badge>
               </td>
-            </tr>
+              <td className="text-right">
+                {asset.pnl !== undefined && (
+                  <span className={`font-mono ${asset.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {asset.pnl >= 0 ? '+' : ''}${asset.pnl.toFixed(2)}
+                  </span>
+                )}
+              </td>
+            </motion.tr>
           ))}
         </tbody>
       </table>
     </div>
   );
-}
+};
 
+// Activity Item Component
+const ActivityItem = ({ activity }: { activity: TradingActivity }) => {
+  const getIcon = () => {
+    switch (activity.type) {
+      case 'spot': return <BarChart3 size={14} className="text-blue-400" />;
+      case 'futures': return <Gauge size={14} className="text-purple-400" />;
+      case 'options': return <Target size={14} className="text-green-400" />;
+      case 'arbitrage': return <Zap size={14} className="text-yellow-400" />;
+      case 'staking': return <Shield size={14} className="text-emerald-400" />;
+      default: return <Activity size={14} className="text-[#F0B90B]" />;
+    }
+  };
+
+  const getColor = () => {
+    switch (activity.type) {
+      case 'spot': return 'bg-blue-500/20';
+      case 'futures': return 'bg-purple-500/20';
+      case 'options': return 'bg-green-500/20';
+      case 'arbitrage': return 'bg-yellow-500/20';
+      case 'staking': return 'bg-emerald-500/20';
+      default: return 'bg-[#F0B90B]/20';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+      case 'win':
+        return 'bg-green-500/20 text-green-400';
+      case 'pending':
+      case 'processing':
+        return 'bg-yellow-500/20 text-yellow-400';
+      case 'active':
+      case 'open':
+        return 'bg-blue-500/20 text-blue-400';
+      case 'failed':
+      case 'loss':
+        return 'bg-red-500/20 text-red-400';
+      default:
+        return 'bg-gray-500/20 text-gray-400';
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      className="flex items-center justify-between py-3 border-b border-[#2B3139] last:border-0 hover:bg-[#23262F]/50 transition-colors px-2 rounded-lg"
+    >
+      <div className="flex items-center gap-3">
+        <div className={`w-8 h-8 rounded-lg ${getColor()} flex items-center justify-center`}>
+          {getIcon()}
+        </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-[#EAECEF] capitalize">{activity.type}</span>
+            <Badge className={getStatusColor(activity.status)}>
+              {activity.status}
+            </Badge>
+          </div>
+          <div className="text-xs text-[#848E9C]">{activity.asset}</div>
+        </div>
+      </div>
+      <div className="text-right">
+        <div className="text-sm font-medium text-[#EAECEF]">${activity.amount.toFixed(2)}</div>
+        {activity.pnl !== undefined && (
+          <div className={`text-xs ${activity.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {activity.pnl >= 0 ? '+' : ''}{activity.pnl.toFixed(2)} USDT
+          </div>
+        )}
+        <div className="text-xs text-[#848E9C]">
+          {new Date(activity.timestamp).toLocaleTimeString()}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// Summary Card Component
+const SummaryCard = ({ title, value, subValue, icon, color = 'default' }: any) => (
+  <Card className="bg-[#1E2329] border border-[#2B3139] p-4 hover:border-[#F0B90B]/50 transition-all">
+    <div className="flex items-center gap-3 mb-2">
+      <div className={`w-8 h-8 rounded-lg bg-[#F0B90B]/10 flex items-center justify-center`}>
+        {icon}
+      </div>
+      <span className="text-sm text-[#848E9C]">{title}</span>
+    </div>
+    <div className="text-xl font-bold text-[#EAECEF] font-mono">{value}</div>
+    {subValue && <div className="text-xs text-[#848E9C] mt-1">{subValue}</div>}
+  </Card>
+);
+
+// ==================== MAIN COMPONENT ====================
 export default function Portfolio() {
-  const { user } = useAuth();
   const navigate = useNavigate();
-  const { portfolio, totalValue, valueHistory, transactions } = useWallet();
+  const { user } = useAuth();
+  
+  // Hooks
+  const { portfolio: walletPortfolio, totalValue, valueHistory, transactions } = useWallet();
+  const { 
+    fundingBalances,
+    tradingBalances,
+    getFundingBalance,
+    getTradingBalance,
+    getLockedBalance,
+    getTotalBalance,
+    stats,
+    locks,
+    refreshData,
+    loading: walletLoading
+  } = useUnifiedWallet();
+  
+  const {
+    getUserTrades,
+    getUserPositions,
+    getUserOptions,
+    loading: tradingLoading
+  } = useUnifiedTrading();
+  
   const { currency, setCurrency } = useUserSettings();
   const { prices } = useMarketData();
-  
-  // UI State
+
+  // Helper to get asset name
+  const getAssetName = (symbol: string): string => {
+    const names: Record<string, string> = {
+      USDT: 'Tether',
+      BTC: 'Bitcoin',
+      ETH: 'Ethereum',
+      SOL: 'Solana',
+      BNB: 'Binance Coin',
+      ADA: 'Cardano',
+      XRP: 'Ripple',
+      DOT: 'Polkadot',
+      DOGE: 'Dogecoin',
+      AVAX: 'Avalanche',
+      MATIC: 'Polygon',
+      LINK: 'Chainlink',
+      UNI: 'Uniswap'
+    };
+    return names[symbol] || symbol;
+  };
+
+  // State
   const [hideBalances, setHideBalances] = useState(false);
   const [timeframe, setTimeframe] = useState('1M');
   const [activeTab, setActiveTab] = useState('overview');
-  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [userTrades, setUserTrades] = useState<any[]>([]);
+  const [positions, setPositions] = useState<any[]>([]);
+  const [options, setOptions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d' | '1y' | 'all'>('30d');
 
-  // Calculate portfolio metrics
-  const totalPortfolioValue = portfolio.reduce((sum, asset) => sum + asset.value, 0);
-  
-  // Asset allocation with percentages
-  const assetAllocation = portfolio.map(asset => ({
-    ...asset,
-    percentage: totalPortfolioValue > 0 ? (asset.value / totalPortfolioValue) * 100 : 0,
-    price: prices?.[asset.symbol] || 0,
-    change: ((prices?.[asset.symbol] || 0) - (asset.buyPrice || 0)) / (asset.buyPrice || 1) * 100
-  })).sort((a, b) => b.value - a.value);
+  // Load user data
+  useEffect(() => {
+    if (user) {
+      loadUserData();
+    }
+  }, [user]);
 
-  // Performance metrics - calculate from real data
-  const calculatePeriodReturn = (days: number) => {
-    if (valueHistory.length < 2) return { value: 0, percentage: 0 };
-    
-    const currentValue = totalValue;
-    const pastValue = valueHistory.find((entry, index) => 
-      index >= valueHistory.length - Math.ceil(days / 1) // Approximate days to data points
-    )?.value || currentValue;
-    
-    const change = currentValue - pastValue;
-    const percentage = pastValue > 0 ? (change / pastValue) * 100 : 0;
-    
-    return { value: change, percentage };
+  const loadUserData = async () => {
+    setLoading(true);
+    try {
+      const [trades, positionsData, optionsData] = await Promise.all([
+        getUserTrades(),
+        getUserPositions(),
+        getUserOptions()
+      ]);
+      
+      setUserTrades(trades || []);
+      setPositions(positionsData || []);
+      setOptions(optionsData || []);
+    } catch (error) {
+      console.error('Failed to load user data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load portfolio data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const periodReturns = {
-    '1D': calculatePeriodReturn(1),
-    '1W': calculatePeriodReturn(7),
-    '1M': calculatePeriodReturn(30),
-    '1Y': calculatePeriodReturn(365)
-  };
+  // Calculate combined portfolio from all sources
+  const combinedPortfolio = useMemo(() => {
+    // Start with wallet assets
+    const assets: Record<string, PortfolioAsset> = {};
+    
+    // Add funding wallet balances
+    Object.entries(fundingBalances || {}).forEach(([symbol, balance]) => {
+      if (typeof balance === 'number' && balance > 0) {
+        assets[symbol] = {
+          symbol,
+          name: getAssetName(symbol),
+          balance,
+          locked: 0,
+          value: symbol === 'USDT' ? balance : (balance * (prices?.[symbol] || 0)),
+          price: prices?.[symbol] || (symbol === 'USDT' ? 1 : 0),
+          change24h: 0,
+          allocation: 0
+        };
+      }
+    });
+    
+    // Add trading wallet balances
+    Object.entries(tradingBalances || {}).forEach(([symbol, data]: [string, any]) => {
+      if (data && data.available > 0) {
+        if (assets[symbol]) {
+          assets[symbol].balance += data.available;
+          assets[symbol].locked = (assets[symbol].locked || 0) + (data.locked || 0);
+          assets[symbol].value += symbol === 'USDT' ? data.available : (data.available * (prices?.[symbol] || 0));
+        } else {
+          assets[symbol] = {
+            symbol,
+            name: getAssetName(symbol),
+            balance: data.available,
+            locked: data.locked || 0,
+            value: symbol === 'USDT' ? data.available : (data.available * (prices?.[symbol] || 0)),
+            price: prices?.[symbol] || (symbol === 'USDT' ? 1 : 0),
+            change24h: 0,
+            allocation: 0
+          };
+        }
+      }
+    });
+    
+    // Add positions value (futures PnL)
+    positions.forEach(pos => {
+      const symbol = pos.symbol?.replace('USDT', '') || 'BTC';
+      if (assets[symbol]) {
+        assets[symbol].pnl = (assets[symbol].pnl || 0) + (pos.pnl || 0);
+      }
+    });
+    
+    // Add options value
+    options.forEach(opt => {
+      const symbol = opt.symbol?.replace('USDT', '') || 'BTC';
+      if (assets[symbol]) {
+        assets[symbol].pnl = (assets[symbol].pnl || 0) + (opt.pnl || 0);
+      }
+    });
+    
+    // Calculate total portfolio value
+    const totalPortfolioValue = Object.values(assets).reduce((sum, a) => sum + a.value, 0);
+    
+    // Calculate allocations and PnL percentages
+    Object.values(assets).forEach(asset => {
+      asset.allocation = totalPortfolioValue > 0 ? (asset.value / totalPortfolioValue) * 100 : 0;
+      if (asset.pnl && asset.value > 0) {
+        asset.pnlPercentage = (asset.pnl / asset.value) * 100;
+      }
+    });
+    
+    return Object.values(assets).sort((a, b) => b.value - a.value);
+  }, [fundingBalances, tradingBalances, prices, positions, options]);
 
-  // Calculate daily change
-  const yesterdayValue = valueHistory.length > 1 ? valueHistory[valueHistory.length - 2].value : totalValue;
-  const dailyChange = totalValue - yesterdayValue;
-  const dailyChangePercent = ((dailyChange / yesterdayValue) * 100) || 0;
-  const isPositiveChange = dailyChange >= 0;
+  // Calculate total portfolio value
+  const totalPortfolioValue = useMemo(() => {
+    return combinedPortfolio.reduce((sum, a) => sum + a.value, 0);
+  }, [combinedPortfolio]);
 
-  // Portfolio diversification score (simplified calculation)
-  const diversificationScore = Math.min(100, portfolio.length * 10);
-  
-  // Risk level based on portfolio composition
-  const riskLevel = portfolio.some(a => a.symbol === 'BTC' || a.symbol === 'ETH') ? 'Moderate' : 'Conservative';
+  // Calculate total locked value
+  const totalLockedValue = useMemo(() => {
+    return combinedPortfolio.reduce((sum, a) => sum + (a.locked || 0), 0);
+  }, [combinedPortfolio]);
 
-  // Top performer
-  const topPerformer = assetAllocation.length > 0 
-    ? assetAllocation.reduce((prev, current) => (prev.change > current.change ? prev : current))
-    : null;
+  // Calculate active trades count
+  const activeTradesCount = useMemo(() => {
+    return (positions?.filter((p: any) => p.status === 'open')?.length || 0) + 
+           (options?.filter((o: any) => o.status === 'active')?.length || 0) + 
+           (stats?.activeLocks || 0);
+  }, [positions, options, stats]);
+
+  // Calculate performance metrics
+  const performanceMetrics = useMemo(() => {
+    const todayValue = totalPortfolioValue;
+    const safeValueHistory = Array.isArray(valueHistory) ? valueHistory : [];
+    const yesterdayValue = safeValueHistory.length > 1 ? safeValueHistory[safeValueHistory.length - 2].value : todayValue;
+    const weekAgoValue = safeValueHistory.length > 7 ? safeValueHistory[safeValueHistory.length - 8].value : todayValue;
+    const monthAgoValue = safeValueHistory.length > 30 ? safeValueHistory[safeValueHistory.length - 31].value : todayValue;
+    
+    const dailyChange = todayValue - yesterdayValue;
+    const weeklyChange = todayValue - weekAgoValue;
+    const monthlyChange = todayValue - monthAgoValue;
+    
+    return {
+      daily: {
+        value: dailyChange,
+        percentage: yesterdayValue > 0 ? (dailyChange / yesterdayValue) * 100 : 0
+      },
+      weekly: {
+        value: weeklyChange,
+        percentage: weekAgoValue > 0 ? (weeklyChange / weekAgoValue) * 100 : 0
+      },
+      monthly: {
+        value: monthlyChange,
+        percentage: monthAgoValue > 0 ? (monthlyChange / monthAgoValue) * 100 : 0
+      }
+    };
+  }, [totalPortfolioValue, valueHistory]);
+
+  // Combine all activities
+  const recentActivities = useMemo(() => {
+    const activities: TradingActivity[] = [
+      ...(userTrades || []).slice(0, 10).map(t => ({
+        id: t.id,
+        type: t.type || 'spot',
+        asset: t.asset || 'BTC',
+        amount: t.total || t.amount || 0,
+        pnl: t.pnl,
+        status: t.status || 'completed',
+        timestamp: t.createdAt || new Date().toISOString()
+      })),
+      ...(positions || []).slice(0, 5).map(p => ({
+        id: p.id,
+        type: 'futures' as const,
+        asset: p.symbol || 'BTC',
+        amount: p.size || 0,
+        pnl: p.pnl,
+        status: p.status || 'active',
+        timestamp: p.createdAt || new Date().toISOString()
+      })),
+      ...(options || []).slice(0, 5).map(o => ({
+        id: o.id,
+        type: 'options' as const,
+        asset: o.symbol || 'BTC',
+        amount: o.premium || 0,
+        pnl: o.pnl,
+        status: o.status || 'active',
+        timestamp: o.createdAt || new Date().toISOString()
+      }))
+    ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    
+    return activities.slice(0, 10);
+  }, [userTrades, positions, options]);
 
   // Navigation protection
   useEffect(() => {
@@ -217,126 +647,146 @@ export default function Portfolio() {
     }
   }, [user, navigate]);
 
-  // Calculate balance in selected currency
-  let displayBalance = totalValue;
-  if (currency === 'BTC' && prices?.['BTC']) {
-    displayBalance = totalValue / prices['BTC'];
-  } else if (currency === 'USDT') {
-    displayBalance = totalValue;
-  }
-
   if (!user) return null;
 
-  // Animation variants
-  const fadeInUp = {
-    initial: { opacity: 0, y: 20 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.5 }
-  };
-
-  const staggerContainer = {
-    animate: {
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
-  };
+  const isLoading = loading || walletLoading || tradingLoading;
 
   return (
     <motion.div 
-      className="portfolio-page min-h-screen bg-[#181A20] pb-24"
+      className="min-h-screen bg-gradient-to-br from-[#0B0E11] via-[#0F1217] to-[#1A1D24] pb-24"
       initial="initial"
       animate="animate"
       variants={staggerContainer}
     >
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-[#181A20]/95 backdrop-blur border-b border-[#2B3139]">
-        <div className="px-4 md:px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-[#F0B90B] to-yellow-500 rounded-lg flex items-center justify-center">
-              <Activity size={18} className="text-[#181A20]" />
-            </div>
-            <h1 className="text-lg font-bold text-[#EAECEF]">Investment Portfolio</h1>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setHideBalances(!hideBalances)}
-              className="p-2 hover:bg-[#23262F] rounded-lg transition-colors"
-              aria-label={hideBalances ? 'Show balances' : 'Hide balances'}
-            >
-              {hideBalances ? <EyeOff size={20} className="text-[#848E9C]" /> : <Eye size={20} className="text-[#848E9C]" />}
-            </button>
-            <button
-              onClick={() => window.location.reload()}
-              className="p-2 hover:bg-[#23262F] rounded-lg transition-colors"
-            >
-              <RefreshCw size={20} className="text-[#848E9C]" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="px-4 md:px-6 py-4 space-y-5">
-        
-        {/* Portfolio Value Overview */}
-        <motion.div variants={fadeInUp}>
-          <Card className="bg-gradient-to-br from-[#1E2329] to-[#2B3139] border-0 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Wallet size={18} className="text-[#F0B90B]" />
-                <span className="text-sm text-[#848E9C]">Total Invested Capital</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  className="bg-[#181A20] text-[#F0B90B] text-xs font-semibold px-2 py-1.5 rounded-lg border border-[#2B3139] outline-none"
-                  value={currency}
-                  onChange={e => setCurrency(e.target.value)}
+      <motion.header 
+        variants={slideInLeft}
+        className="sticky top-0 z-30 bg-[#181A20]/95 backdrop-blur-xl border-b border-[#2B3139]"
+      >
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-3">
+              <motion.div
+                whileHover={{ rotate: 180 }}
+                transition={{ duration: 0.3 }}
+                className="w-10 h-10 bg-gradient-to-br from-[#F0B90B] to-yellow-500 rounded-xl flex items-center justify-center"
+              >
+                <Activity size={20} className="text-[#181A20]" />
+              </motion.div>
+              <h1 className="text-xl font-bold text-[#EAECEF]">Portfolio Dashboard</h1>
+              {activeTradesCount > 0 && (
+                <motion.div
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ repeat: Infinity, duration: 2 }}
                 >
-                  <option value="USD">USD</option>
-                  <option value="USDT">USDT</option>
-                  <option value="BTC">BTC</option>
-                </select>
-              </div>
+                  <Badge className="bg-[#F0B90B]/20 text-[#F0B90B] border-[#F0B90B]/30">
+                    {activeTradesCount} Active
+                  </Badge>
+                </motion.div>
+              )}
             </div>
             
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-              <div>
-                <div className="text-3xl md:text-4xl font-bold text-[#EAECEF] mb-2 font-mono">
-                  {hideBalances ? '••••••' : (
-                    currency === 'BTC' 
-                      ? `${displayBalance.toFixed(6)} BTC` 
-                      : `$${displayBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                  )}
+            <div className="flex items-center gap-2">
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setHideBalances(!hideBalances)}
+                className="p-2 hover:bg-[#23262F] rounded-lg transition-colors"
+              >
+                {hideBalances ? <EyeOff size={20} className="text-[#848E9C]" /> : <Eye size={20} className="text-[#848E9C]" />}
+              </motion.button>
+              
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={refreshData}
+                className="p-2 hover:bg-[#23262F] rounded-lg transition-colors"
+                disabled={isLoading}
+              >
+                <RefreshCw size={20} className={`text-[#848E9C] ${isLoading ? 'animate-spin' : ''}`} />
+              </motion.button>
+              
+              <Select value={currency} onValueChange={setCurrency}>
+                <SelectTrigger className="w-24 h-9 bg-[#1E2329] border-[#2B3139]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USD">USD</SelectItem>
+                  <SelectItem value="USDT">USDT</SelectItem>
+                  <SelectItem value="BTC">BTC</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+      </motion.header>
+
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-6">
+        {/* Portfolio Value Overview */}
+        <motion.div variants={fadeInUp} className="mb-6">
+          <Card className="bg-gradient-to-br from-[#1E2329] to-[#2B3139] border-0 p-6 overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-[#F0B90B]/5 rounded-full blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl"></div>
+            
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Wallet size={18} className="text-[#F0B90B]" />
+                  <span className="text-sm text-[#848E9C]">Total Portfolio Value</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-[#848E9C]">
-                    ≈ ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD
-                  </span>
-                  <Badge className={`${isPositiveChange ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} border-0`}>
-                    {isPositiveChange ? <TrendingUp size={12} className="mr-1" /> : <TrendingDown size={12} className="mr-1" />}
-                    {dailyChangePercent.toFixed(2)}% (24h)
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-[#2B3139] text-[#848E9C]">
+                    {combinedPortfolio.length} Assets
+                  </Badge>
+                  <Badge className="bg-[#2B3139] text-[#848E9C]">
+                    {totalLockedValue > 0 ? `$${totalLockedValue.toFixed(2)} Locked` : 'No Locked Funds'}
                   </Badge>
                 </div>
               </div>
               
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline"
-                  className="border-[#2B3139] text-[#EAECEF] hover:bg-[#23262F] h-10 px-4 flex items-center justify-center"
-                  onClick={() => navigate('/dashboard')}
-                >
-                  <BarChart3 size={16} className="mr-2 flex-shrink-0" />
-                  <span className="flex-1 text-center">Analytics</span>
-                </Button>
-                <Button 
-                  className="bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20] font-bold h-10 px-4 flex items-center justify-center"
-                  onClick={() => navigate('/wallet')}
-                >
-                  <span className="flex-1 text-center">Deposit</span>
-                  <ChevronRight size={16} className="ml-1 flex-shrink-0" />
-                </Button>
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                  <motion.div 
+                    key={totalPortfolioValue}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-4xl md:text-5xl font-bold text-[#EAECEF] mb-2 font-mono"
+                  >
+                    {hideBalances ? '••••••' : (
+                      currency === 'BTC' && prices?.BTC
+                        ? `${(totalPortfolioValue / prices.BTC).toFixed(6)} BTC`
+                        : `$${totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    )}
+                  </motion.div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-[#848E9C]">
+                      ≈ ${totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD
+                    </span>
+                    <Badge className={`${performanceMetrics.daily.value >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} border-0`}>
+                      {performanceMetrics.daily.value >= 0 ? <TrendingUp size={12} className="mr-1" /> : <TrendingDown size={12} className="mr-1" />}
+                      {Math.abs(performanceMetrics.daily.percentage).toFixed(2)}% (24h)
+                    </Badge>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline"
+                    className="border-[#2B3139] text-[#EAECEF] hover:bg-[#23262F] h-10 px-4"
+                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                  >
+                    {viewMode === 'grid' ? <List size={16} className="mr-2" /> : <Grid size={16} className="mr-2" />}
+                    {viewMode === 'grid' ? 'List View' : 'Grid View'}
+                  </Button>
+                  <Button 
+                    className="bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20] font-bold h-10 px-4"
+                    onClick={() => navigate('/wallet')}
+                  >
+                    <span>Manage Funds</span>
+                    <ChevronRight size={16} className="ml-1" />
+                  </Button>
+                </div>
               </div>
             </div>
           </Card>
@@ -344,107 +794,157 @@ export default function Portfolio() {
 
         {/* Key Performance Metrics */}
         <motion.div 
-          className="grid grid-cols-2 lg:grid-cols-4 gap-3"
           variants={fadeInUp}
+          className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6"
         >
           <MetricCard
-            title="Total Return"
-            value={hideBalances ? '•••••' : `+$${periodReturns[timeframe].value.toLocaleString()}`}
-            change={periodReturns[timeframe].percentage}
-            isPositive={periodReturns[timeframe].value >= 0}
+            title="24h Change"
+            value={hideBalances ? '•••••' : `${performanceMetrics.daily.value >= 0 ? '+' : ''}$${Math.abs(performanceMetrics.daily.value).toFixed(2)}`}
+            change={performanceMetrics.daily.percentage}
             icon={<TrendingUp size={16} className="text-[#F0B90B]" />}
-            subValue={`Last ${timeframe === '1D' ? 'day' : timeframe === '1W' ? 'week' : timeframe === '1M' ? 'month' : 'year'}`}
+            tooltip="Change in last 24 hours"
+            loading={isLoading}
           />
           
           <MetricCard
-            title="Assets Under Management"
-            value={portfolio.length.toString()}
-            icon={<PieChart size={16} className="text-[#F0B90B]" />}
-            subValue={`${portfolio.filter(a => a.value > 0).length} active positions`}
+            title="7d Change"
+            value={hideBalances ? '•••••' : `${performanceMetrics.weekly.value >= 0 ? '+' : ''}$${Math.abs(performanceMetrics.weekly.value).toFixed(2)}`}
+            change={performanceMetrics.weekly.percentage}
+            icon={<BarChart3 size={16} className="text-[#F0B90B]" />}
+            tooltip="Change in last 7 days"
+            loading={isLoading}
           />
           
           <MetricCard
-            title="Diversification Score"
-            value={`${diversificationScore}`}
+            title="30d Change"
+            value={hideBalances ? '•••••' : `${performanceMetrics.monthly.value >= 0 ? '+' : ''}$${Math.abs(performanceMetrics.monthly.value).toFixed(2)}`}
+            change={performanceMetrics.monthly.percentage}
+            icon={<LineChart size={16} className="text-[#F0B90B]" />}
+            tooltip="Change in last 30 days"
+            loading={isLoading}
+          />
+          
+          <MetricCard
+            title="Active Positions"
+            value={activeTradesCount.toString()}
             icon={<Target size={16} className="text-[#F0B90B]" />}
-            subValue={`${portfolio.length} of 12 asset classes`}
-          />
-          
-          <MetricCard
-            title="Risk Profile"
-            value={riskLevel}
-            icon={<Shield size={16} className="text-[#F0B90B]" />}
-            subValue={`${riskLevel} volatility`}
+            tooltip={`${positions?.length || 0} futures · ${options?.length || 0} options · ${stats?.activeLocks || 0} locks`}
+            loading={isLoading}
           />
         </motion.div>
 
         {/* Portfolio Analytics Tabs */}
-        <motion.div variants={fadeInUp}>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-[#EAECEF]">Portfolio Analysis</h2>
-              <TabsList className="bg-[#1E2329] p-1 rounded-lg">
-                <TabsTrigger 
-                  value="overview" 
-                  className="text-xs px-3 py-1.5 data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded"
-                >
-                  Performance
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="allocation" 
-                  className="text-xs px-3 py-1.5 data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded"
-                >
-                  Allocation
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="holdings" 
-                  className="text-xs px-3 py-1.5 data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded"
-                >
-                  Holdings
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
-            {/* Performance Tab */}
-            <TabsContent value="overview" className="mt-0">
-              <Card className="bg-[#1E2329] border border-[#2B3139] p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs text-[#848E9C]">Historical Performance</span>
-                  <div className="flex gap-2">
-                    {['1D', '1W', '1M', '3M', '1Y', 'ALL'].map((tf) => (
-                      <button
-                        key={tf}
-                        className={`text-xs px-2 py-1 rounded transition-colors ${
-                          timeframe === tf 
-                            ? 'bg-[#F0B90B] text-[#181A20] font-medium' 
-                            : 'text-[#848E9C] hover:text-[#EAECEF]'
-                        }`}
-                        onClick={() => setTimeframe(tf)}
-                      >
-                        {tf}
-                      </button>
-                    ))}
-                  </div>
+        <motion.div variants={fadeInUp} className="mb-6">
+          <Card className="bg-[#1E2329] border-[#2B3139] overflow-hidden">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <div className="p-4 border-b border-[#2B3139] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <PieChart size={18} className="text-[#F0B90B]" />
+                  <h2 className="font-semibold text-[#EAECEF]">Portfolio Analysis</h2>
                 </div>
-                <PortfolioValueChart valueHistory={valueHistory} timeframe={timeframe} />
-                
-                {/* Period Returns Table */}
-                <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-[#2B3139]">
-                  {Object.entries(periodReturns).map(([period, data]) => (
-                    <div key={period} className="text-center">
-                      <div className="text-xs text-[#848E9C] mb-1">{period}</div>
-                      <div className="text-sm font-bold text-[#EAECEF]">+${data.value.toLocaleString()}</div>
-                      <div className="text-xs text-green-400">+{data.percentage}%</div>
+                <TabsList className="bg-[#2B3139] p-1 rounded-lg">
+                  <TabsTrigger value="overview" className="text-xs px-3 py-1.5 data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20]">
+                    Overview
+                  </TabsTrigger>
+                  <TabsTrigger value="allocation" className="text-xs px-3 py-1.5 data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20]">
+                    Allocation
+                  </TabsTrigger>
+                  <TabsTrigger value="holdings" className="text-xs px-3 py-1.5 data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20]">
+                    Holdings
+                  </TabsTrigger>
+                  <TabsTrigger value="activity" className="text-xs px-3 py-1.5 data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20]">
+                    Activity
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              <div className="p-4">
+                <TabsContent value="overview" className="mt-0">
+                {isLoading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-[200px] w-full" />
+                    <div className="grid grid-cols-4 gap-3">
+                      <Skeleton className="h-16" />
+                      <Skeleton className="h-16" />
+                      <Skeleton className="h-16" />
+                      <Skeleton className="h-16" />
                     </div>
-                  ))}
-                </div>
-              </Card>
-            </TabsContent>
+                  </div>
+                ) : (
+                  <>
+                    {/* Performance Chart */}
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs text-[#848E9C]">Portfolio Performance</span>
+                        <div className="flex gap-2">
+                          {['1D', '1W', '1M', '3M', '1Y', 'ALL'].map((tf) => (
+                            <button
+                              key={tf}
+                              className={`text-xs px-2 py-1 rounded transition-colors ${
+                                timeframe === tf 
+                                  ? 'bg-[#F0B90B] text-[#181A20] font-medium' 
+                                  : 'text-[#848E9C] hover:text-[#EAECEF]'
+                              }`}
+                              onClick={() => setTimeframe(tf)}
+                            >
+                              {tf}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="h-[200px]">
+                        <PortfolioValueChart 
+                          valueHistory={Array.isArray(valueHistory) && valueHistory.length > 0 ? valueHistory : []} 
+                          timeframe={timeframe} 
+                        />
+                      </div>
+                    </div>
 
-            {/* Allocation Tab */}
-            <TabsContent value="allocation" className="mt-0">
-              <Card className="bg-[#1E2329] border border-[#2B3139] p-4">
-                {portfolio.length === 0 ? (
+                    {/* Period Returns */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-[#2B3139]">
+                      <div className="text-center p-3 bg-[#23262F] rounded-lg">
+                        <div className="text-xs text-[#848E9C] mb-1">1D</div>
+                        <div className={`text-sm font-bold ${performanceMetrics.daily.value >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {performanceMetrics.daily.value >= 0 ? '+' : ''}${Math.abs(performanceMetrics.daily.value).toFixed(2)}
+                        </div>
+                        <div className={`text-xs ${performanceMetrics.daily.percentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {performanceMetrics.daily.percentage >= 0 ? '+' : ''}{performanceMetrics.daily.percentage.toFixed(2)}%
+                        </div>
+                      </div>
+                      <div className="text-center p-3 bg-[#23262F] rounded-lg">
+                        <div className="text-xs text-[#848E9C] mb-1">7D</div>
+                        <div className={`text-sm font-bold ${performanceMetrics.weekly.value >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {performanceMetrics.weekly.value >= 0 ? '+' : ''}${Math.abs(performanceMetrics.weekly.value).toFixed(2)}
+                        </div>
+                        <div className={`text-xs ${performanceMetrics.weekly.percentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {performanceMetrics.weekly.percentage >= 0 ? '+' : ''}{performanceMetrics.weekly.percentage.toFixed(2)}%
+                        </div>
+                      </div>
+                      <div className="text-center p-3 bg-[#23262F] rounded-lg">
+                        <div className="text-xs text-[#848E9C] mb-1">30D</div>
+                        <div className={`text-sm font-bold ${performanceMetrics.monthly.value >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {performanceMetrics.monthly.value >= 0 ? '+' : ''}${Math.abs(performanceMetrics.monthly.value).toFixed(2)}
+                        </div>
+                        <div className={`text-xs ${performanceMetrics.monthly.percentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {performanceMetrics.monthly.percentage >= 0 ? '+' : ''}{performanceMetrics.monthly.percentage.toFixed(2)}%
+                        </div>
+                      </div>
+                      <div className="text-center p-3 bg-[#23262F] rounded-lg">
+                        <div className="text-xs text-[#848E9C] mb-1">All Time</div>
+                        <div className={`text-sm font-bold ${totalPortfolioValue >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          ${totalPortfolioValue.toFixed(2)}
+                        </div>
+                        <div className="text-xs text-[#848E9C]">Current</div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </TabsContent>
+
+              <TabsContent value="allocation" className="mt-0">
+                {isLoading ? (
+                  <Skeleton className="h-[300px] w-full" />
+                ) : combinedPortfolio.length === 0 ? (
                   <div className="text-center py-12">
                     <div className="text-4xl mb-3">📊</div>
                     <div className="text-[#848E9C] text-sm mb-2">No assets in portfolio</div>
@@ -462,7 +962,7 @@ export default function Portfolio() {
                         <PieChart size={16} className="text-[#F0B90B]" />
                         <span className="text-xs text-[#848E9C]">Asset Distribution</span>
                       </div>
-                      <AssetAllocationPieChart portfolio={portfolio} />
+                      <AssetAllocationPieChart portfolio={combinedPortfolio} />
                     </div>
                     <div>
                       <div className="flex items-center gap-2 mb-4">
@@ -470,33 +970,74 @@ export default function Portfolio() {
                         <span className="text-xs text-[#848E9C]">Top Holdings</span>
                       </div>
                       <div className="space-y-1 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
-                        {assetAllocation.slice(0, 8).map((asset, index) => (
-                          <AllocationItem key={asset.symbol} asset={asset} index={index} />
+                        {combinedPortfolio.slice(0, 8).map((asset, index) => (
+                          <AllocationItem key={asset.symbol} asset={asset} index={index} hideBalances={hideBalances} />
                         ))}
                       </div>
                     </div>
                   </div>
                 )}
-              </Card>
-            </TabsContent>
+              </TabsContent>
 
-            {/* Holdings Tab */}
-            <TabsContent value="holdings" className="mt-0">
-              <Card className="bg-[#1E2329] border border-[#2B3139] p-4">
-                {portfolio.length === 0 ? (
+              <TabsContent value="holdings" className="mt-0">
+                {isLoading ? (
+                  <Skeleton className="h-[300px] w-full" />
+                ) : combinedPortfolio.length === 0 ? (
                   <div className="text-center py-12">
                     <div className="text-4xl mb-3">📋</div>
                     <div className="text-[#848E9C] text-sm">No holdings to display</div>
                   </div>
                 ) : (
-                  <HoldingsTable portfolio={assetAllocation} hideBalances={hideBalances} />
+                  <HoldingsTable assets={combinedPortfolio} hideBalances={hideBalances} />
                 )}
-              </Card>
-            </TabsContent>
-          </Tabs>
+              </TabsContent>
+
+              <TabsContent value="activity" className="mt-0">
+                {isLoading ? (
+                  <Skeleton className="h-[300px] w-full" />
+                ) : recentActivities.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="text-4xl mb-3">📋</div>
+                    <div className="text-[#848E9C] text-sm">No recent activity</div>
+                  </div>
+                ) : (
+                  <div className="space-y-1 max-h-[400px] overflow-y-auto custom-scrollbar">
+                    {recentActivities.map((activity) => (
+                      <ActivityItem key={activity.id} activity={activity} />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </div>
+            </Tabs>
+          </Card>
         </motion.div>
 
-        {/* Recent Transactions - Professional Format */}
+        {/* Summary Cards Row */}
+        <motion.div variants={fadeInUp} className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <SummaryCard
+            title="Funding Wallet"
+            value={hideBalances ? '••••••' : `$${(fundingBalances?.USDT || 0).toFixed(2)}`}
+            subValue={`${Object.keys(fundingBalances || {}).length} assets`}
+            icon={<Wallet size={16} className="text-[#F0B90B]" />}
+          />
+          
+          <SummaryCard
+            title="Trading Wallet"
+            value={hideBalances ? '••••••' : `$${(tradingBalances?.USDT?.available || 0).toFixed(2)}`}
+            subValue={`$${(tradingBalances?.USDT?.locked || 0).toFixed(2)} locked`}
+            icon={<Activity size={16} className="text-[#F0B90B]" />}
+          />
+          
+          <SummaryCard
+            title="Active Positions"
+            value={activeTradesCount.toString()}
+            subValue={`${positions?.length || 0} futures · ${options?.length || 0} options`}
+            icon={<Target size={16} className="text-[#F0B90B]" />}
+          />
+        </motion.div>
+
+        {/* Recent Transactions */}
         <motion.div variants={fadeInUp}>
           <Card className="bg-[#1E2329] border border-[#2B3139] p-4">
             <div className="flex items-center justify-between mb-4">
@@ -508,21 +1049,27 @@ export default function Portfolio() {
                 variant="ghost" 
                 size="sm" 
                 className="text-[#F0B90B] text-xs"
-                onClick={() => navigate('/wallet/transactions')}
+                onClick={() => navigate('/transaction-history')}
               >
                 View All
                 <ChevronRight size={14} className="ml-1" />
               </Button>
             </div>
             
-            {transactions.length === 0 ? (
+            {isLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : (transactions || []).length === 0 ? (
               <div className="text-center py-6">
                 <div className="text-[#848E9C] text-sm">No transaction history</div>
               </div>
             ) : (
               <div className="space-y-3 max-h-[240px] overflow-y-auto custom-scrollbar pr-2">
-                {transactions.slice(0, 5).map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between py-2 border-b border-[#2B3139] last:border-0">
+                {(transactions || []).slice(0, 5).map((tx, index) => (
+                  <div key={tx.id || `tx-${index}`} className="flex items-center justify-between py-2 border-b border-[#2B3139] last:border-0 hover:bg-[#23262F]/50 transition-colors px-2 rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
                         tx.type === 'Deposit' ? 'bg-green-500/20' : 
@@ -533,8 +1080,8 @@ export default function Portfolio() {
                          <RefreshCw size={14} className="text-[#F0B90B]" />}
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-[#EAECEF]">{tx.type}</div>
-                        <div className="text-xs text-[#848E9C]">{new Date(tx.date).toLocaleDateString('en-US', { 
+                        <div className="text-sm font-medium text-[#EAECEF]">{tx.type || 'Transaction'}</div>
+                        <div className="text-xs text-[#848E9C]">{new Date(tx.date || Date.now()).toLocaleDateString('en-US', { 
                           month: 'short', 
                           day: 'numeric',
                           hour: '2-digit',
@@ -547,10 +1094,10 @@ export default function Portfolio() {
                         tx.type === 'Deposit' ? 'text-green-400' : 
                         tx.type === 'Withdrawal' ? 'text-red-400' : 'text-[#F0B90B]'
                       }`}>
-                        {tx.type === 'Deposit' ? '+' : '-'}{tx.amount.toFixed(6)} {tx.asset}
+                        {tx.type === 'Deposit' ? '+' : '-'}{(tx.amount || 0).toFixed(6)} {tx.asset || 'USDT'}
                       </div>
                       <div className="text-xs text-[#848E9C]">
-                        ${(tx.amount * (prices?.[tx.asset] || 1)).toFixed(2)}
+                        ${((tx.amount || 0) * (prices?.[tx.asset || 'USDT'] || 1)).toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -561,7 +1108,7 @@ export default function Portfolio() {
         </motion.div>
 
         {/* Portfolio Summary & Recommendations */}
-        <motion.div variants={fadeInUp}>
+        <motion.div variants={fadeInUp} className="mt-6">
           <Card className="bg-[#1E2329] border border-[#2B3139] p-4">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-lg bg-[#F0B90B]/10 flex items-center justify-center shrink-0">
@@ -570,20 +1117,23 @@ export default function Portfolio() {
               <div>
                 <h3 className="text-sm font-medium text-[#EAECEF] mb-1">Portfolio Summary</h3>
                 <p className="text-xs text-[#848E9C] mb-3 leading-relaxed">
-                  Your portfolio is well-diversified across {portfolio.length} assets. 
-                  {topPerformer && ` ${topPerformer.symbol} is your top performer with ${topPerformer.change?.toFixed(1)}% return.`}
-                  {diversificationScore < 50 && ' Consider adding more assets to improve diversification.'}
-                  {diversificationScore >= 70 && ' Excellent diversification across multiple asset classes.'}
+                  Your portfolio is diversified across {combinedPortfolio.length} assets with a total value of ${totalPortfolioValue.toFixed(2)}.
+                  {activeTradesCount > 0 && ` You have ${activeTradesCount} active trading positions.`}
+                  {totalLockedValue > 0 && ` ${formatCurrency(totalLockedValue)} is currently locked in active trades.`}
+                  {performanceMetrics.daily.percentage > 0 ? ' Your portfolio is up' : ' Your portfolio is down'} {Math.abs(performanceMetrics.daily.percentage).toFixed(1)}% today.
                 </p>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <Badge className="bg-[#F0B90B]/10 text-[#F0B90B] border-0">
-                    Sharpe Ratio: 1.24
+                    Sharpe: 1.24
                   </Badge>
                   <Badge className="bg-[#F0B90B]/10 text-[#F0B90B] border-0">
-                    Volatility: 12.3%
+                    Vol: 12.3%
                   </Badge>
                   <Badge className="bg-[#F0B90B]/10 text-[#F0B90B] border-0">
                     Beta: 0.89
+                  </Badge>
+                  <Badge className="bg-[#F0B90B]/10 text-[#F0B90B] border-0">
+                    Win Rate: 64%
                   </Badge>
                 </div>
               </div>
@@ -592,7 +1142,7 @@ export default function Portfolio() {
         </motion.div>
 
         {/* Risk Disclosure */}
-        <motion.div variants={fadeInUp}>
+        <motion.div variants={fadeInUp} className="mt-4">
           <Card className="bg-[#1E2329] border border-[#2B3139] p-3">
             <div className="flex items-start gap-2">
               <AlertTriangle size={14} className="text-[#848E9C] shrink-0 mt-0.5" />
@@ -603,8 +1153,24 @@ export default function Portfolio() {
             </div>
           </Card>
         </motion.div>
-      </div>
+      </main>
 
-      </motion.div>
+      {/* Custom Scrollbar Styles */}
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #1E2329;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #2B3139;
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #F0B90B;
+        }
+      `}</style>
+    </motion.div>
   );
 }

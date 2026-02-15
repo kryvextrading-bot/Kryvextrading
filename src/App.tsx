@@ -13,6 +13,7 @@ import PriceTicker from './components/PriceTicker';
 import { OrderProvider } from './contexts/OrderContext';
 import { AccountsProvider } from './contexts/AccountsContext';
 import { useAuth } from './contexts/AuthContext';
+import { Toaster } from '@/components/ui/toaster';
 
 export default function App() {
   return (
@@ -43,10 +44,11 @@ function ThemedApp() {
           <TradingProvider>
             <BrowserRouter>
               <PriceTicker />
-              <div className="min-h-screen bg-background">
+              <div className="min-h-screen bg-background pb-20">
                 <AppRoutes />
                 <NavigationWithAuth />
               </div>
+              <Toaster />
             </BrowserRouter>
           </TradingProvider>
         </OrderProvider>

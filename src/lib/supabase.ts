@@ -2,11 +2,38 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
+
+// Debug environment variables
+console.log('🔍 [Supabase] Environment variables:', {
+  url: supabaseUrl ? '✅ Set' : '❌ Missing',
+  anonKey: supabaseAnonKey ? '✅ Set' : '❌ Missing',
+  serviceKey: supabaseServiceKey ? '✅ Set' : '❌ Missing'
+})
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+  },
+  global: {
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+  },
+})
+
+// Service role client for admin operations (bypasses RLS)
+// Use fallback if service key is not available
+const adminKey = supabaseServiceKey || supabaseAnonKey
+
+console.log('🔧 [Supabase] Admin client key:', adminKey ? '✅ Using admin key' : '❌ Using anon key as fallback')
+
+export const supabaseAdmin = createClient(supabaseUrl, adminKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
   },
   global: {
     headers: {

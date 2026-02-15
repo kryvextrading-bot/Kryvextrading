@@ -41,28 +41,33 @@ export interface ButtonProps
   asChild?: boolean
 }
 
-export function Button({ className, variant = 'default', asChild = false, ...props }: ButtonProps) {
-  const base = 'font-bold rounded-lg transition-all shadow focus:outline-none focus:ring-2 focus:ring-[#F0B90B]';
-  let color = '';
-  if (variant === 'default' || variant === 'primary') {
-    color = 'bg-[#F0B90B] text-black hover:bg-[#FFD666]';
-  } else if (variant === 'outline') {
-    color = 'bg-transparent border border-[#F0B90B] text-[#F0B90B] hover:bg-[#23262F]';
-  } else if (variant === 'secondary') {
-    color = 'bg-[#23262F] text-white hover:bg-[#181A20]';
-  } else if (variant === 'danger') {
-    color = 'bg-[#F6465D] text-white hover:bg-[#ff7b8a]';
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant = 'default', asChild = false, ...props }, ref) => {
+    const base = 'font-bold rounded-lg transition-all shadow focus:outline-none focus:ring-2 focus:ring-[#F0B90B]';
+    let color = '';
+    if (variant === 'default') {
+      color = 'bg-[#F0B90B] text-black hover:bg-[#FFD666]';
+    } else if (variant === 'outline') {
+      color = 'bg-transparent border border-[#F0B90B] text-[#F0B90B] hover:bg-[#23262F]';
+    } else if (variant === 'secondary') {
+      color = 'bg-[#23262F] text-white hover:bg-[#181A20]';
+    } else if (variant === 'destructive') {
+      color = 'bg-[#F6465D] text-white hover:bg-[#ff7b8a]';
+    }
+    
+    const Comp = asChild ? Slot : "button";
+    
+    return (
+      <Comp 
+        className={`${base} ${color} px-5 py-2 ${className || ''}`} 
+        {...(asChild ? {} : { type: "button" })} 
+        {...props} 
+        ref={ref}
+      />
+    );
   }
-  
-  const Comp = asChild ? Slot : "button";
-  
-  return (
-    <Comp 
-      className={`${base} ${color} px-5 py-2 ${className || ''}`} 
-      {...(asChild ? {} : { type: "button" })} 
-      {...props} 
-    />
-  );
-}
+);
+
+Button.displayName = "Button";
 
 export { buttonVariants };

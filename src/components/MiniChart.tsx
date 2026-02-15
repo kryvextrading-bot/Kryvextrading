@@ -14,7 +14,10 @@ export default function MiniChart({ data }: { data: number[] }) {
   const points = validData.map((v, i) => {
     const x = (i / (validData.length - 1)) * 80;
     const y = 24 - ((v - min) / (max - min || 1)) * 24;
-    return `${x},${y}`;
+    // Ensure both x and y are valid numbers
+    const validX = typeof x === 'number' && !isNaN(x) && isFinite(x) ? x : 0;
+    const validY = typeof y === 'number' && !isNaN(y) && isFinite(y) ? y : 24;
+    return `${validX},${validY}`;
   }).join(' ');
   
   return (

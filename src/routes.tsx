@@ -20,7 +20,7 @@ import Privacy from './pages/Privacy';
 import NotFound from './pages/NotFound';
 import QuickAccess from './pages/QuickAccess';
 import OptionsTradingPage from './pages/OptionsTradingPage';
-import ArbitragePage from './pages/Arbitrage';
+import ArbitragePage from './pages/ArbitrageSimple';
 import Portfolio from './pages/Portfolio';
 import LoanPage from './pages/Loan';
 import KycVerification from './pages/KycVerification';
@@ -34,8 +34,11 @@ import CreditScore from './pages/CreditScore';
 import Security from './pages/Security';
 import PaymentMethods from './pages/PaymentMethods';
 import TransactionHistory from './pages/TransactionHistory';
+import OrderHistoryPage from './pages/OrderHistoryPage';
+import WalletTransfer from './pages/WalletTransfer';
 import AdminDashboard from './pages/admin/Dashboard';
 import UserDetailsPage from './pages/admin/UserDetailsPage';
+import TradingAdminPanel from './pages/admin/TradingAdmin';
 
 // Admin Dashboard Redirect Component
 const AdminDashboardRedirect = () => {
@@ -91,6 +94,11 @@ export default function AppRoutes() {
           <Wallet />
         </ProtectedRoute>
       } />
+      <Route path="/wallet-transfer" element={
+        <ProtectedRoute>
+          <WalletTransfer />
+        </ProtectedRoute>
+      } />
       <Route path="/account" element={
         <ProtectedRoute>
           <Account />
@@ -108,7 +116,12 @@ export default function AppRoutes() {
       } />
       <Route path="/transaction-history" element={
         <ProtectedRoute>
-          <TransactionHistory />
+          <OrderHistoryPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/wallet/transactions" element={
+        <ProtectedRoute>
+          <OrderHistoryPage />
         </ProtectedRoute>
       } />
       <Route path="/quick-access" element={
@@ -163,6 +176,11 @@ export default function AppRoutes() {
       <Route path="/admin/user/:userId" element={
         <ProtectedRoute requireAdmin>
           <UserDetailsPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/trading-control" element={
+        <ProtectedRoute requireAdmin>
+          <TradingAdminPanel />
         </ProtectedRoute>
       } />
     </Routes>

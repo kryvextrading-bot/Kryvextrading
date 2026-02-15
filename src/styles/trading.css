@@ -25,3 +25,8 @@
   border-radius: 12px;
   overflow: hidden;
 }
+
+/* Balance progress bar */
+.balance-progress-bar {
+  width: var(--progress-width, 0%);
+}

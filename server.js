@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios'; // Add this at the top if not already present
+import multer from 'multer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +14,9 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Configure multer for file uploads
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Mock data
 const users = [
@@ -330,6 +334,80 @@ app.post('/api/auth/register', (req, res) => {
   users.push(newUser);
   const token = `mock-jwt-token-${Date.now()}`;
   res.status(201).json({ token, user: newUser });
+});
+
+// Wallet/Deposit routes
+app.post('/api/wallet/deposit', upload.single('proof'), async (req, res) => {
+  try {
+    console.log('📝 [API] Received deposit request');
+    
+    // Get data from req.body (multer processes FormData)
+    const amount = req.body.amount;
+    const currency = req.body.currency;
+    const network = req.body.network;
+    const address = req.body.address;
+    const userId = req.body.userId;
+    const userEmail = req.body.userEmail;
+    const userName = req.body.userName;
+    const proof = req.file; // File uploaded via multer
+    
+    // Validate required fields
+    if (!amount || !currency || !network || !address || !userId || !userEmail) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        details: 'Amount, currency, network, address, userId, and userEmail are required'
+      });
+    }
+    
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      return res.status(400).json({ 
+        error: 'Invalid amount',
+        details: 'Amount must be a positive number'
+      });
+    }
+    
+    console.log('📊 [API] Deposit request data:', {
+      amount: amountNum,
+      currency,
+      network,
+      address,
+      hasProof: !!proof
+    });
+    
+    // Mock deposit request creation (in production, this would save to database)
+    const depositRequest = {
+      id: `deposit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      userId,
+      userEmail,
+      userName,
+      amount: amountNum.toString(),
+      currency,
+      network,
+      address,
+      status: 'Pending',
+      proofUrl: proof ? `proof-${Date.now()}` : null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    console.log('✅ [API] Deposit request created successfully:', depositRequest);
+    
+    return res.json({
+      success: true,
+      message: 'Deposit request submitted successfully',
+      data: depositRequest
+    });
+    
+  } catch (error) {
+    console.error('💥 [API] Error creating deposit request:', error);
+    return res.status(500).json(
+      { 
+        error: 'Failed to submit deposit request',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }
+    );
+  }
 });
 
 // Serve static files in production
