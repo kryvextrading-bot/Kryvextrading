@@ -1204,10 +1204,8 @@ export default function WalletManagement() {
   // Load users for dropdown
   const loadUsers = async () => {
     try {
-      console.log('🔄 [WalletManagement] Loading users...');
       const usersResponse = await adminApiService.getUsers();
       const usersData = usersResponse.data || [];
-      console.log('✅ [WalletManagement] Loaded users:', usersData.length);
       setUsers(usersData);
     } catch (error) {
       console.error('❌ [WalletManagement] Error loading users:', error);
@@ -1223,23 +1221,20 @@ export default function WalletManagement() {
   const loadWalletRequests = async () => {
     try {
       setLoading(true);
-      console.log('🔄 [WalletManagement] Loading wallet requests...');
       
       // Get wallet requests from our new wallet API service (includes admin actions)
       const walletRequests = await walletApiService.getWalletRequests();
-      console.log('📊 [WalletManagement] Wallet requests from API:', walletRequests);
       
-      // Get deposit requests from proxy server (if any)
+      // Get deposit requests from main server
       let depositRequests = [];
       try {
-        const response = await fetch('http://localhost:3001/api/deposit-requests');
+        const response = await fetch('/api/deposit-requests');
         if (response.ok) {
           const data = await response.json();
           depositRequests = data.requests || [];
-          console.log('📊 [WalletManagement] Deposit requests from proxy:', depositRequests);
         }
       } catch (error) {
-        console.log('📊 [WalletManagement] No deposit requests available from proxy');
+        console.error('Error fetching deposit requests:', error);
       }
       
       // Transform proxy deposit requests to wallet request format
@@ -1303,8 +1298,6 @@ export default function WalletManagement() {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       
-      console.log('✅ [WalletManagement] Loaded wallet requests:', allRequests.length);
-      console.log('📊 [WalletManagement] Final requests list:', allRequests);
       
       setRequests(allRequests);
       setFilteredRequests(allRequests);
@@ -1369,7 +1362,6 @@ export default function WalletManagement() {
   // Handle request approval
   const handleApprove = async (requestId: string) => {
     try {
-      console.log('👍 [WalletManagement] Approving request:', requestId);
       
       const request = requests.find(req => req.id === requestId);
       if (!request) {
@@ -1381,37 +1373,63 @@ export default function WalletManagement() {
         return;
       }
 
-      // Check if this is a deposit request from proxy server
-      const isDepositRequest = requestId.startsWith('deposit-');
+      // Check if this is a deposit request from main server
+      const isDepositRequest = requestId.startsWith('deposit-') || request.type === 'deposit';
       
       if (isDepositRequest) {
-        // Update deposit request status in proxy server
+        // Get current admin user ID (you might get this from auth context)
+        const adminId = 'current-admin-id'; // Replace with actual admin ID from auth
+        
+        // Update deposit request status in main server with admin ID
         try {
-          const response = await fetch(`http://localhost:3001/api/deposit-requests/${requestId}`, {
+          const response = await fetch(`/api/deposit-requests/${requestId}`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ status: 'approved' }),
+            body: JSON.stringify({ 
+              status: 'Approved',
+              adminId: adminId,
+              adminNotes: 'Approved by admin'
+            })
           });
           
           if (!response.ok) {
-            throw new Error('Failed to update deposit request status');
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to update deposit request status');
+          }
+
+          const result = await response.json();
+          
+          // If server processed approval and added funds, show success
+          if (result.success) {
+            toast({
+              title: "Deposit Approved & Processed",
+              description: `${request.currency} ${request.amount.toLocaleString()} has been added to user wallet`,
+            });
           }
         } catch (error) {
           console.error('Error updating deposit request:', error);
+          toast({
+            title: "Error",
+            description: error instanceof Error ? error.message : 'Failed to approve deposit',
+            variant: "destructive",
+          });
+          return;
         }
       }
 
-      // Update request status to approved
-      setRequests(prev => prev.map(req => 
-        req.id === requestId 
-          ? { ...req, status: 'approved', processedAt: new Date().toISOString() }
-          : req
-      ));
+      // Update request status to approved (only for non-deposit requests)
+      if (!isDepositRequest) {
+        setRequests(prev => prev.map(req => 
+          req.id === requestId 
+            ? { ...req, status: 'approved', processedAt: new Date().toISOString() }
+            : req
+        ));
+      }
 
-      // Process the wallet balance change
-      if (request.type === 'deposit') {
+      // Process the wallet balance change for non-deposit requests
+      if (!isDepositRequest && request.type === 'deposit') {
         await walletApiService.adminAddFunds(
           request.userId, 
           request.amount, 
@@ -1451,7 +1469,6 @@ export default function WalletManagement() {
         });
       }
       
-      console.log('✅ [WalletManagement] Request approved and processed:', requestId);
     } catch (error) {
       console.error('❌ [WalletManagement] Error approving request:', error);
       toast({
@@ -1511,13 +1528,6 @@ export default function WalletManagement() {
         });
         return;
       }
-      
-      console.log('💰 [WalletManagement] Processing fund action:', { 
-        selectedUser: selectedUser.id, 
-        fundAction, 
-        amount, 
-        fundCurrency 
-      });
       
       if (fundAction === 'add') {
         await walletApiService.adminAddFunds(
@@ -2115,9 +2125,7 @@ export default function WalletManagement() {
             <div>
               <Label className="text-gray-400">User</Label>
               <Select value={selectedUser?.id || ''} onValueChange={(value) => {
-                console.log('👤 [WalletManagement] User selected in dialog:', value);
                 const user = users.find(u => u.id === value);
-                console.log('🔍 [WalletManagement] Found user:', user);
                 setSelectedUser(user);
               }}>
                 <SelectTrigger className="mt-1 bg-gray-700 border-gray-600 text-white">

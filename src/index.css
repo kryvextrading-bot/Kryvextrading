@@ -243,3 +243,17 @@ input[type="range"].binance-slider:focus {
 input[type="range"].binance-slider::-ms-tooltip {
   display: none;
 }
+
+/* Shimmer animation for buttons */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%) skewX(-12deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(-12deg);
+  }
+}
+
+.group:hover .animate-shimmer {
+  animation: shimmer 0.6s ease-out;
+}

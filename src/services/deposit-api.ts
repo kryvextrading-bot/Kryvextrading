@@ -19,6 +19,7 @@ export interface CreateDepositRequest {
   amount: string;
   currency: string;
   network: string;
+  address: string;
   proof: File;
   userId: string;
   userEmail: string;
@@ -61,8 +62,10 @@ export class DepositApiService {
           amount: parseFloat(data.amount),
           currency: data.currency,
           network: data.network,
-          status: 'pending',
-          proof_file: proofUrl,
+          address: data.address,
+          status: 'Pending', // Match SQL schema capitalization
+          proof_url: proofUrl,
+          proof_file_name: data.proof?.name,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })

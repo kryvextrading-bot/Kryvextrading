@@ -46,7 +46,6 @@ export class EnhancedMockWebSocket {
     this.emit('open');
     this.readyState = 1; // OPEN
     
-    console.log('WebSocket connected to:', this.url);
   }
 
   close(): void {
@@ -66,7 +65,6 @@ export class EnhancedMockWebSocket {
     
     try {
       const message = JSON.parse(data);
-      console.log('WebSocket message sent:', message);
       // In a real implementation, this would send to server
     } catch (error) {
       console.error('Error parsing WebSocket message:', error);
@@ -103,12 +101,10 @@ export class EnhancedMockWebSocket {
 
   // Additional utility methods
   subscribe(channel: string, callback: Function): void {
-    console.log('Subscribed to channel:', channel);
     // In a real implementation, this would send subscription message to server
   }
 
   unsubscribe(channel: string): void {
-    console.log('Unsubscribed from channel:', channel);
     // In a real implementation, this would send unsubscribe message to server
   }
 

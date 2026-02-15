@@ -5,7 +5,6 @@ import DepositApiService from '@/services/deposit-api';
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('📝 [API] Received deposit request');
 
     // Parse FormData from the request
     const formData = await request.formData();
@@ -14,6 +13,7 @@ export async function POST(request: NextRequest) {
     const amount = formData.get('amount') as string;
     const currency = formData.get('currency') as string;
     const network = formData.get('network') as string;
+    const address = formData.get('address') as string;
     const proof = formData.get('proof') as File;
     const userId = formData.get('userId') as string;
     const userEmail = formData.get('userEmail') as string;
@@ -36,28 +36,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('📊 [API] Deposit request data:', {
-      amount: amountNum,
-      currency,
-      network,
-      userId,
-      userEmail,
-      userName,
-      hasProof: !!proof
-    });
-
     // Create deposit request
     const depositRequest = await DepositApiService.createDepositRequest({
       amount,
       currency,
       network,
+      address,
       proof,
       userId,
       userEmail,
       userName
     });
 
-    console.log('✅ [API] Deposit request created successfully:', depositRequest);
 
     return NextResponse.json({
       success: true,
@@ -79,7 +69,6 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('📋 [API] Getting deposit requests');
 
     // Get user ID from query params (for user-specific requests)
     const { searchParams } = new URL(request.url);
@@ -95,7 +84,6 @@ export async function GET(request: NextRequest) {
       depositRequests = await DepositApiService.getAllDepositRequests();
     }
 
-    console.log('✅ [API] Retrieved deposit requests:', depositRequests.length);
 
     return NextResponse.json({
       success: true,

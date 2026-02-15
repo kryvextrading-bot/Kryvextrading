@@ -4,12 +4,18 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios'; // Add this at the top if not already present
 import multer from 'multer';
+import { createClient } from '@supabase/supabase-js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Initialize Supabase
+const supabaseUrl = process.env.SUPABASE_URL || 'https://your-project.supabase.co';
+const supabaseKey = process.env.SUPABASE_ANON_KEY || 'your-anon-key';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Middleware
 app.use(cors());
@@ -77,6 +83,9 @@ const users = [
     password: 'admin123'
   }
 ];
+
+// Store deposit requests in memory (in production, use a database)
+let depositRequests = [];
 
 const transactions = [
   {
@@ -375,28 +384,69 @@ app.post('/api/wallet/deposit', upload.single('proof'), async (req, res) => {
       hasProof: !!proof
     });
     
-    // Mock deposit request creation (in production, this would save to database)
+    // Create deposit request in Supabase
     const depositRequest = {
-      id: `deposit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      userId,
-      userEmail,
-      userName,
-      amount: amountNum.toString(),
+      user_id: userId,
+      user_email: userEmail,
+      user_name: userName || userEmail.split('@')[0],
+      amount: amountNum,
       currency,
       network,
       address,
       status: 'Pending',
-      proofUrl: proof ? `proof-${Date.now()}` : null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      proof_url: proof ? `proof-${Date.now()}` : null,
+      proof_file_name: proof ? proof.originalname : null
     };
     
-    console.log('✅ [API] Deposit request created successfully:', depositRequest);
+    // Insert into Supabase
+    const { data, error } = await supabase
+      .from('deposit_requests')
+      .insert([depositRequest])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('💥 [API] Error creating deposit request in Supabase:', error);
+      return res.status(500).json({
+        error: 'Failed to submit deposit request',
+        details: error.message
+      });
+    }
+    
+    // If there's a proof file, upload it to Supabase storage
+    if (proof) {
+      try {
+        const fileName = `deposit-proofs/${data.id}/${proof.originalname}`;
+        const { error: uploadError } = await supabase.storage
+          .from('deposit-proofs')
+          .upload(fileName, proof.buffer, {
+            contentType: proof.mimetype,
+            upsert: true
+          });
+        
+        if (!uploadError) {
+          // Update the deposit request with the file URL
+          const { data: publicUrlData } = supabase.storage
+            .from('deposit-proofs')
+            .getPublicUrl(fileName);
+          
+          await supabase
+            .from('deposit_requests')
+            .update({ proof_url: publicUrlData.publicUrl })
+            .eq('id', data.id);
+        }
+      } catch (uploadError) {
+        console.error('Error uploading proof file:', uploadError);
+        // Don't fail the request if file upload fails
+      }
+    }
+    
+    console.log('✅ [API] Deposit request created successfully:', data);
     
     return res.json({
       success: true,
       message: 'Deposit request submitted successfully',
-      data: depositRequest
+      data: data
     });
     
   } catch (error) {
@@ -407,6 +457,152 @@ app.post('/api/wallet/deposit', upload.single('proof'), async (req, res) => {
         details: error instanceof Error ? error.message : 'Unknown error'
       }
     );
+  }
+});
+
+// Get all deposit requests endpoint
+app.get('/api/deposit-requests', async (req, res) => {
+  try {
+    // Fetch from Supabase
+    const { data, error } = await supabase
+      .from('deposit_requests')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching deposit requests from Supabase:', error);
+      return res.status(500).json({ 
+        error: 'Failed to fetch deposit requests',
+        details: error.message
+      });
+    }
+    
+    res.json({
+      success: true,
+      requests: data || []
+    });
+  } catch (error) {
+    console.error('Error fetching deposit requests:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch deposit requests',
+      details: error.message
+    });
+  }
+});
+
+// Update deposit request status endpoint
+app.put('/api/deposit-requests/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, adminId, adminNotes } = req.body;
+    
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required' });
+    }
+    
+    // Update in Supabase
+    const updateData = {
+      status,
+      updated_at: new Date().toISOString()
+    };
+    
+    if (adminId) {
+      updateData.processed_by = adminId;
+      updateData.processed_at = new Date().toISOString();
+    }
+    
+    if (adminNotes) {
+      updateData.admin_notes = adminNotes;
+    }
+    
+    const { data, error } = await supabase
+      .from('deposit_requests')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating deposit request in Supabase:', error);
+      return res.status(500).json({ 
+        error: 'Failed to update deposit request',
+        details: error.message
+      });
+    }
+    
+    if (!data) {
+      return res.status(404).json({ error: 'Deposit request not found' });
+    }
+    
+    // If approved, add funds to user wallet
+    if (status === 'Approved') {
+      try {
+        // Call the database function to add funds
+        const { data: walletResult, error: walletError } = await supabase
+          .rpc('add_funds_to_wallet', {
+            p_user_id: data.user_id,
+            p_currency: data.currency,
+            p_amount: data.amount,
+            p_description: `Deposit approved: ${data.network} deposit`
+          });
+        
+        if (walletError) {
+          console.error('Error adding funds to wallet:', walletError);
+          // Don't fail the request, but log the error
+        } else if (walletResult && walletResult.length > 0) {
+          const result = walletResult[0];
+          if (result.success) {
+            console.log(`✅ Added ${data.amount} ${data.currency} to user ${data.user_id}. New balance: ${result.new_balance}`);
+            
+            // Update deposit request to completed
+            await supabase
+              .from('deposit_requests')
+              .update({ status: 'Completed' })
+              .eq('id', id);
+          }
+        }
+      } catch (walletError) {
+        console.error('Unexpected error adding funds to wallet:', walletError);
+      }
+    }
+    
+    // Log admin action if adminId is provided
+    if (adminId) {
+      try {
+        await supabase
+          .from('admin_action_logs')
+          .insert([{
+            admin_id: adminId,
+            action_type: status === 'Approved' ? 'deposit_approve' : 'deposit_reject',
+            target_user_id: data.user_id,
+            target_resource_id: id,
+            resource_type: 'deposit_request',
+            action_details: {
+              old_status: 'Pending',
+              new_status: status,
+              admin_notes: adminNotes,
+              amount: data.amount,
+              currency: data.currency
+            }
+          }]);
+      } catch (logError) {
+        console.error('Error logging admin action:', logError);
+      }
+    }
+    
+    console.log(`📝 Deposit request ${id} updated to status: ${status}`);
+    
+    res.json({
+      success: true,
+      message: 'Deposit request updated successfully',
+      request: data
+    });
+  } catch (error) {
+    console.error('Error updating deposit request:', error);
+    res.status(500).json({ 
+      error: 'Failed to update deposit request',
+      details: error.message
+    });
   }
 });
 

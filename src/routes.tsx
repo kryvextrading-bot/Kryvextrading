@@ -8,7 +8,6 @@ import AssetPage from './pages/AssetPage';
 import Trading from './pages/Trading';
 import TradingInterface from './pages/TradingInterface';
 import Wallet from './pages/Wallet';
-import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -43,7 +42,7 @@ import TradingAdminPanel from './pages/admin/TradingAdmin';
 // Admin Dashboard Redirect Component
 const AdminDashboardRedirect = () => {
   const { isAdmin, isSuperAdmin } = useAuth();
-  const redirectPath = (isAdmin || isSuperAdmin) ? '/admin/dashboard' : '/dashboard';
+  const redirectPath = (isAdmin || isSuperAdmin) ? '/admin/dashboard' : '/portfolio';
   return <Navigate to={redirectPath} replace />;
 };
 

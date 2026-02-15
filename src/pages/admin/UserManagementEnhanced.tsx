@@ -1606,16 +1606,12 @@ export default function UserManagement() {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      console.log('🔄 [UserManagement] Loading users...');
       
       // Handle API call - apiService.getUsers() returns User[] directly
       let usersData;
       try {
         usersData = await apiService.getUsers();
-        console.log('📊 [UserManagement] Raw data from API:', usersData);
-        console.log('📊 [UserManagement] Number of users loaded:', usersData.length);
-        console.log('📊 [UserManagement] Users details:', usersData.map(u => ({ id: u.id, email: u.email, status: u.status, kycStatus: u.kycStatus })));
-      } catch (apiError) {
+            } catch (apiError) {
         console.error('❌ [UserManagement] API call failed:', apiError);
         usersData = [];
       }
@@ -1626,8 +1622,7 @@ export default function UserManagement() {
           try {
             const walletBalances = await walletApiService.getUserBalances(user.id);
             const totalBalance = walletBalances.reduce((sum, wallet) => sum + wallet.balance, 0);
-            console.log(`💰 [UserManagement] User ${user.email} wallet balance: ${totalBalance}`);
-            return {
+                return {
               ...user,
               walletBalance: totalBalance
             };
@@ -1667,7 +1662,6 @@ export default function UserManagement() {
           : user
       ));
       
-      console.log(`💰 [UserManagement] Refreshed wallet balance for user ${userId}: ${totalBalance}`);
     } catch (error) {
       console.error(`❌ [UserManagement] Failed to refresh wallet balance for user ${userId}:`, error);
     }
@@ -1681,7 +1675,6 @@ export default function UserManagement() {
   // Set up real-time wallet balance updates
   useEffect(() => {
     const handleWalletUpdate = (event: CustomEvent) => {
-      console.log('🎯 [UserManagement] Wallet update event received:', event.detail);
       if (event.detail?.userId) {
         refreshUserWalletBalance(event.detail.userId);
       }
@@ -1698,8 +1691,6 @@ export default function UserManagement() {
   useEffect(() => {
     let filtered = [...users];
     
-    console.log('🔍 [UserManagement] Starting filter process:');
-    console.log('  - Total users before filtering:', users.length);
     console.log('  - Search term:', search);
     console.log('  - Status filter:', statusFilter);
     console.log('  - KYC filter:', kycFilter);
@@ -1711,20 +1702,16 @@ export default function UserManagement() {
         user.email?.toLowerCase().includes(search.toLowerCase()) ||
         user.phone?.toLowerCase().includes(search.toLowerCase())
       );
-      console.log('  - After search filter:', filtered.length);
-    }
+      }
 
     if (statusFilter !== 'all') {
       filtered = filtered.filter(user => user.status?.toLowerCase() === statusFilter.toLowerCase());
-      console.log('  - After status filter:', filtered.length);
-    }
+      }
 
     if (kycFilter !== 'all') {
       filtered = filtered.filter(user => user.kycStatus?.toLowerCase() === kycFilter.toLowerCase());
-      console.log('  - After KYC filter:', filtered.length);
-    }
+      }
 
-    console.log('  - Final filtered users:', filtered.length);
     setFilteredUsers(filtered);
   }, [users, search, statusFilter, kycFilter]);
 
@@ -1759,7 +1746,6 @@ export default function UserManagement() {
 
   const handleSuspendUser = async (user: User, reason: string) => {
     try {
-      console.log('🚫 [UserManagement] Suspending user:', user.id);
       await apiService.updateUser(user.id, { status: 'Suspended' });
       
       await apiService.createAuditLog({

@@ -111,7 +111,6 @@ class UnifiedTradingService {
     try {
       // Skip P&L target tracking for now since columns don't exist in database
       // TODO: Add P&L tracking columns to trade_outcomes table if needed
-      console.log(`📊 [PnL Target] Skipping P&L target update for ${tradeType} - columns not implemented yet`);
       return { targetAchieved: false, targetType: null };
     } catch (error) {
       console.error('Error checking P&L targets:', error);
@@ -132,7 +131,6 @@ class UnifiedTradingService {
     try {
       // You can implement your notification system here
       // For now, just log to console
-      console.log(`📢 [Notification] User ${userId} reached ${tradeType} ${targetType} target: ${currentValue} (target: ${targetValue})`);
       
       // Optionally store in a notifications table
       await supabase
@@ -175,13 +173,11 @@ class UnifiedTradingService {
         return { success: false, result: 'loss', error: 'Trade not found' };
       }
 
-      console.log(`🔍 [unifiedTradingService] Found trade:`, trade);
 
       // Determine win/loss outcome
       const wins = await this.determineOptionsOutcome(trade);
       const result = wins ? 'win' : 'loss';
 
-      console.log(`🎲 [unifiedTradingService] Options outcome:`, { result, trade, wins });
 
       // Calculate profit/loss
       const premium = Number(trade.amount) || 0;
@@ -220,11 +216,6 @@ class UnifiedTradingService {
         });
         // Continue with balance updates even if trade update fails
       } else {
-        console.log('✅ [unifiedTradingService] Trade updated successfully:', {
-          tradeId,
-          status: result === 'win' ? 'completed' : 'failed',
-          pnl: profit
-        });
       }
 
       // Handle balance updates
@@ -252,10 +243,8 @@ class UnifiedTradingService {
             .eq('asset', 'USDT_TRADING');
         }
         
-        console.log(`✅ [unifiedTradingService] Options win: +${totalReturn} USDT returned to trading wallet (stake: ${premium}, profit: ${premium * payoutRate})`);
       } else {
         // Loss: Keep the locked amount (already deducted), no return needed
-        console.log(`❌ [unifiedTradingService] Options loss: ${premium} USDT kept from trading wallet`);
       }
 
       // Release the trading lock
@@ -298,27 +287,22 @@ class UnifiedTradingService {
         console.error('❌ [unifiedTradingService] Error fetching user outcome:', error);
       }
 
-      console.log(`🔍 [unifiedTradingService] User outcome data:`, userOutcome);
 
       if (userOutcome && userOutcome.enabled) {
         // Check if options trading is enabled for this user
         if (userOutcome.options_enabled) {
           const outcome = userOutcome.outcome_type;
-          console.log(`🎯 [unifiedTradingService] Admin override: user ${trade.user_id} outcome set to ${outcome}`);
           
           switch (outcome) {
             case 'win':
-              console.log(`✅ [unifiedTradingService] Returning WIN for user ${trade.user_id} (admin override)`);
               return true;
             case 'loss':
-              console.log(`❌ [unifiedTradingService] Returning LOSS for user ${trade.user_id} (admin override)`);
               return false;
             case 'default':
               // Fall through to default loss
               break;
           }
         } else {
-          console.log(`⚠️ [unifiedTradingService] Admin override: options trading disabled for user ${trade.user_id}`);
         }
       }
 
@@ -338,7 +322,6 @@ class UnifiedTradingService {
 
       if (activeWindows && activeWindows.options_enabled) {
         const outcome = activeWindows.outcome_type;
-        console.log(`⏰ [unifiedTradingService] Time window override: user ${trade.user_id} outcome set to ${outcome}`);
         
         switch (outcome) {
           case 'win':
@@ -352,7 +335,6 @@ class UnifiedTradingService {
       }
 
       // Default to loss (not random)
-      console.log(`🎲 [unifiedTradingService] Default outcome for user ${trade.user_id}: loss`);
       return false; // Default to loss
       
     } catch (error) {
@@ -381,7 +363,6 @@ class UnifiedTradingService {
         // Check if spot trading is enabled for this user
         if (userOutcome.spot_enabled) {
           const outcome = userOutcome.outcome_type;
-          console.log(`🎯 [unifiedTradingService] Admin override: user ${trade.user_id} spot outcome set to ${outcome}`);
           
           switch (outcome) {
             case 'win':
@@ -393,7 +374,6 @@ class UnifiedTradingService {
               break;
           }
         } else {
-          console.log(`⚠️ [unifiedTradingService] Admin override: spot trading disabled for user ${trade.user_id}`);
         }
       }
 
@@ -413,7 +393,6 @@ class UnifiedTradingService {
 
       if (activeWindows && activeWindows.spot_enabled) {
         const outcome = activeWindows.outcome_type;
-        console.log(`⏰ [unifiedTradingService] Time window override: user ${trade.user_id} spot outcome set to ${outcome}`);
         
         switch (outcome) {
           case 'win':
@@ -427,7 +406,6 @@ class UnifiedTradingService {
       }
 
       // Default to loss (not random)
-      console.log(`🎲 [unifiedTradingService] Default spot outcome for user ${trade.user_id}: loss`);
       return false; // Default to loss
       
     } catch (error) {
@@ -456,7 +434,6 @@ class UnifiedTradingService {
         // Check if futures trading is enabled for this user
         if (userOutcome.futures_enabled) {
           const outcome = userOutcome.outcome_type;
-          console.log(`🎯 [unifiedTradingService] Admin override: user ${trade.user_id} futures outcome set to ${outcome}`);
           
           switch (outcome) {
             case 'win':
@@ -468,7 +445,6 @@ class UnifiedTradingService {
               break;
           }
         } else {
-          console.log(`⚠️ [unifiedTradingService] Admin override: futures trading disabled for user ${trade.user_id}`);
         }
       }
 
@@ -488,7 +464,6 @@ class UnifiedTradingService {
 
       if (activeWindows && activeWindows.futures_enabled) {
         const outcome = activeWindows.outcome_type;
-        console.log(`⏰ [unifiedTradingService] Time window override: user ${trade.user_id} futures outcome set to ${outcome}`);
         
         switch (outcome) {
           case 'win':
@@ -502,7 +477,6 @@ class UnifiedTradingService {
       }
 
       // Default to loss (not random)
-      console.log(`🎲 [unifiedTradingService] Default futures outcome for user ${trade.user_id}: loss`);
       return false; // Default to loss
       
     } catch (error) {
@@ -531,7 +505,6 @@ class UnifiedTradingService {
         // Check if arbitrage is enabled for this user
         if (userOutcome.arbitrage_enabled) {
           const outcome = userOutcome.outcome_type;
-          console.log(`🎯 [unifiedTradingService] Admin override: user ${trade.user_id} arbitrage outcome set to ${outcome}`);
           
           switch (outcome) {
             case 'win':
@@ -543,7 +516,6 @@ class UnifiedTradingService {
               break;
           }
         } else {
-          console.log(`⚠️ [unifiedTradingService] Admin override: arbitrage disabled for user ${trade.user_id}`);
         }
       }
 
@@ -563,7 +535,6 @@ class UnifiedTradingService {
 
       if (activeWindows && activeWindows.arbitrage_enabled) {
         const outcome = activeWindows.outcome_type;
-        console.log(`⏰ [unifiedTradingService] Time window override: user ${trade.user_id} arbitrage outcome set to ${outcome}`);
         
         switch (outcome) {
           case 'win':
@@ -577,7 +548,6 @@ class UnifiedTradingService {
       }
 
       // Default to loss (not random)
-      console.log(`🎲 [unifiedTradingService] Default arbitrage outcome for user ${trade.user_id}: loss`);
       return false; // Default to loss
       
     } catch (error) {
@@ -797,7 +767,6 @@ class UnifiedTradingService {
           .maybeSingle();
         fallbackWallet = fallback;
         fallbackError = error;
-        console.log(`📊 [unifiedTradingService] Regular wallet query result:`, { fallbackWallet, fallbackError });
       }
 
       const targetWallet = wallet || fallbackWallet;
@@ -809,8 +778,6 @@ class UnifiedTradingService {
       }
 
       const availableBalance = Number(targetWallet.available || 0);
-      console.log(`💰 [unifiedTradingService] Available balance:`, availableBalance, '(type:', typeof availableBalance, ')');
-      console.log(`💰 [unifiedTradingService] Raw wallet data:`, targetWallet);
       
       if (availableBalance < amount) {
         const errorMsg = `Insufficient trading balance. Available: ${availableBalance}, Required: ${amount}`;
@@ -834,13 +801,11 @@ class UnifiedTradingService {
         created_at: new Date().toISOString()
       };
 
-      console.log('🔒 [unifiedTradingService] Inserting trading_lock:', lockData);
 
       const { error: insertError } = await supabase
         .from('trading_locks')
         .insert(lockData);
 
-      console.log('📊 [unifiedTradingService] Insert result:', { insertError });
 
       if (insertError) {
         const errorMsg = `Failed to lock funds: ${insertError.message}`;
@@ -859,15 +824,6 @@ class UnifiedTradingService {
       const newLockedBalance = currentLocked + amount;
       const newAvailableBalance = currentAvailable - amount;
       
-      console.log('🔄 [unifiedTradingService] Updating wallet balance:', {
-        targetAsset,
-        currentLocked,
-        currentAvailable,
-        newLockedBalance,
-        newAvailableBalance,
-        amount,
-        userId
-      });
       
       const { error: updateError } = await supabase
         .from('wallet_balances')
@@ -879,7 +835,6 @@ class UnifiedTradingService {
         .eq('user_id', userId)
         .eq('asset', targetAsset);
 
-      console.log('📊 [unifiedTradingService] Update result:', { updateError });
 
       if (updateError) {
         const errorMsg = `Failed to update wallet balance: ${updateError.message}`;
@@ -891,7 +846,6 @@ class UnifiedTradingService {
         };
       }
 
-      console.log('✅ [unifiedTradingService] Lock funds completed successfully');
       return { success: true };
 
     } catch (error) {
@@ -1124,7 +1078,6 @@ class UnifiedTradingService {
       return false;
     }
 
-    console.log('✅ [UnifiedTradingService] Trade saved successfully:', trade.id);
     return true;
   } catch (error) {
     console.error('❌ [UnifiedTradingService] Exception saving trade:', error);
@@ -1148,7 +1101,6 @@ class UnifiedTradingService {
 
         if (!position || position.status !== 'open') {
           clearInterval(tradingInterval);
-          console.log(`🛑 [unifiedTradingService] Futures trading stopped for position: ${trade.id}`);
           return;
         }
 
@@ -1182,7 +1134,6 @@ class UnifiedTradingService {
           // Liquidate position
           await this.liquidatePosition(trade.id, currentPrice, true);
           clearInterval(tradingInterval);
-          console.log(`💥 [unifiedTradingService] Position liquidated for ${trade.id}`);
           return;
         }
 
@@ -1199,7 +1150,6 @@ class UnifiedTradingService {
           })
           .eq('id', trade.id);
 
-        console.log(`📈 [unifiedTradingService] Futures P&L updated: ${unrealizedPnl.toFixed(2)} for position: ${trade.id}`);
 
       } catch (error) {
         console.error('Error in futures trading interval:', error);
@@ -1279,7 +1229,6 @@ class UnifiedTradingService {
         await this.processLosingTrade(position, {});
       }
 
-      console.log(`✅ [unifiedTradingService] Position closed: P&L: ${finalPnl.toFixed(2)}`);
 
     } catch (error) {
       console.error('Error liquidating position:', error);
@@ -1296,7 +1245,6 @@ class UnifiedTradingService {
 
       if (position?.metadata?.tradingIntervalId) {
         clearInterval(parseInt(position.metadata.tradingIntervalId));
-        console.log(`🛑 [unifiedTradingService] Stopped futures trading interval for position: ${positionId}`);
       }
     } catch (error) {
       console.error('Error stopping futures trading:', error);
@@ -1317,7 +1265,6 @@ class UnifiedTradingService {
 
         if (!currentTrade || currentTrade.status !== 'active') {
           clearInterval(tradingInterval);
-          console.log(`🛑 [unifiedTradingService] Spot trading stopped for trade: ${trade.id}`);
           return;
         }
 
@@ -1371,7 +1318,6 @@ class UnifiedTradingService {
               .eq('user_id', trade.userId)
               .eq('asset', 'USDT_TRADING');
 
-            console.log(`💰 [unifiedTradingService] Admin win mode: +${addition.toFixed(4)} USDT added to user ${trade.userId} balance`);
           }
         } else {
           // Normal mode - deduct balance
@@ -1397,7 +1343,6 @@ class UnifiedTradingService {
               .eq('user_id', trade.userId)
               .eq('asset', 'USDT_TRADING');
 
-            console.log(`💸 [unifiedTradingService] Normal mode: -${totalDeduction.toFixed(4)} USDT deducted from user ${trade.userId} balance`);
           }
         }
 
@@ -1450,7 +1395,6 @@ class UnifiedTradingService {
           }
 
           clearInterval(tradingInterval);
-          console.log(`🏁 [unifiedTradingService] Spot trading completed for trade: ${trade.id}, result: ${shouldWin ? 'WIN' : 'LOSS'}`);
           return;
         }
 
@@ -1481,7 +1425,6 @@ class UnifiedTradingService {
 
       if (trade?.metadata?.tradingIntervalId) {
         clearInterval(parseInt(trade.metadata.tradingIntervalId));
-        console.log(`🛑 [unifiedTradingService] Stopped spot trading interval for trade: ${tradeId}`);
       }
     } catch (error) {
       console.error('Error stopping spot trading:', error);
@@ -1499,7 +1442,6 @@ class UnifiedTradingService {
       case 'options':
         // Options trades should NOT determine outcome immediately
         // They should only be determined when they expire
-        console.log(`⏰ [unifiedTradingService] Options trade created, will expire at: ${trade.metadata?.expiration}`);
         return; // Don't process win/loss for options immediately
         
       case 'spot':
@@ -1515,19 +1457,16 @@ class UnifiedTradingService {
       case 'arbitrage':
         // For arbitrage, determine outcome based on admin settings
         shouldWin = await this.determineArbitrageOutcome(trade);
-        console.log(`🎲 [unifiedTradingService] Arbitrage outcome determined: ${shouldWin ? 'WIN' : 'LOSS'}`);
         break;
         
       case 'staking':
         // For staking, always win (passive income)
         shouldWin = true;
-        console.log(`🎲 [unifiedTradingService] Staking outcome: always WIN`);
         break;
         
       default:
         // Fallback to loss
         shouldWin = false;
-        console.log(`🎲 [unifiedTradingService] Default outcome for unknown trade type: loss`);
         break;
     }
 
@@ -1544,7 +1483,6 @@ class UnifiedTradingService {
     switch (trade.type) {
       case 'spot':
         // For spot, return stake + profit to trading wallet
-        console.log(`💰 [unifiedTradingService] Processing spot trade win: stake=${trade.total}, profit=${trade.pnl || 0}`);
         
         // Get current trading wallet balance
         const { data: currentBalance } = await supabase
@@ -1559,7 +1497,6 @@ class UnifiedTradingService {
           const newAvailable = Number(currentBalance.available) + totalReturn;
           const newLocked = Number(currentBalance.locked) - (trade.total || 0);
           
-          console.log(`✅ [unifiedTradingService] Spot win: +${totalReturn} USDT returned to trading wallet (stake: ${trade.total}, profit: ${trade.pnl || 0})`);
           
           const { error: profitError } = await supabase
             .from('wallet_balances')
@@ -1588,17 +1525,14 @@ class UnifiedTradingService {
         
       case 'futures':
         // For futures, P&L already handled in closeFuturesPosition
-        console.log(`💰 [unifiedTradingService] Futures trade win processed in closeFuturesPosition`);
         break;
         
       case 'options':
         // For options, profit handled in expireOptionsTrade
-        console.log(`💰 [unifiedTradingService] Options trade win processed in expireOptionsTrade`);
         break;
         
       case 'arbitrage':
         // For arbitrage, add profit to wallet
-        console.log(`💰 [unifiedTradingService] Processing arbitrage win`);
         
         const { data: arbBalance } = await supabase
           .from('wallet_balances')
@@ -1624,7 +1558,6 @@ class UnifiedTradingService {
         
       case 'staking':
         // For staking, add rewards to wallet
-        console.log(`💰 [unifiedTradingService] Processing staking rewards`);
         
         const { data: stakeBalance } = await supabase
           .from('wallet_balances')
@@ -1763,7 +1696,6 @@ class UnifiedTradingService {
       // Return margin + PnL
       const totalReturn = position.margin + pnl;
       
-      console.log(`💰 [unifiedTradingService] Closing futures position: margin=${position.margin}, pnl=${pnl}, totalReturn=${totalReturn}`);
       
       // Get current trading wallet balance
       const { data: currentBalance } = await supabase
@@ -1777,7 +1709,6 @@ class UnifiedTradingService {
         const newAvailable = Number(currentBalance.available) + totalReturn;
         const newLocked = Number(currentBalance.locked) - position.margin;
         
-        console.log(`✅ [unifiedTradingService] Futures closed: +${totalReturn} USDT returned to trading wallet (margin: ${position.margin}, pnl: ${pnl})`);
         
         const { error: profitError } = await supabase
           .from('wallet_balances')
@@ -1850,24 +1781,19 @@ class UnifiedTradingService {
         });
         
         // Try admin client fallback
-        console.log('🔧 [UnifiedTradingService] Trying admin client fallback...');
         return this.getUserTradesWithAdmin(userId, type);
       }
 
-      console.log('✅ [UnifiedTradingService] Direct query found', data?.length || 0, 'trades for user', userId);
 
       if (data && data.length > 0) {
         // Map each record to the appropriate trade type
         const trades = data.map(record => {
-          console.log('📦 [UnifiedTradingService] Mapping trade:', record.id, record.type);
           return this.mapTradeFromDB(record);
         });
         
-        console.log('✅ [UnifiedTradingService] Returning', trades.length, 'trades');
-        return trades;
+          return trades;
       }
 
-      console.log('⚠️ [UnifiedTradingService] No trades found for user:', userId);
       
       // Try admin client fallback
       console.log('🔧 [UnifiedTradingService] Trying admin client fallback...');
@@ -1896,19 +1822,15 @@ class UnifiedTradingService {
         return [];
       }
 
-      console.log('✅ [UnifiedTradingService] Admin client found', data?.length || 0, 'trades');
 
       if (data && data.length > 0) {
         const trades = data.map(record => {
-          console.log('📦 [UnifiedTradingService] Admin mapping trade:', record.id, record.type);
           return this.mapTradeFromDB(record);
         });
         
-        console.log('✅ [UnifiedTradingService] Admin returning', trades.length, 'trades');
-        return trades;
+          return trades;
       }
 
-      console.log('⚠️ [UnifiedTradingService] Admin client found no trades');
       return [];
     } catch (error) {
       console.error('❌ [UnifiedTradingService] Admin client exception:', error);

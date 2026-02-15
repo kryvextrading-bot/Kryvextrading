@@ -30,12 +30,63 @@ export default function HomePage() {
   );
 
   return (
-    <div className="min-h-screen bg-white p-6">
-      <div className="mb-2 text-sm text-gray-500">Choose your portfolio</div>
-      <NavigationTabs selected={selectedTab} onSelect={setSelectedTab} />
-      <SearchBar value={search} onChange={setSearch} />
-      <MarketOverview marketCap="$2.4T" volume24h="$89.2B" btcDominance="58.7%" onBuy={()=>{}} onSell={()=>{}} onAlert={()=>{}} />
-      <AssetTable assets={filteredAssets} onSelect={row => navigate(`/asset/${row.name.replace(/\W/g, '')}`)} />
+    <div className="min-h-screen bg-[#0B0E11] text-gray-200">
+      
+      {/* Main Container */}
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        {/* Header Section */}
+        <div className="mb-6">
+          <p className="text-xs sm:text-sm text-gray-400 tracking-wide uppercase">
+            Portfolio Selection
+          </p>
+          <h1 className="text-xl sm:text-2xl font-semibold mt-1">
+            Markets Overview
+          </h1>
+        </div>
+
+        {/* Tabs + Search Section */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+          
+          <div className="w-full lg:w-auto">
+            <NavigationTabs 
+              selected={selectedTab} 
+              onSelect={setSelectedTab} 
+            />
+          </div>
+
+          <div className="w-full lg:max-w-sm">
+            <SearchBar 
+              value={search} 
+              onChange={setSearch} 
+            />
+          </div>
+
+        </div>
+
+        {/* Market Overview Card */}
+        <div className="bg-[#161A1E] rounded-2xl p-4 sm:p-6 mb-8 border border-[#23262F] shadow-lg">
+          <MarketOverview
+            marketCap="$2.4T"
+            volume24h="$89.2B"
+            btcDominance="58.7%"
+            onBuy={()=>{}}
+            onSell={()=>{}}
+            onAlert={()=>{}}
+          />
+        </div>
+
+        {/* Asset Table Section */}
+        <div className="bg-[#161A1E] rounded-2xl border border-[#23262F] shadow-lg overflow-hidden">
+          <AssetTable
+            assets={filteredAssets}
+            onSelect={row =>
+              navigate(`/asset/${row.name.replace(/\W/g, '')}`)
+            }
+          />
+        </div>
+
+      </div>
     </div>
   );
-} 
+}

@@ -16,7 +16,6 @@ declare global {
 
 // Broadcast function to notify frontend of balance updates
 const broadcastBalanceUpdate = (userId: string, amount: number, currency: string) => {
-  console.log('📡 [WalletAPI] Broadcasting balance update for Supabase:', { userId, amount, currency });
   
   // Store update in a global variable for React to pick up
   // This avoids the React context issue with custom events
@@ -41,7 +40,6 @@ const broadcastBalanceUpdate = (userId: string, amount: number, currency: string
     }));
   }, 300);
   
-  console.log('📡 [WalletAPI] Balance update broadcasted to Supabase frontend');
 };
 
 export interface WalletBalance {
@@ -129,7 +127,6 @@ class WalletApiService {
   // Get wallet requests
   async getWalletRequests(): Promise<WalletRequest[]> {
     try {
-      console.log('🔄 [WalletAPI] Getting wallet requests from database...');
       
       // Fetch real wallet requests from Supabase with explicit relationship
       const { data: walletRequests, error: walletError } = await supabase
@@ -150,7 +147,6 @@ class WalletApiService {
         throw walletError;
       }
       
-      console.log('📊 [WalletAPI] Retrieved wallet requests from database:', walletRequests.length);
       return walletRequests || [];
     } catch (error) {
       console.error('❌ [WalletAPI] Failed to get wallet requests:', error);
@@ -161,7 +157,6 @@ class WalletApiService {
   // Admin: Add funds to user wallet
   async adminAddFunds(userId: string, amount: number, currency: string, reason: string): Promise<void> {
     try {
-      console.log('💰 [WalletAPI] Adding funds to user:', { userId, amount, currency, reason });
 
       // 1. Get current wallet balance using admin client
       const { data: currentBalance, error: balanceError } = await supabaseAdmin
@@ -248,7 +243,6 @@ class WalletApiService {
       // 5. Broadcast balance update to frontend
       broadcastBalanceUpdate(userId, amount, currency);
 
-      console.log('✅ [WalletAPI] Funds added successfully');
     } catch (error) {
       console.error('❌ [WalletAPI] Failed to add funds:', error);
       throw error;
@@ -258,7 +252,6 @@ class WalletApiService {
   // Admin: Remove funds from user wallet
   async adminRemoveFunds(userId: string, amount: number, currency: string, reason: string): Promise<void> {
     try {
-      console.log('💸 [WalletAPI] Removing funds from user:', { userId, amount, currency, reason });
 
       // 1. Get current wallet balance using admin client
       const { data: currentBalance, error: balanceError } = await supabaseAdmin
@@ -327,7 +320,6 @@ class WalletApiService {
       // 5. Broadcast balance update to frontend (negative amount for removal)
       broadcastBalanceUpdate(userId, -amount, currency);
 
-      console.log('✅ [WalletAPI] Funds removed successfully');
     } catch (error) {
       console.error('❌ [WalletAPI] Failed to remove funds:', error);
       throw error;
@@ -337,7 +329,6 @@ class WalletApiService {
   // Admin: Freeze user balance
   async freezeUserBalance(userId: string, currency: string, amount: number): Promise<void> {
     try {
-      console.log('🧊 [WalletAPI] Freezing user balance:', { userId, currency, amount });
 
       // 1. Get current wallet balance
       const { data: currentBalance, error: balanceError } = await supabase
@@ -385,7 +376,6 @@ class WalletApiService {
 
       if (transactionError) throw transactionError;
 
-      console.log('✅ [WalletAPI] Balance frozen successfully');
     } catch (error) {
       console.error('❌ [WalletAPI] Failed to freeze balance:', error);
       throw error;
@@ -395,7 +385,6 @@ class WalletApiService {
   // Admin: Unfreeze user balance
   async unfreezeUserBalance(userId: string, currency: string, amount: number): Promise<void> {
     try {
-      console.log('🔥 [WalletAPI] Unfreezing user balance:', { userId, currency, amount });
 
       // 1. Get current wallet balance
       const { data: currentBalance, error: balanceError } = await supabase
@@ -443,7 +432,6 @@ class WalletApiService {
 
       if (transactionError) throw transactionError;
 
-      console.log('✅ [WalletAPI] Balance unfrozen successfully');
     } catch (error) {
       console.error('❌ [WalletAPI] Failed to unfreeze balance:', error);
       throw error;

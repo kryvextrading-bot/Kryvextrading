@@ -365,19 +365,15 @@ export default function Trading() {
   const loadUserData = useCallback(async () => {
   if (!user?.id) return;
   
-  console.log('🔄 [Trading] Loading user data for user:', user.id);
   try {
     // Get trades from unified trading service
     const trades = await getUserTrades(user.id);
-    console.log('📊 [Trading] getUserTrades result:', trades.length, 'trades');
     
     // Get positions
     const positionsData = await getUserPositions();
-    console.log('📊 [Trading] getUserPositions result:', positionsData.length, 'positions');
     
     // Get options
     const optionsData = await getUserOptions();
-    console.log('📊 [Trading] getUserOptions result:', optionsData.length, 'options');
     
     // Get locks and stats
     const locks = await tradingDataService.getUserTradingLocks(user.id);
@@ -389,16 +385,9 @@ export default function Trading() {
     setTradingLocks(locks || []);
     setTradingStats(stats || { activeLocks: 0, totalLockedAmount: 0 });
     
-    console.log('📋 [Trading] Data loaded:', {
-      trades: trades?.length || 0,
-      positions: positionsData?.length || 0,
-      options: optionsData?.length || 0,
-      locks: locks?.length || 0
-    });
     
     // Log sample for debugging
     if (trades && trades.length > 0) {
-      console.log('📋 [Trading] Sample trade:', trades[0]);
     }
   } catch (error) {
     console.error('Failed to load user data:', error);
@@ -436,7 +425,6 @@ export default function Trading() {
     
     // ✅ Use trading wallet balance for trading
     const tradingBalance = getTradingBalance('USDT');
-    console.log('💰 Trading balance for trade:', tradingBalance);
     
     if (total > tradingBalance) {
       toast.error(`Insufficient trading balance. Need ${formatCurrency(total)} USDT. You have ${formatCurrency(tradingBalance)} USDT in trading wallet. Please transfer funds from your funding wallet.`);
@@ -495,7 +483,6 @@ export default function Trading() {
     
     // ✅ Use trading wallet balance for trading
     const tradingBalance = getTradingBalance('USDT');
-    console.log('💰 Trading balance for futures trade:', tradingBalance);
     
     if (margin > tradingBalance) {
       toast.error(`Insufficient trading balance. Need ${formatCurrency(margin)} USDT. You have ${formatCurrency(tradingBalance)} USDT in trading wallet. Please transfer funds from your funding wallet.`);
@@ -548,7 +535,6 @@ export default function Trading() {
 
     // ✅ Use trading wallet balance for trading
     const tradingBalance = getTradingBalance('USDT');
-    console.log('💰 Trading balance for options trade:', tradingBalance);
     
     if (parsedAmount > tradingBalance) {
       toast.error(`Insufficient trading balance. Need ${formatCurrency(parsedAmount)} USDT. You have ${formatCurrency(tradingBalance)} USDT in trading wallet. Please transfer funds from your funding wallet.`);
@@ -557,27 +543,10 @@ export default function Trading() {
 
     setLoading(true);
 
-    console.log('🔥 [Trading] handleOptionsTrade called:', {
-      direction,
-      timeFrame,
-      parsedAmount,
-      currentPrice,
-      selectedPair: selectedPair.symbol
-    });
-
+    const rate = PROFIT_RATES[timeFrame as keyof typeof PROFIT_RATES]?.payout || 0.85;
+    const expiresAt = Date.now() + timeFrame * 1000;
+      
     try {
-      const rate = PROFIT_RATES[timeFrame as keyof typeof PROFIT_RATES]?.payout || 0.85;
-      const expiresAt = Date.now() + timeFrame * 1000;
-      
-      console.log('💰 [Trading] About to call executeTrade with data:', {
-        symbol: selectedPair.symbol,
-        direction,
-        amount: parsedAmount,
-        price: currentPrice || 67000,
-        timeFrame,
-        payoutRate: rate
-      });
-      
       const result = await executeTrade('options', {
         symbol: selectedPair.symbol,
         direction,
@@ -763,16 +732,16 @@ export default function Trading() {
         transition={{ type: 'spring', stiffness: 100, damping: 20 }}
         className="sticky top-0 z-50 bg-[#181A20]/95 backdrop-blur-xl border-b border-[#2B3139] shadow-lg"
       >
-        <div className="px-3 sm:px-4 py-2 sm:py-3">
+        <div className="px-4 sm:px-6 py-3">
           {/* Top Row */}
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-3">
             {/* Left Section - Back Button and Pair Selector */}
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={() => navigate('/')}
-                className="p-2 hover:bg-[#23262F] rounded-lg transition-all shrink-0"
+                className="p-2.5 hover:bg-[#23262F] rounded-xl transition-all shrink-0"
                 title="Go back"
               >
                 <ArrowLeft className="w-5 h-5 text-[#848E9C]" />
@@ -782,36 +751,47 @@ export default function Trading() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setPairSelectorOpen(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-[#1E2329] hover:bg-[#2B3139] rounded-xl transition-all group relative overflow-hidden flex-1 min-w-0"
+                className="flex items-center gap-3 px-4 py-2.5 bg-[#1E2329] hover:bg-[#2B3139] rounded-xl transition-all group relative overflow-hidden flex-1 min-w-0"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-[#F0B90B]/0 via-[#F0B90B]/5 to-[#F0B90B]/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-[#F0B90B]/0 via-[#F0B90B]/10 to-[#F0B90B]/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
                 <div className="flex flex-col items-start relative z-10 min-w-0">
-                  <div className="flex items-center gap-1 w-full">
-                    <h2 className="text-base sm:text-lg font-bold text-[#EAECEF] group-hover:text-[#F0B90B] transition-colors truncate">
+                  <div className="flex items-center gap-2 w-full">
+                    <h2 className="text-lg sm:text-xl font-bold text-[#EAECEF] group-hover:text-[#F0B90B] transition-colors truncate">
                       {selectedPair.baseAsset}/{selectedPair.quoteAsset}
                     </h2>
+                    <Badge className="bg-[#F0B90B]/10 text-[#F0B90B] border-[#F0B90B]/20 text-xs px-2 py-0.5">
+                      Perp
+                    </Badge>
                   </div>
-                  <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 mt-0.5">
                     {priceLoading ? (
-                      <Skeleton className="h-5 w-20" />
+                      <Skeleton className="h-5 w-24" />
                     ) : (
-                      <motion.span 
-                        key={currentPrice}
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-sm sm:text-base text-green-500 font-mono"
-                      >
-                        ${formatPrice(currentPrice || 67000)}
-                      </motion.span>
+                      <>
+                        <motion.span 
+                          key={currentPrice}
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`text-sm sm:text-base font-mono font-medium ${
+                            priceChange24h >= 0 ? 'text-green-400' : 'text-red-400'
+                          }`}
+                        >
+                          ${formatPrice(currentPrice || 67000)}
+                        </motion.span>
+                        <motion.div
+                          animate={{ rotate: priceChange24h >= 0 ? 0 : 180 }}
+                          transition={{ duration: 0.3 }}
+                        >
+                          <Badge className={`${
+                            priceChange24h >= 0 
+                              ? 'bg-green-500/15 text-green-400 border-green-500/20' 
+                              : 'bg-red-500/15 text-red-400 border-red-500/20'
+                          } text-xs font-medium`}>
+                            {priceChange24h >= 0 ? '+' : ''}{(priceChange24h || 0).toFixed(2)}%
+                          </Badge>
+                        </motion.div>
+                      </>
                     )}
-                    <motion.div
-                      animate={{ rotate: priceChange24h >= 0 ? 0 : 180 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <Badge className={`${priceChange24h >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} text-xs`}>
-                        {priceChange24h >= 0 ? '+' : ''}{(priceChange24h || 0).toFixed(2)}%
-                      </Badge>
-                    </motion.div>
                   </div>
                 </div>
                 <ChevronDown className="w-4 h-4 text-[#848E9C] group-hover:text-[#F0B90B] transition-colors relative z-10 shrink-0" />
@@ -819,67 +799,100 @@ export default function Trading() {
             </div>
 
             {/* Right Section - Action Buttons */}
-            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => setHideBalances(!hideBalances)}
-                className="p-2 hover:bg-[#23262F] rounded-lg transition-all"
-                title={hideBalances ? 'Show balances' : 'Hide balances'}
-              >
-                {hideBalances ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 text-[#848E9C]" /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-[#848E9C]" />}
-              </motion.button>
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setHideBalances(!hideBalances)}
+                      className="p-2.5 hover:bg-[#23262F] rounded-xl transition-all"
+                    >
+                      {hideBalances ? 
+                        <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 text-[#848E9C]" /> : 
+                        <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-[#848E9C]" />
+                      }
+                    </motion.button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="bg-[#2B3139] border-[#3A3F4A] text-[#EAECEF]">
+                    <p>{hideBalances ? 'Show' : 'Hide'} balances</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => setShowTransfer(true)}
-                className="p-2 hover:bg-[#23262F] rounded-lg transition-all relative group"
-                title="Transfer between wallets"
-              >
-                <ArrowLeftRight className="w-4 h-4 sm:w-5 sm:h-5 text-[#F0B90B]" />
-                <span className="absolute -top-1 -right-1 w-2 h-2 bg-[#F0B90B] rounded-full group-hover:animate-ping"></span>
-              </motion.button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setShowTransfer(true)}
+                      className="p-2.5 hover:bg-[#23262F] rounded-xl transition-all relative group"
+                    >
+                      <ArrowLeftRight className="w-4 h-4 sm:w-5 sm:h-5 text-[#F0B90B]" />
+                      <span className="absolute top-1 right-1 w-2 h-2 bg-[#F0B90B] rounded-full group-hover:animate-ping"></span>
+                    </motion.button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="bg-[#2B3139] border-[#3A3F4A] text-[#EAECEF]">
+                    <p>Transfer between wallets</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={refreshData}
-                className="p-2 hover:bg-[#23262F] rounded-lg transition-all"
-                disabled={walletLoading}
-                title="Refresh balances"
-              >
-                <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 text-[#848E9C] ${walletLoading ? 'animate-spin' : ''}`} />
-              </motion.button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={refreshData}
+                      className="p-2.5 hover:bg-[#23262F] rounded-xl transition-all"
+                      disabled={walletLoading}
+                    >
+                      <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 text-[#848E9C] ${walletLoading ? 'animate-spin' : ''}`} />
+                    </motion.button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="bg-[#2B3139] border-[#3A3F4A] text-[#EAECEF]">
+                    <p>Refresh balances</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setShowSettings(!showSettings)}
+                      className="p-2.5 hover:bg-[#23262F] rounded-xl transition-all hidden sm:block"
+                    >
+                      <Settings className="w-5 h-5 text-[#848E9C]" />
+                    </motion.button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="bg-[#2B3139] border-[#3A3F4A] text-[#EAECEF]">
+                    <p>Settings</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={() => setShowSettings(!showSettings)}
-                className="p-2 hover:bg-[#23262F] rounded-lg transition-all hidden sm:block"
-                title="Settings"
-              >
-                <Settings className="w-5 h-5 text-[#848E9C]" />
-              </motion.button>
-              
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => setShowSettings(!showSettings)}
-                className="p-2 hover:bg-[#23262F] rounded-lg transition-all sm:hidden"
-                title="Settings"
+                className="p-2.5 hover:bg-[#23262F] rounded-xl transition-all sm:hidden"
               >
                 <Settings className="w-4 h-4 text-[#848E9C]" />
               </motion.button>
               
               <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => setProfileOpen(!profileOpen)}
-                className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-[#F0B90B] to-yellow-500 rounded-xl flex items-center justify-center hover:shadow-lg hover:shadow-[#F0B90B]/20 transition-all shrink-0"
-                title="Profile"
+                className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-[#F0B90B] to-yellow-500 rounded-xl flex items-center justify-center hover:shadow-lg hover:shadow-[#F0B90B]/20 transition-all shrink-0"
               >
-                <span className="text-xs sm:text-sm font-bold text-[#181A20]">
+                <span className="text-sm font-bold text-[#181A20]">
                   {user?.first_name?.[0] || user?.email?.[0] || 'U'}
                 </span>
               </motion.button>
@@ -887,34 +900,34 @@ export default function Trading() {
           </div>
 
           {/* Chart Controls Row - Mobile */}
-          <div className="flex items-center justify-between gap-2 mt-2 lg:hidden">
-            <div className="flex items-center gap-1 bg-[#1E2329] p-1 rounded-lg flex-1">
+          <div className="flex items-center justify-between gap-2 mt-4 lg:hidden">
+            <div className="flex items-center gap-1 bg-[#1E2329] p-1 rounded-xl flex-1">
               <button
                 onClick={() => setChartType('candlestick')}
-                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                   chartType === 'candlestick' 
-                    ? 'bg-[#F0B90B] text-[#181A20]' 
-                    : 'text-[#848E9C] hover:text-[#EAECEF]'
+                    ? 'bg-[#F0B90B] text-[#181A20] shadow-lg shadow-[#F0B90B]/20' 
+                    : 'text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139]'
                 }`}
               >
-                Candlestick
+                <CandlestickChart className="w-4 h-4 mx-auto" />
               </button>
               <button
                 onClick={() => setChartType('line')}
-                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                   chartType === 'line' 
-                    ? 'bg-[#F0B90B] text-[#181A20]' 
-                    : 'text-[#848E9C] hover:text-[#EAECEF]'
+                    ? 'bg-[#F0B90B] text-[#181A20] shadow-lg shadow-[#F0B90B]/20' 
+                    : 'text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139]'
                 }`}
               >
-                Line
+                <LineChart className="w-4 h-4 mx-auto" />
               </button>
             </div>
             
             <select
               value={timeframe}
               onChange={(e) => setTimeframe(e.target.value)}
-              className="bg-[#1E2329] text-[#EAECEF] text-xs font-medium px-2 py-1.5 rounded-lg hover:bg-[#2B3139] transition-colors cursor-pointer"
+              className="bg-[#1E2329] text-[#EAECEF] text-sm font-medium px-3 py-2 rounded-xl hover:bg-[#2B3139] transition-colors cursor-pointer border border-[#2B3139] focus:outline-none focus:ring-1 focus:ring-[#F0B90B]"
             >
               <option value="1m">1m</option>
               <option value="5m">5m</option>
@@ -926,23 +939,32 @@ export default function Trading() {
             
             <button
               onClick={() => setChartExpanded(!chartExpanded)}
-              className="p-2 bg-[#1E2329] rounded-lg text-[#848E9C] hover:text-[#EAECEF]"
+              className="p-2.5 bg-[#1E2329] rounded-xl text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139] transition-all border border-[#2B3139]"
             >
               {chartExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
           </div>
 
           {/* Mobile Tabs */}
-          <div className="mt-3">
+          <div className="mt-4">
             <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="w-full">
-              <TabsList className="grid grid-cols-3 bg-[#1E2329] p-1 rounded-xl">
-                <TabsTrigger value="spot" className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg transition-all text-sm py-3">
+              <TabsList className="grid grid-cols-3 bg-[#1E2329] p-1.5 rounded-xl">
+                <TabsTrigger 
+                  value="spot" 
+                  className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] data-[state=active]:shadow-lg data-[state=active]:shadow-[#F0B90B]/20 rounded-lg transition-all text-sm font-medium py-3"
+                >
                   Spot
                 </TabsTrigger>
-                <TabsTrigger value="futures" className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg transition-all text-sm py-3">
+                <TabsTrigger 
+                  value="futures" 
+                  className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] data-[state=active]:shadow-lg data-[state=active]:shadow-[#F0B90B]/20 rounded-lg transition-all text-sm font-medium py-3"
+                >
                   Futures
                 </TabsTrigger>
-                <TabsTrigger value="options" className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg transition-all text-sm py-3">
+                <TabsTrigger 
+                  value="options" 
+                  className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] data-[state=active]:shadow-lg data-[state=active]:shadow-[#F0B90B]/20 rounded-lg transition-all text-sm font-medium py-3"
+                >
                   Options
                 </TabsTrigger>
               </TabsList>
@@ -952,7 +974,7 @@ export default function Trading() {
       </motion.header>
 
       {/* Main Content */}
-      <main className="px-3 sm:px-4 py-4 sm:py-6">
+      <main className="px-4 sm:px-6 py-4 sm:py-6">
         {/* Status Banners */}
         <AnimatePresence>
           {!isAuthenticated && (
@@ -963,18 +985,18 @@ export default function Trading() {
               exit="exit"
               className="mb-4"
             >
-              <div className="bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-500/30 rounded-xl p-3 sm:p-4 backdrop-blur-sm">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-yellow-500/20 flex items-center justify-center shrink-0">
-                    <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
+              <div className="bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border border-yellow-500/20 rounded-2xl p-4 backdrop-blur-sm">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-yellow-500/20 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-yellow-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-xs sm:text-sm font-medium text-yellow-400">View Only Mode</h3>
-                    <p className="text-xs text-yellow-300 mt-1">
+                    <h3 className="text-sm font-semibold text-yellow-400">View Only Mode</h3>
+                    <p className="text-sm text-yellow-300/80 mt-1">
                       You're viewing in read-only mode. 
                       <button 
                         onClick={() => navigate('/login')}
-                        className="underline hover:text-yellow-200 ml-1 font-medium"
+                        className="underline hover:text-yellow-200 ml-1 font-medium transition-colors"
                       >
                         Login
                       </button> to trade.
@@ -993,22 +1015,22 @@ export default function Trading() {
               exit="exit"
               className="mb-4"
             >
-              <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl p-3 sm:p-4 backdrop-blur-sm">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-                      <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
+              <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-2xl p-4 backdrop-blur-sm">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
+                      <Clock className="w-5 h-5 text-amber-400" />
                     </div>
                     <div>
-                      <h3 className="text-xs sm:text-sm font-medium text-amber-400">Active Trading Windows</h3>
-                      <p className="text-xs text-amber-300 mt-1">
+                      <h3 className="text-sm font-semibold text-amber-400">Active Trading Windows</h3>
+                      <p className="text-sm text-amber-300/80 mt-1">
                         {activeWindows.map(w => w.outcome_type.toUpperCase()).join(' • ')}
                       </p>
                     </div>
                   </div>
                   {adminCountdown && (
-                    <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs px-2 py-1">
-                      <Clock className="w-3 h-3 mr-1" />
+                    <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs px-3 py-1.5 rounded-lg">
+                      <Clock className="w-3 h-3 mr-1.5" />
                       {adminCountdown}
                     </Badge>
                   )}
@@ -1026,26 +1048,28 @@ export default function Trading() {
               exit="exit"
               className="mb-4"
             >
-              <div className={`bg-gradient-to-r ${
-                optionsResult === 'win' ? 'from-green-500/20 to-emerald-500/20 border-green-500/30' :
-                optionsResult === 'loss' ? 'from-red-500/20 to-rose-500/20 border-red-500/30' :
-                'from-blue-500/20 to-purple-500/20 border-blue-500/30'
-              } rounded-xl p-3 sm:p-4 backdrop-blur-sm`}>
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full ${
+              <div className={`bg-gradient-to-r rounded-2xl p-4 backdrop-blur-sm border ${
+                optionsResult === 'win' ? 'from-green-500/10 to-emerald-500/10 border-green-500/20' :
+                optionsResult === 'loss' ? 'from-red-500/10 to-rose-500/10 border-red-500/20' :
+                'from-blue-500/10 to-purple-500/10 border-blue-500/20'
+              }`}>
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                       optionsResult === 'win' ? 'bg-green-500/20' :
                       optionsResult === 'loss' ? 'bg-red-500/20' :
                       'bg-blue-500/20'
-                    } flex items-center justify-center shrink-0`}>
-                      <Clock className={`w-4 h-4 sm:w-5 sm:h-5 ${
-                        optionsResult === 'win' ? 'text-green-400' :
-                        optionsResult === 'loss' ? 'text-red-400' :
-                        'text-blue-400'
-                      }`} />
+                    }`}>
+                      {optionsResult === 'win' ? (
+                        <CheckCircle className="w-5 h-5 text-green-400" />
+                      ) : optionsResult === 'loss' ? (
+                        <XCircle className="w-5 h-5 text-red-400" />
+                      ) : (
+                        <Clock className="w-5 h-5 text-blue-400" />
+                      )}
                     </div>
                     <div>
-                      <h3 className={`text-xs sm:text-sm font-medium ${
+                      <h3 className={`text-sm font-semibold ${
                         optionsResult === 'win' ? 'text-green-400' :
                         optionsResult === 'loss' ? 'text-red-400' :
                         'text-blue-400'
@@ -1054,13 +1078,13 @@ export default function Trading() {
                          optionsResult === 'loss' ? 'Trade Lost' :
                          'Options Trade in Progress'}
                       </h3>
-                      <p className={`text-xs ${
-                        optionsResult === 'win' ? 'text-green-300' :
-                        optionsResult === 'loss' ? 'text-red-300' :
-                        'text-blue-300'
-                      } mt-1`}>
-                        {optionsResult === 'win' ? `Profit: +$${optionsPayout?.toFixed(2)}` :
-                         optionsResult === 'loss' ? `Loss: -$${activeOptionsTrade.amount}` :
+                      <p className={`text-sm mt-1 ${
+                        optionsResult === 'win' ? 'text-green-300/80' :
+                        optionsResult === 'loss' ? 'text-red-300/80' :
+                        'text-blue-300/80'
+                      }`}>
+                        {optionsResult === 'win' ? `Profit: +$${optionsPayout?.toFixed(2)} USDT` :
+                         optionsResult === 'loss' ? `Loss: -$${activeOptionsTrade.amount} USDT` :
                          `${activeOptionsTrade.direction === 'up' ? '📈 Call' : '📉 Put'} • $${activeOptionsTrade.amount}`}
                       </p>
                     </div>
@@ -1073,8 +1097,10 @@ export default function Trading() {
                   )}
                   {optionsResult && (
                     <Badge className={`${
-                      optionsResult === 'win' ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'
-                    } text-xs px-2 py-1`}>
+                      optionsResult === 'win' 
+                        ? 'bg-green-500/20 text-green-400 border-green-500/30' 
+                        : 'bg-red-500/20 text-red-400 border-red-500/30'
+                    } text-xs px-3 py-1.5 rounded-lg font-semibold`}>
                       {optionsResult === 'win' ? 'WIN' : 'LOSS'}
                     </Badge>
                   )}
@@ -1085,11 +1111,15 @@ export default function Trading() {
         </AnimatePresence>
 
         {/* Mobile Toggle Buttons */}
-        <div className="flex gap-2 mb-4 lg:hidden">
+        <div className="flex gap-3 mb-5 lg:hidden">
           <Button
             variant="outline"
-            size="sm"
-            className={`flex-1 ${showOrderBook ? 'bg-[#F0B90B] text-[#181A20] border-[#F0B90B]' : 'border-[#2B3139]'}`}
+            size="lg"
+            className={`flex-1 rounded-xl text-sm font-medium ${
+              showOrderBook 
+                ? 'bg-[#F0B90B] text-[#181A20] border-[#F0B90B] hover:bg-[#F0B90B]/90' 
+                : 'border-[#2B3139] text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139]'
+            }`}
             onClick={() => setShowOrderBook(!showOrderBook)}
           >
             <Layers className="w-4 h-4 mr-2" />
@@ -1097,8 +1127,12 @@ export default function Trading() {
           </Button>
           <Button
             variant="outline"
-            size="sm"
-            className={`flex-1 ${showRecentTrades ? 'bg-[#F0B90B] text-[#181A20] border-[#F0B90B]' : 'border-[#2B3139]'}`}
+            size="lg"
+            className={`flex-1 rounded-xl text-sm font-medium ${
+              showRecentTrades 
+                ? 'bg-[#F0B90B] text-[#181A20] border-[#F0B90B] hover:bg-[#F0B90B]/90' 
+                : 'border-[#2B3139] text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139]'
+            }`}
             onClick={() => setShowRecentTrades(!showRecentTrades)}
           >
             <Activity className="w-4 h-4 mr-2" />
@@ -1111,64 +1145,94 @@ export default function Trading() {
           variants={staggerChildren}
           initial="initial"
           animate="animate"
-          className={`grid grid-cols-1 lg:grid-cols-12 gap-4`}
+          className={`grid grid-cols-1 lg:grid-cols-12 gap-5`}
         >
           {/* Left Column - Chart */}
           <motion.div 
             variants={fadeInUp}
-            className={`${chartExpanded ? 'lg:col-span-9' : 'lg:col-span-8'} space-y-4`}
+            className={`${chartExpanded ? 'lg:col-span-9' : 'lg:col-span-8'} space-y-5`}
           >
-            <Card className="bg-[#1E2329] border-[#2B3139] overflow-hidden group hover:border-[#F0B90B]/30 transition-all duration-300">
-              <div className="p-3 sm:p-4 border-b border-[#2B3139] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-[#F0B90B]" />
-                  <h2 className="text-sm sm:text-base font-semibold text-[#EAECEF]">
-                    {selectedPair.baseAsset}/{selectedPair.quoteAsset}
-                  </h2>
-                  <Badge className="bg-green-500/20 text-green-400 text-xs">
+            <Card className="bg-[#1E2329] border-[#2B3139] overflow-hidden group hover:border-[#F0B90B]/30 transition-all duration-300 rounded-2xl">
+              <div className="p-4 sm:p-5 border-b border-[#2B3139] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-[#F0B90B]/10 rounded-xl flex items-center justify-center">
+                    <BarChart3 className="w-4 h-4 text-[#F0B90B]" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-[#EAECEF]">
+                      {selectedPair.baseAsset}/{selectedPair.quoteAsset}
+                    </h2>
+                    <p className="text-xs text-[#848E9C] mt-0.5">Real-time chart</p>
+                  </div>
+                  <Badge className="bg-green-500/15 text-green-400 border-green-500/20 text-xs px-2 py-1 rounded-lg">
                     <Activity className="w-3 h-3 mr-1" />
                     Live
                   </Badge>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-[#848E9C]">
-                  <span>H: ${formatPrice(pairStats.high)}</span>
-                  <span>L: ${formatPrice(pairStats.low)}</span>
-                  <span>V: ${(pairStats.volume / 1e6).toFixed(1)}M</span>
+                <div className="flex items-center gap-3 text-sm text-[#848E9C] bg-[#2B3139] px-3 py-1.5 rounded-xl">
+                  <span className="flex items-center gap-1">
+                    <span className="text-green-400">H</span> ${formatPrice(pairStats.high)}
+                  </span>
+                  <span className="w-1 h-1 rounded-full bg-[#3A3F4A]"></span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-red-400">L</span> ${formatPrice(pairStats.low)}
+                  </span>
+                  <span className="w-1 h-1 rounded-full bg-[#3A3F4A]"></span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-[#F0B90B]">V</span> ${(pairStats.volume / 1e6).toFixed(1)}M
+                  </span>
                 </div>
               </div>
-              <div className={`${chartExpanded ? 'h-[300px] sm:h-[400px] lg:h-[500px]' : 'h-[250px] sm:h-[350px] lg:h-[450px]'} transition-all duration-300`}>
+              <div className={`${chartExpanded ? 'h-[350px] sm:h-[450px] lg:h-[550px]' : 'h-[300px] sm:h-[400px] lg:h-[500px]'} transition-all duration-300`}>
                 <TradingViewWidget symbol={selectedPair.symbol} />
               </div>
             </Card>
 
             {/* Trading Forms - All Screens */}
             <div>
-              <Card className="bg-[#1E2329] border-[#2B3139] p-3 sm:p-4 lg:p-6">
+              <Card className="bg-[#1E2329] border-[#2B3139] p-4 sm:p-5 lg:p-6 rounded-2xl">
                 <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="w-full">
-                  <TabsList className="grid w-full grid-cols-3 bg-[#2B3139] p-1 mb-3 sm:mb-4 lg:mb-6 rounded-lg">
-                    <TabsTrigger value="spot" className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-md text-xs sm:text-sm py-2">
+                  <TabsList className="grid w-full grid-cols-3 bg-[#2B3139] p-1 mb-4 sm:mb-5 lg:mb-6 rounded-xl">
+                    <TabsTrigger 
+                      value="spot" 
+                      className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg text-sm font-medium py-2.5 transition-all"
+                    >
                       Spot
                     </TabsTrigger>
-                    <TabsTrigger value="futures" className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-md text-xs sm:text-sm py-2">
+                    <TabsTrigger 
+                      value="futures" 
+                      className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg text-sm font-medium py-2.5 transition-all"
+                    >
                       Futures
                     </TabsTrigger>
-                    <TabsTrigger value="options" className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-md text-xs sm:text-sm py-2">
+                    <TabsTrigger 
+                      value="options" 
+                      className="data-[state=active]:bg-[#F0B90B] data-[state=active]:text-[#181A20] rounded-lg text-sm font-medium py-2.5 transition-all"
+                    >
                       Options
                     </TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="spot">
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                       <div className="grid grid-cols-2 gap-4">
                         <Button
                           onClick={() => setFormState(prev => ({ ...prev, spot: { ...prev.spot, side: 'buy' } }))}
-                          className={`py-3 ${formState.spot.side === 'buy' ? 'bg-green-500 hover:bg-green-600' : 'bg-[#2B3139] hover:bg-[#3A3F4A]'}`}
+                          className={`py-4 rounded-xl text-sm font-semibold transition-all ${
+                            formState.spot.side === 'buy' 
+                              ? 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/20' 
+                              : 'bg-[#2B3139] hover:bg-[#3A3F4A] text-[#EAECEF]'
+                          }`}
                         >
                           Buy {selectedPair.baseAsset}
                         </Button>
                         <Button
                           onClick={() => setFormState(prev => ({ ...prev, spot: { ...prev.spot, side: 'sell' } }))}
-                          className={`py-3 ${formState.spot.side === 'sell' ? 'bg-red-500 hover:bg-red-600' : 'bg-[#2B3139] hover:bg-[#3A3F4A]'}`}
+                          className={`py-4 rounded-xl text-sm font-semibold transition-all ${
+                            formState.spot.side === 'sell' 
+                              ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20' 
+                              : 'bg-[#2B3139] hover:bg-[#3A3F4A] text-[#EAECEF]'
+                          }`}
                         >
                           Sell {selectedPair.baseAsset}
                         </Button>
@@ -1178,76 +1242,121 @@ export default function Trading() {
                         value={formState.spot.orderType}
                         onValueChange={(value: any) => setFormState(prev => ({ ...prev, spot: { ...prev.spot, orderType: value } }))}
                       >
-                        <SelectTrigger className="bg-[#2B3139] border-[#3A3F4A]">
+                        <SelectTrigger className="bg-[#2B3139] border-[#3A3F4A] text-[#EAECEF] rounded-xl py-6">
                           <SelectValue placeholder="Order Type" />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="market">Market</SelectItem>
-                          <SelectItem value="limit">Limit</SelectItem>
-                          <SelectItem value="stop">Stop</SelectItem>
+                        <SelectContent className="bg-[#1E2329] border-[#2B3139]">
+                          <SelectItem value="market" className="text-[#EAECEF] focus:bg-[#2B3139]">Market</SelectItem>
+                          <SelectItem value="limit" className="text-[#EAECEF] focus:bg-[#2B3139]">Limit</SelectItem>
+                          <SelectItem value="stop" className="text-[#EAECEF] focus:bg-[#2B3139]">Stop</SelectItem>
                         </SelectContent>
                       </Select>
 
                       {formState.spot.orderType !== 'market' && (
-                        <Input
-                          type="number"
-                          value={formState.spot.price}
-                          onChange={(e) => setFormState(prev => ({ ...prev, spot: { ...prev.spot, price: e.target.value } }))}
-                          placeholder="Price"
-                          className="bg-[#2B3139] border-[#3A3F4A]"
-                        />
+                        <div className="space-y-2">
+                          <label className="text-sm text-[#848E9C]">Price (USDT)</label>
+                          <Input
+                            type="number"
+                            value={formState.spot.price}
+                            onChange={(e) => setFormState(prev => ({ ...prev, spot: { ...prev.spot, price: e.target.value } }))}
+                            placeholder="0.00"
+                            className="bg-[#2B3139] border-[#3A3F4A] text-[#EAECEF] rounded-xl py-6 text-lg"
+                          />
+                        </div>
                       )}
 
-                      <Input
-                        type="number"
-                        value={formState.spot.amount}
-                        onChange={(e) => setFormState(prev => ({ ...prev, spot: { ...prev.spot, amount: e.target.value } }))}
-                        placeholder={`Amount in ${selectedPair.baseAsset}`}
-                        className="bg-[#2B3139] border-[#3A3F4A]"
-                      />
+                      <div className="space-y-2">
+                        <label className="text-sm text-[#848E9C]">Amount ({selectedPair.baseAsset})</label>
+                        <Input
+                          type="number"
+                          value={formState.spot.amount}
+                          onChange={(e) => setFormState(prev => ({ ...prev, spot: { ...prev.spot, amount: e.target.value } }))}
+                          placeholder="0.00"
+                          className="bg-[#2B3139] border-[#3A3F4A] text-[#EAECEF] rounded-xl py-6 text-lg"
+                        />
+                      </div>
 
-                      <div className="bg-[#2B3139] rounded-lg p-3">
-                        <div className="flex justify-between text-sm mb-2">
+                      <div className="bg-[#2B3139] rounded-xl p-4 space-y-3">
+                        <div className="flex justify-between items-center text-sm">
                           <span className="text-[#848E9C]">Available</span>
-                          <span className="text-[#F0B90B]">{formatCurrency(getTradingBalance('USDT'))} USDT</span>
+                          <span className="text-[#F0B90B] font-mono font-medium">
+                            {hideBalances ? '••••' : formatCurrency(getTradingBalance('USDT'))} USDT
+                          </span>
                         </div>
+                        {formState.spot.amount && formState.spot.price && (
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-[#848E9C]">Total</span>
+                            <span className="text-[#EAECEF] font-mono font-medium">
+                              ${(parseFloat(formState.spot.amount) * parseFloat(formState.spot.price || currentPrice?.toString() || '0')).toFixed(2)}
+                            </span>
+                          </div>
+                        )}
                         <Button
                           onClick={handleSpotTrade}
                           disabled={!formState.spot.amount || loading}
-                          className={`w-full ${formState.spot.side === 'buy' ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}
+                          className={`w-full py-4 rounded-xl text-sm font-semibold transition-all ${
+                            formState.spot.side === 'buy' 
+                              ? 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/20' 
+                              : 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'
+                          }`}
                         >
-                          {loading ? 'Processing...' : `${formState.spot.side === 'buy' ? 'Buy' : 'Sell'}`}
+                          {loading ? 'Processing...' : `${formState.spot.side === 'buy' ? 'Buy' : 'Sell'} ${selectedPair.baseAsset}`}
                         </Button>
                       </div>
                     </div>
                   </TabsContent>
 
                   <TabsContent value="futures">
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                       <div className="grid grid-cols-2 gap-4">
                         <Button
                           onClick={() => setFormState(prev => ({ ...prev, futures: { ...prev.futures, side: 'long' } }))}
-                          className={`py-3 ${formState.futures.side === 'long' ? 'bg-green-500 hover:bg-green-600' : 'bg-[#2B3139] hover:bg-[#3A3F4A]'}`}
+                          className={`py-4 rounded-xl text-sm font-semibold transition-all ${
+                            formState.futures.side === 'long' 
+                              ? 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/20' 
+                              : 'bg-[#2B3139] hover:bg-[#3A3F4A] text-[#EAECEF]'
+                          }`}
                         >
                           Long 📈
                         </Button>
                         <Button
                           onClick={() => setFormState(prev => ({ ...prev, futures: { ...prev.futures, side: 'short' } }))}
-                          className={`py-3 ${formState.futures.side === 'short' ? 'bg-red-500 hover:bg-red-600' : 'bg-[#2B3139] hover:bg-[#3A3F4A]'}`}
+                          className={`py-4 rounded-xl text-sm font-semibold transition-all ${
+                            formState.futures.side === 'short' 
+                              ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20' 
+                              : 'bg-[#2B3139] hover:bg-[#3A3F4A] text-[#EAECEF]'
+                          }`}
                         >
                           Short 📉
                         </Button>
                       </div>
 
-                      <div className="space-y-2">
-                        <label className="text-sm text-[#848E9C]">Leverage: {formState.futures.leverage}x</label>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <label className="text-sm text-[#848E9C]">Leverage: <span className="text-[#F0B90B] font-semibold">{formState.futures.leverage}x</span></label>
+                          <div className="flex items-center gap-2">
+                            {[2, 5, 10, 25, 50].map((lev) => (
+                              <button
+                                key={lev}
+                                onClick={() => setFormState(prev => ({ ...prev, futures: { ...prev.futures, leverage: lev } }))}
+                                className={`px-2 py-1 text-xs rounded-lg transition-all ${
+                                  formState.futures.leverage === lev
+                                    ? 'bg-[#F0B90B] text-[#181A20] font-medium'
+                                    : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+                                }`}
+                              >
+                                {lev}x
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                         <input
                           type="range"
                           min="1"
                           max="100"
                           value={formState.futures.leverage}
                           onChange={(e) => setFormState(prev => ({ ...prev, futures: { ...prev.futures, leverage: parseInt(e.target.value) } }))}
-                          className="w-full"
+                          className="w-full h-2 bg-[#2B3139] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-[#F0B90B] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
                         />
                       </div>
 
@@ -1255,112 +1364,146 @@ export default function Trading() {
                         value={formState.futures.orderType}
                         onValueChange={(value: any) => setFormState(prev => ({ ...prev, futures: { ...prev.futures, orderType: value } }))}
                       >
-                        <SelectTrigger className="bg-[#2B3139] border-[#3A3F4A]">
+                        <SelectTrigger className="bg-[#2B3139] border-[#3A3F4A] text-[#EAECEF] rounded-xl py-6">
                           <SelectValue placeholder="Order Type" />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="market">Market</SelectItem>
-                          <SelectItem value="limit">Limit</SelectItem>
-                          <SelectItem value="stop">Stop</SelectItem>
+                        <SelectContent className="bg-[#1E2329] border-[#2B3139]">
+                          <SelectItem value="market" className="text-[#EAECEF] focus:bg-[#2B3139]">Market</SelectItem>
+                          <SelectItem value="limit" className="text-[#EAECEF] focus:bg-[#2B3139]">Limit</SelectItem>
+                          <SelectItem value="stop" className="text-[#EAECEF] focus:bg-[#2B3139]">Stop</SelectItem>
                         </SelectContent>
                       </Select>
 
                       {formState.futures.orderType !== 'market' && (
-                        <Input
-                          type="number"
-                          value={formState.futures.price}
-                          onChange={(e) => setFormState(prev => ({ ...prev, futures: { ...prev.futures, price: e.target.value } }))}
-                          placeholder="Price"
-                          className="bg-[#2B3139] border-[#3A3F4A]"
-                        />
+                        <div className="space-y-2">
+                          <label className="text-sm text-[#848E9C]">Price (USDT)</label>
+                          <Input
+                            type="number"
+                            value={formState.futures.price}
+                            onChange={(e) => setFormState(prev => ({ ...prev, futures: { ...prev.futures, price: e.target.value } }))}
+                            placeholder="0.00"
+                            className="bg-[#2B3139] border-[#3A3F4A] text-[#EAECEF] rounded-xl py-6 text-lg"
+                          />
+                        </div>
                       )}
 
-                      <Input
-                        type="number"
-                        value={formState.futures.amount}
-                        onChange={(e) => setFormState(prev => ({ ...prev, futures: { ...prev.futures, amount: e.target.value } }))}
-                        placeholder="Position Size (USDT)"
-                        className="bg-[#2B3139] border-[#3A3F4A]"
-                      />
+                      <div className="space-y-2">
+                        <label className="text-sm text-[#848E9C]">Position Size (USDT)</label>
+                        <Input
+                          type="number"
+                          value={formState.futures.amount}
+                          onChange={(e) => setFormState(prev => ({ ...prev, futures: { ...prev.futures, amount: e.target.value } }))}
+                          placeholder="0.00"
+                          className="bg-[#2B3139] border-[#3A3F4A] text-[#EAECEF] rounded-xl py-6 text-lg"
+                        />
+                      </div>
 
-                      <div className="bg-[#2B3139] rounded-lg p-3">
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-[#848E9C]">Margin Required</span>
-                            <span className="text-[#F0B90B]">
-                              ${formState.futures.amount ? (parseFloat(formState.futures.amount) / formState.futures.leverage).toFixed(2) : '0'}
-                            </span>
-                          </div>
-                          <Button
-                            onClick={handleFuturesTrade}
-                            disabled={!formState.futures.amount || loading}
-                            className="w-full bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20]"
-                          >
-                            {loading ? 'Opening...' : `Open ${formState.futures.side === 'long' ? 'Long' : 'Short'}`}
-                          </Button>
+                      <div className="bg-[#2B3139] rounded-xl p-4 space-y-3">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-[#848E9C]">Margin Required</span>
+                          <span className="text-[#F0B90B] font-mono font-medium">
+                            ${formState.futures.amount ? (parseFloat(formState.futures.amount) / formState.futures.leverage).toFixed(2) : '0'}
+                          </span>
                         </div>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-[#848E9C]">Liquidation Price</span>
+                          <span className="text-red-400 font-mono font-medium">
+                            ${formState.futures.amount && currentPrice ? (currentPrice * (1 - (1 / formState.futures.leverage))).toFixed(2) : '0'}
+                          </span>
+                        </div>
+                        <Button
+                          onClick={handleFuturesTrade}
+                          disabled={!formState.futures.amount || loading}
+                          className="w-full bg-gradient-to-r from-[#F0B90B] to-yellow-500 hover:from-[#F0B90B]/90 hover:to-yellow-500/90 text-[#181A20] font-semibold py-4 rounded-xl text-sm shadow-lg shadow-[#F0B90B]/20"
+                        >
+                          {loading ? 'Opening...' : `Open ${formState.futures.side === 'long' ? 'Long' : 'Short'} Position`}
+                        </Button>
                       </div>
                     </div>
                   </TabsContent>
 
                   <TabsContent value="options">
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                       <div className="grid grid-cols-2 gap-4">
                         <Button
                           onClick={() => setFormState(prev => ({ ...prev, options: { ...prev.options, direction: 'up' } }))}
-                          className={`py-3 ${formState.options.direction === 'up' ? 'bg-green-500 hover:bg-green-600' : 'bg-[#2B3139] hover:bg-[#3A3F4A]'}`}
+                          className={`py-4 rounded-xl text-sm font-semibold transition-all ${
+                            formState.options.direction === 'up' 
+                              ? 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/20' 
+                              : 'bg-[#2B3139] hover:bg-[#3A3F4A] text-[#EAECEF]'
+                          }`}
                         >
                           <TrendingUp className="w-4 h-4 mr-2 inline" />
-                          Up
+                          Up / Call
                         </Button>
                         <Button
                           onClick={() => setFormState(prev => ({ ...prev, options: { ...prev.options, direction: 'down' } }))}
-                          className={`py-3 ${formState.options.direction === 'down' ? 'bg-red-500 hover:bg-red-600' : 'bg-[#2B3139] hover:bg-[#3A3F4A]'}`}
+                          className={`py-4 rounded-xl text-sm font-semibold transition-all ${
+                            formState.options.direction === 'down' 
+                              ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20' 
+                              : 'bg-[#2B3139] hover:bg-[#3A3F4A] text-[#EAECEF]'
+                          }`}
                         >
                           <TrendingDown className="w-4 h-4 mr-2 inline" />
-                          Down
+                          Down / Put
                         </Button>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2">
-                        {OPTIONS_TIMEFRAMES.map((tf) => (
-                          <Button
-                            key={tf.value}
-                            onClick={() => setFormState(prev => ({ ...prev, options: { ...prev.options, timeFrame: tf.value } }))}
-                            className={`p-2 ${formState.options.timeFrame === tf.value ? 'bg-[#F0B90B] text-[#181A20]' : 'bg-[#2B3139] text-[#848E9C]'}`}
-                          >
-                            <div className="text-xs">{tf.label}</div>
-                            <div className="text-[10px]">+{tf.profit}%</div>
-                          </Button>
-                        ))}
+                      <div className="space-y-2">
+                        <label className="text-sm text-[#848E9C]">Time Frame</label>
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                          {OPTIONS_TIMEFRAMES.map((tf) => (
+                            <Button
+                              key={tf.value}
+                              onClick={() => setFormState(prev => ({ ...prev, options: { ...prev.options, timeFrame: tf.value } }))}
+                              className={`p-3 rounded-xl transition-all ${
+                                formState.options.timeFrame === tf.value 
+                                  ? `bg-gradient-to-r ${tf.color} text-white shadow-lg` 
+                                  : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#3A3F4A]'
+                              }`}
+                            >
+                              <div className="text-xs font-semibold">{tf.label}</div>
+                              <div className="text-[10px] opacity-80">+{tf.profit}%</div>
+                            </Button>
+                          ))}
+                        </div>
                       </div>
 
-                      <Input
-                        type="number"
-                        value={formState.options.amount}
-                        onChange={(e) => setFormState(prev => ({ ...prev, options: { ...prev.options, amount: e.target.value } }))}
-                        placeholder="Investment (USDT)"
-                        className="bg-[#2B3139] border-[#3A3F4A]"
-                      />
+                      <div className="space-y-2">
+                        <label className="text-sm text-[#848E9C]">Investment (USDT)</label>
+                        <Input
+                          type="number"
+                          value={formState.options.amount}
+                          onChange={(e) => setFormState(prev => ({ ...prev, options: { ...prev.options, amount: e.target.value } }))}
+                          placeholder="0.00"
+                          className="bg-[#2B3139] border-[#3A3F4A] text-[#EAECEF] rounded-xl py-6 text-lg"
+                        />
+                      </div>
 
-                      <div className="bg-[#2B3139] rounded-lg p-3">
-                        <div className="space-y-2">
-                          {formState.options.amount && (
-                            <div className="flex justify-between text-sm">
+                      <div className="bg-[#2B3139] rounded-xl p-4 space-y-3">
+                        {formState.options.amount && (
+                          <>
+                            <div className="flex justify-between items-center text-sm">
                               <span className="text-[#848E9C]">Potential Payout</span>
-                              <span className="text-green-400">
+                              <span className="text-green-400 font-mono font-medium">
                                 ${(parseFloat(formState.options.amount) * PROFIT_RATES[formState.options.timeFrame as keyof typeof PROFIT_RATES]?.payout).toFixed(2)}
                               </span>
                             </div>
-                          )}
-                          <Button
-                            onClick={handleOptionsTrade}
-                            disabled={!formState.options.amount || loading || !!activeOptionsTrade}
-                            className="w-full bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20]"
-                          >
-                            {loading ? 'Purchasing...' : activeOptionsTrade ? 'In Progress' : 'Buy Option'}
-                          </Button>
-                        </div>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-[#848E9C]">Profit if Win</span>
+                              <span className="text-green-400 font-mono font-medium">
+                                +${(parseFloat(formState.options.amount) * (PROFIT_RATES[formState.options.timeFrame as keyof typeof PROFIT_RATES]?.profit / 100)).toFixed(2)}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                        <Button
+                          onClick={handleOptionsTrade}
+                          disabled={!formState.options.amount || loading || !!activeOptionsTrade}
+                          className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-semibold py-4 rounded-xl text-sm shadow-lg shadow-purple-500/20"
+                        >
+                          {loading ? 'Purchasing...' : activeOptionsTrade ? 'Trade in Progress' : 'Buy Option'}
+                        </Button>
                       </div>
                     </div>
                   </TabsContent>
@@ -1372,37 +1515,39 @@ export default function Trading() {
           {/* Right Column - Market Data */}
           <motion.div 
             variants={fadeInUp}
-            className={`${chartExpanded ? 'lg:col-span-3' : 'lg:col-span-4'} space-y-4`}
+            className={`${chartExpanded ? 'lg:col-span-3' : 'lg:col-span-4'} space-y-5`}
           >
             {/* Balance Card */}
-            <Card className="bg-gradient-to-br from-[#1E2329] to-[#2B3139] border-[#3A3F4A] p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Wallet className="w-4 h-4 text-[#F0B90B]" />
+            <Card className="bg-gradient-to-br from-[#1E2329] to-[#2B3139] border-[#3A3F4A] p-5 rounded-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-[#F0B90B]/10 rounded-xl flex items-center justify-center">
+                    <Wallet className="w-4 h-4 text-[#F0B90B]" />
+                  </div>
                   <h3 className="text-sm font-semibold text-[#EAECEF]">Balances</h3>
                 </div>
-                <Badge className="bg-[#2B3139] text-[#848E9C] text-xs">
+                <Badge className="bg-[#2B3139] text-[#848E9C] border-[#3A3F4A] text-xs px-3 py-1.5 rounded-lg">
                   {stats.activeLocks} Active
                 </Badge>
               </div>
               
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-[#848E9C]">Funding</span>
-                  <span className="text-[#EAECEF] font-mono">
-                    {hideBalances ? '••••' : `${formatCurrency(getFundingBalance('USDT'))}`}
+                  <span className="text-[#848E9C]">Funding Wallet</span>
+                  <span className="text-[#EAECEF] font-mono font-medium">
+                    {hideBalances ? '••••' : formatCurrency(getFundingBalance('USDT'))} USDT
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-[#848E9C]">Trading</span>
-                  <span className="text-[#F0B90B] font-mono">
-                    {hideBalances ? '••••' : `${formatCurrency(getTradingBalance('USDT'))}`}
+                  <span className="text-[#848E9C]">Trading Wallet</span>
+                  <span className="text-[#F0B90B] font-mono font-medium">
+                    {hideBalances ? '••••' : formatCurrency(getTradingBalance('USDT'))} USDT
                   </span>
                 </div>
-                <div className="flex justify-between items-center text-xs pt-2 border-t border-[#3A3F4A]">
-                  <span className="text-[#848E9C]">Locked</span>
-                  <span className="text-[#F0B90B] font-mono">
-                    {hideBalances ? '••••' : `${formatCurrency(getLockedBalance('USDT'))}`}
+                <div className="flex justify-between items-center text-xs pt-3 border-t border-[#3A3F4A]">
+                  <span className="text-[#848E9C]">Locked Balance</span>
+                  <span className="text-[#F0B90B] font-mono font-medium">
+                    {hideBalances ? '••••' : formatCurrency(getLockedBalance('USDT'))} USDT
                   </span>
                 </div>
               </div>
@@ -1430,43 +1575,43 @@ export default function Trading() {
             )}
 
             {/* Quick Actions */}
-            <Card className="bg-[#1E2329] border-[#2B3139] p-3">
-              <h3 className="text-sm font-semibold text-[#EAECEF] mb-2">Quick Actions</h3>
+            <Card className="bg-[#1E2329] border-[#2B3139] p-4 rounded-2xl">
+              <h3 className="text-sm font-semibold text-[#EAECEF] mb-3 px-1">Quick Actions</h3>
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => navigate('/wallet')}
-                  className="justify-start"
+                  className="justify-start bg-[#2B3139] hover:bg-[#3A3F4A] text-[#EAECEF] rounded-xl py-3 px-3"
                 >
-                  <Wallet className="w-4 h-4 mr-2" />
+                  <Wallet className="w-4 h-4 mr-2 text-[#F0B90B]" />
                   Wallet
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => navigate('/arbitrage')}
-                  className="justify-start"
+                  className="justify-start bg-[#2B3139] hover:bg-[#3A3F4A] text-[#EAECEF] rounded-xl py-3 px-3"
                 >
-                  <Zap className="w-4 h-4 mr-2" />
+                  <Zap className="w-4 h-4 mr-2 text-[#F0B90B]" />
                   Arbitrage
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowHistory(true)}
-                  className="justify-start"
+                  className="justify-start bg-[#2B3139] hover:bg-[#3A3F4A] text-[#EAECEF] rounded-xl py-3 px-3"
                 >
-                  <History className="w-4 h-4 mr-2" />
+                  <History className="w-4 h-4 mr-2 text-[#F0B90B]" />
                   History
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowTransfer(true)}
-                  className="justify-start"
+                  className="justify-start bg-[#2B3139] hover:bg-[#3A3F4A] text-[#EAECEF] rounded-xl py-3 px-3"
                 >
-                  <ArrowLeftRight className="w-4 h-4 mr-2" />
+                  <ArrowLeftRight className="w-4 h-4 mr-2 text-[#F0B90B]" />
                   Transfer
                 </Button>
               </div>
@@ -1474,26 +1619,32 @@ export default function Trading() {
 
             {/* Open Positions */}
             {positions.length > 0 && (
-              <Card className="bg-[#1E2329] border-[#2B3139] p-3">
-                <div className="flex items-center justify-between mb-2">
+              <Card className="bg-[#1E2329] border-[#2B3139] p-4 rounded-2xl">
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Gauge className="w-4 h-4 text-[#F0B90B]" />
-                    <h3 className="text-sm font-semibold text-[#EAECEF]">Positions</h3>
+                    <h3 className="text-sm font-semibold text-[#EAECEF]">Open Positions</h3>
                   </div>
-                  <Badge className="bg-[#2B3139] text-[#848E9C]">{positions.length}</Badge>
+                  <Badge className="bg-[#2B3139] text-[#F0B90B] border-[#3A3F4A] text-xs px-2 py-1 rounded-lg">
+                    {positions.length}
+                  </Badge>
                 </div>
                 <div className="space-y-2">
-                  {positions.slice(0, 2).map((position) => (
-                    <div key={position.id} className="bg-[#2B3139] rounded-lg p-2 text-xs">
-                      <div className="flex justify-between mb-1">
-                        <span>{position.symbol}</span>
-                        <span className={position.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
-                          {position.pnl >= 0 ? '+' : ''}{position.pnl?.toFixed(2)}
-                        </span>
+                  {positions.slice(0, 3).map((position) => (
+                    <div key={position.id} className="bg-[#2B3139] rounded-xl p-3 text-xs">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-semibold text-[#EAECEF]">{position.symbol}</span>
+                        <Badge className={`${
+                          position.side === 'long' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                        } text-[10px] px-2 py-0.5 rounded-lg`}>
+                          {position.side}
+                        </Badge>
                       </div>
-                      <div className="flex justify-between text-[#848E9C]">
-                        <span>{position.side}</span>
-                        <span>{position.size} {position.asset}</span>
+                      <div className="flex justify-between items-center text-[#848E9C]">
+                        <span>Size: {position.size} {position.asset}</span>
+                        <span className={position.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
+                          {position.pnl >= 0 ? '+' : ''}{position.pnl?.toFixed(2)} USDT
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -1505,25 +1656,25 @@ export default function Trading() {
 
         {/* Trading Locks Status */}
         {tradingLocks.length > 0 && (
-          <Card className="mt-4 bg-[#1E2329] border-[#2B3139] p-3">
-            <div className="flex items-center justify-between mb-2">
+          <Card className="mt-5 bg-[#1E2329] border-[#2B3139] p-4 rounded-2xl">
+            <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Shield className="w-4 h-4 text-[#F0B90B]" />
                 <h3 className="text-sm font-semibold text-[#EAECEF]">Active Locks</h3>
               </div>
-              <Badge className="bg-[#2B3139] text-[#848E9C]">
+              <Badge className="bg-[#2B3139] text-[#F0B90B] border-[#3A3F4A] text-xs px-3 py-1.5 rounded-lg">
                 {tradingStats.totalLockedAmount.toFixed(2)} USDT
               </Badge>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {tradingLocks.slice(0, 3).map((lock) => (
-                <div key={lock.id} className="bg-[#2B3139] rounded-lg p-2 text-xs">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-[#EAECEF]">{lock.asset}</span>
-                    <span className="text-[#F0B90B]">{lock.amount.toFixed(2)}</span>
+                <div key={lock.id} className="bg-[#2B3139] rounded-xl p-3 text-xs">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-semibold text-[#EAECEF]">{lock.asset}</span>
+                    <span className="text-[#F0B90B] font-mono font-medium">{lock.amount.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-[#848E9C]">
-                    <span>{lock.lock_type}</span>
+                  <div className="flex justify-between items-center text-[#848E9C]">
+                    <span className="capitalize">{lock.lock_type}</span>
                     <span>{new Date(lock.expires_at).toLocaleTimeString()}</span>
                   </div>
                 </div>
@@ -1539,33 +1690,36 @@ export default function Trading() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
               onClick={() => setShowHistory(false)}
             >
               <motion.div
                 initial={{ scale: 0.9, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.9, y: 20 }}
-                className="bg-[#1E2329] border border-[#2B3139] rounded-xl max-w-4xl w-full max-h-[80vh] overflow-hidden"
+                className="bg-[#1E2329] border border-[#2B3139] rounded-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="p-3 border-b border-[#2B3139] flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <History className="w-4 h-4 text-[#F0B90B]" />
+                <div className="p-4 border-b border-[#2B3139] flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-[#F0B90B]/10 rounded-xl flex items-center justify-center">
+                      <History className="w-4 h-4 text-[#F0B90B]" />
+                    </div>
                     <h3 className="text-base font-semibold text-[#EAECEF]">Order History</h3>
                   </div>
                   <button
                     onClick={() => setShowHistory(false)}
-                    className="p-1 hover:bg-[#2B3139] rounded-lg transition-colors"
+                    className="p-2 hover:bg-[#2B3139] rounded-xl transition-colors"
                   >
                     <X className="w-4 h-4 text-[#848E9C]" />
                   </button>
                 </div>
-                <div className="p-3 overflow-y-auto max-h-[calc(80vh-80px)]">
+                <div className="p-4 overflow-y-auto max-h-[calc(85vh-80px)]">
                   {userTrades.length === 0 ? (
-                    <div className="text-center py-8">
-                      <div className="text-4xl mb-2">📋</div>
+                    <div className="text-center py-12">
+                      <div className="text-5xl mb-3">📋</div>
                       <div className="text-sm text-[#848E9C]">No trades yet</div>
+                      <p className="text-xs text-[#848E9C]/60 mt-1">Your trading history will appear here</p>
                     </div>
                   ) : (
                     <OrderHistoryTable orders={userTrades} />
@@ -1583,52 +1737,54 @@ export default function Trading() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
               onClick={() => setShowSettings(false)}
             >
               <motion.div
                 initial={{ scale: 0.9, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.9, y: 20 }}
-                className="bg-[#1E2329] border border-[#2B3139] rounded-xl max-w-md w-full"
+                className="bg-[#1E2329] border border-[#2B3139] rounded-2xl max-w-md w-full shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="p-3 border-b border-[#2B3139] flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Settings className="w-4 h-4 text-[#F0B90B]" />
+                <div className="p-4 border-b border-[#2B3139] flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-[#F0B90B]/10 rounded-xl flex items-center justify-center">
+                      <Settings className="w-4 h-4 text-[#F0B90B]" />
+                    </div>
                     <h3 className="text-base font-semibold text-[#EAECEF]">Settings</h3>
                   </div>
                   <button
                     onClick={() => setShowSettings(false)}
-                    className="p-1 hover:bg-[#2B3139] rounded-lg transition-colors"
+                    className="p-2 hover:bg-[#2B3139] rounded-xl transition-colors"
                   >
                     <X className="w-4 h-4 text-[#848E9C]" />
                   </button>
                 </div>
-                <div className="p-3 space-y-3">
+                <div className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm">Hide Balances</span>
+                    <span className="text-sm text-[#EAECEF]">Hide Balances</span>
                     <button
                       onClick={() => setHideBalances(!hideBalances)}
-                      className={`w-10 h-5 rounded-full transition-colors ${hideBalances ? 'bg-[#F0B90B]' : 'bg-[#2B3139]'}`}
+                      className={`w-12 h-6 rounded-full transition-colors ${hideBalances ? 'bg-[#F0B90B]' : 'bg-[#2B3139]'}`}
                     >
-                      <div className={`w-4 h-4 rounded-full bg-white transition-transform ${hideBalances ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      <div className={`w-5 h-5 rounded-full bg-white transition-transform ${hideBalances ? 'translate-x-6' : 'translate-x-0.5'}`} />
                     </button>
                   </div>
                   <Separator className="bg-[#2B3139]" />
-                  <div>
-                    <label className="text-sm text-[#848E9C] mb-1 block">Default Chart</label>
+                  <div className="space-y-2">
+                    <label className="text-sm text-[#848E9C]">Default Timeframe</label>
                     <Select value={timeframe} onValueChange={setTimeframe}>
-                      <SelectTrigger className="bg-[#2B3139] border-[#3A3F4A]">
+                      <SelectTrigger className="bg-[#2B3139] border-[#3A3F4A] text-[#EAECEF] rounded-xl">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1m">1m</SelectItem>
-                        <SelectItem value="5m">5m</SelectItem>
-                        <SelectItem value="15m">15m</SelectItem>
-                        <SelectItem value="1h">1h</SelectItem>
-                        <SelectItem value="4h">4h</SelectItem>
-                        <SelectItem value="1d">1d</SelectItem>
+                      <SelectContent className="bg-[#1E2329] border-[#2B3139]">
+                        <SelectItem value="1m" className="text-[#EAECEF] focus:bg-[#2B3139]">1 minute</SelectItem>
+                        <SelectItem value="5m" className="text-[#EAECEF] focus:bg-[#2B3139]">5 minutes</SelectItem>
+                        <SelectItem value="15m" className="text-[#EAECEF] focus:bg-[#2B3139]">15 minutes</SelectItem>
+                        <SelectItem value="1h" className="text-[#EAECEF] focus:bg-[#2B3139]">1 hour</SelectItem>
+                        <SelectItem value="4h" className="text-[#EAECEF] focus:bg-[#2B3139]">4 hours</SelectItem>
+                        <SelectItem value="1d" className="text-[#EAECEF] focus:bg-[#2B3139]">1 day</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1668,35 +1824,36 @@ export default function Trading() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute top-16 right-4 w-64 bg-[#1E2329] border border-[#2B3139] rounded-xl shadow-2xl z-50"
+            className="absolute top-20 right-6 w-72 bg-[#1E2329] border border-[#2B3139] rounded-2xl shadow-2xl z-50 overflow-hidden"
           >
-            <div className="p-3 border-b border-[#2B3139]">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-[#F0B90B] to-yellow-500 rounded-lg flex items-center justify-center">
+            <div className="p-4 border-b border-[#2B3139]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-[#F0B90B] to-yellow-500 rounded-xl flex items-center justify-center shadow-lg shadow-[#F0B90B]/20">
                   <span className="text-sm font-bold text-[#181A20]">
                     {user?.first_name?.[0] || user?.email?.[0] || 'U'}
                   </span>
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-[#EAECEF] truncate">
                     {user?.email || 'User'}
                   </p>
+                  <p className="text-xs text-[#848E9C] mt-0.5">Member since {new Date().getFullYear()}</p>
                 </div>
               </div>
             </div>
-            <div className="p-1">
+            <div className="p-2">
               <button
                 onClick={() => navigate('/account')}
-                className="w-full px-3 py-2 text-left text-sm text-[#EAECEF] hover:bg-[#2B3139] rounded-lg transition-colors flex items-center gap-2"
+                className="w-full px-3 py-2.5 text-left text-sm text-[#EAECEF] hover:bg-[#2B3139] rounded-xl transition-colors flex items-center gap-3"
               >
-                <User className="w-4 h-4" />
+                <User className="w-4 h-4 text-[#848E9C]" />
                 Profile
               </button>
               <button
                 onClick={() => navigate('/security')}
-                className="w-full px-3 py-2 text-left text-sm text-[#EAECEF] hover:bg-[#2B3139] rounded-lg transition-colors flex items-center gap-2"
+                className="w-full px-3 py-2.5 text-left text-sm text-[#EAECEF] hover:bg-[#2B3139] rounded-xl transition-colors flex items-center gap-3"
               >
-                <Shield className="w-4 h-4" />
+                <Shield className="w-4 h-4 text-[#848E9C]" />
                 Security
               </button>
               <button
@@ -1704,7 +1861,7 @@ export default function Trading() {
                   logout();
                   setProfileOpen(false);
                 }}
-                className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-red-500/20 rounded-lg transition-colors flex items-center gap-2"
+                className="w-full px-3 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/20 rounded-xl transition-colors flex items-center gap-3"
               >
                 <LogOut className="w-4 h-4" />
                 Sign Out

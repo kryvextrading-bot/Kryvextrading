@@ -638,11 +638,9 @@ class UnifiedWalletService {
           total: tradingBalance,
           updatedAt: new Date().toISOString()
         };
-        console.log(`📈 [unifiedWalletService] Added trading balance for ${tradingAssetKey}:`, tradingBalance);
       }
     }
 
-    console.log('📊 [unifiedWalletService] Final balances including trading:', balances);
 
     return {
       balances,
