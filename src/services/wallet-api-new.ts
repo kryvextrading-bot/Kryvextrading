@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
-import { BalanceOperation, BalanceResult, WalletBalance } from '@/types/wallet';
+import { BalanceOperation } from '@/types/wallet';
+import { BalanceResult, WalletBalance } from '@/services/unified-wallet-service';
 import { v4 as uuidv4 } from 'uuid';
 
 class WalletApiService {
@@ -91,7 +92,7 @@ class WalletApiService {
 
       return {
         success: true,
-        newBalance: data,
+        newAvailable: data,
         transactionId
       };
     } catch (error) {
@@ -127,7 +128,7 @@ class WalletApiService {
 
       return {
         success: true,
-        newBalance: data,
+        newAvailable: data,
         transactionId
       };
     } catch (error) {
