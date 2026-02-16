@@ -176,6 +176,26 @@ class SupabaseApiService {
             return { user: data.user, profile: null };
           }
           
+          // Verify user has wallet balances (trigger should handle this automatically)
+          try {
+            const { data: walletBalances, error: walletError } = await supabase
+              .from('wallet_balances')
+              .select('asset')
+              .eq('user_id', data.user.id);
+              
+            if (walletError) {
+              console.warn('Warning: Could not verify wallet balances:', walletError);
+            } else if (!walletBalances || walletBalances.length === 0) {
+              console.warn('Warning: No wallet balances found for new user - trigger may have failed');
+              // Optionally call manual backup function
+              await supabase.rpc('ensure_user_has_wallets', { p_user_id: data.user.id });
+            } else {
+              console.log(`✅ User has ${walletBalances.length} wallet balances ready`);
+            }
+          } catch (walletCheckError) {
+            console.warn('Warning: Wallet balance verification failed:', walletCheckError);
+          }
+          
           return { user: data.user, profile };
           
         } catch (profileErr) {
