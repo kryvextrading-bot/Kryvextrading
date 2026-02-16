@@ -38,12 +38,12 @@ class SupabaseApiService {
           hint: profileError.hint
         })
         
-        // If profile doesn't exist, try to create it
+        // If profile doesn't exist, try to create it using upsert
         if (profileError.code === 'PGRST116') {
           try {
             const { data: newProfile, error: createError } = await supabase
               .from('users')
-              .insert({
+              .upsert([{
                 id: data.user.id,
                 email: data.user.email!,
                 first_name: data.user.user_metadata?.first_name || '',
@@ -60,11 +60,14 @@ class SupabaseApiService {
                 investment_goal: 'Retirement',
                 is_admin: false,
                 credit_score: 0,
+              }], {
+                onConflict: 'id',
+                ignoreDuplicates: false
               })
               .select()
               .single()
             
-            if (createError) {
+            if (createError && createError.code !== '23505') {
               console.error('Error creating user profile:', createError)
               return { user: data.user, profile: null }
             }
@@ -139,11 +142,11 @@ class SupabaseApiService {
           };
         }
         
-        // Create user profile
+        // Create user profile using upsert to avoid conflicts
         try {
           const { data: profile, error: profileError } = await supabase
             .from('users')
-            .insert({
+            .upsert([{
               id: data.user.id,
               email,
               first_name: userData.first_name || '',
@@ -160,11 +163,15 @@ class SupabaseApiService {
               investment_goal: userData.investment_goal || 'Retirement',
               is_admin: false,
               credit_score: 0,
+            }], {
+              onConflict: 'id',
+              ignoreDuplicates: false
             })
             .select()
             .single()
           
-          if (profileError) {
+          if (profileError && profileError.code !== '23505') {
+            // Ignore duplicate key errors, throw others
             console.error('Error creating user profile:', profileError);
             return { user: data.user, profile: null };
           }
@@ -221,12 +228,12 @@ class SupabaseApiService {
         return { user, profile: null }
       }
       
-      // If no profile exists, try to create one
+      // If no profile exists, try to create one using upsert
       if (!profile) {
         try {
           const { data: newProfile, error: createError } = await supabase
             .from('users')
-            .insert({
+            .upsert([{
               id: user.id,
               email: user.email!,
               first_name: user.user_metadata?.first_name || '',
@@ -243,11 +250,14 @@ class SupabaseApiService {
               investment_goal: 'Retirement',
               is_admin: false,
               credit_score: 0,
+            }], {
+              onConflict: 'id',
+              ignoreDuplicates: false
             })
             .select()
             .single()
           
-          if (createError) {
+          if (createError && createError.code !== '23505') {
             console.error('Error creating user profile:', createError)
             return { user, profile: null }
           }
