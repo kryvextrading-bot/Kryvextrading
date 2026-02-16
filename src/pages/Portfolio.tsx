@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { TrendingUp } from '@/components/icons/TrendingUp';
 import {
-  TrendingUp,
   TrendingDown,
   DollarSign,
   PieChart,
