@@ -290,6 +290,23 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['deposit_requests']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['deposit_requests']['Row']>
       }
+      trade_outcomes: {
+        Row: {
+          id: string
+          user_id: string
+          enabled: boolean
+          outcome_type: 'win' | 'loss' | 'default'
+          spot_enabled: boolean
+          futures_enabled: boolean
+          options_enabled: boolean
+          arbitrage_enabled: boolean
+          futures_current_pnl: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['trade_outcomes']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['trade_outcomes']['Row']>
+      }
     }
   }
 }
