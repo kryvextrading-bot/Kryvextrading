@@ -1173,18 +1173,14 @@ export default function WalletManagement() {
       // Get wallet requests from our new wallet API service (includes admin actions)
       const walletRequests = await walletApiService.getWalletRequests();
       
-      // Get deposit requests from Supabase
+      // Get deposit requests from Supabase using depositService
       let depositRequests = [];
       try {
-        const { data, error } = await supabase
-          .from('deposit_requests')
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        if (error) {
-          console.error('Error fetching deposit requests:', error);
-        } else {
-          depositRequests = data || [];
+        const result = await depositService.getAllDepositRequests();
+        if (result.success && result.data) {
+          depositRequests = result.data;
+        } else if (result.error) {
+          console.error('Error fetching deposit requests:', result.error);
         }
       } catch (error) {
         console.error('Error fetching deposit requests:', error);
