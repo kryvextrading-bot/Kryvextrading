@@ -1,35 +1,35 @@
 import { BalanceOperation, BalanceResult, WalletBalance } from '@/types/wallet';
-import walletApi from './wallet-api-new';
+import { walletApiService } from './wallet-api-new';
 
 class WalletService {
   // ==================== USER METHODS ====================
   
   async getUserBalances(userId: string): Promise<WalletBalance[]> {
-    return walletApi.getUserBalances(userId);
+    return walletApiService.getUserBalances(userId);
   }
 
   async getBalance(userId: string, asset: string): Promise<number> {
-    return walletApi.getBalance(userId, asset);
+    return walletApiService.getBalance(userId, asset);
   }
 
   async getLockedBalance(userId: string, asset: string): Promise<number> {
-    return walletApi.getLockedBalance(userId, asset);
+    return walletApiService.getLockedBalance(userId, asset);
   }
 
   async addBalance(operation: BalanceOperation): Promise<BalanceResult> {
-    return walletApi.addBalance(operation);
+    return walletApiService.addBalance(operation);
   }
 
   async deductBalance(operation: BalanceOperation): Promise<BalanceResult> {
-    return walletApi.deductBalance(operation);
+    return walletApiService.deductBalance(operation);
   }
 
   async lockBalance(operation: BalanceOperation): Promise<BalanceResult> {
-    return walletApi.lockBalance(operation);
+    return walletApiService.lockBalance(operation);
   }
 
   async unlockBalance(operation: BalanceOperation): Promise<BalanceResult> {
-    return walletApi.unlockBalance(operation);
+    return walletApiService.unlockBalance(operation);
   }
 
   // ==================== VALIDATION METHODS ====================
@@ -63,7 +63,7 @@ class WalletService {
   // ==================== LEDGER METHODS ====================
   
   async getTransactionHistory(userId: string, limit?: number): Promise<any[]> {
-    return walletApi.getLedgerEntries(userId, limit);
+    return walletApiService.getLedgerEntries(userId, limit);
   }
 }
 
