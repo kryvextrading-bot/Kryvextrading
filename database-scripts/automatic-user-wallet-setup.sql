@@ -24,12 +24,13 @@ BEGIN
     INSERT INTO admin_action_logs (admin_id, action_type, action_details, created_at)
     VALUES (
         NEW.id,
-        'user_balance_setup',
+        'user_creation',  -- Use a valid action_type that should be allowed
         json_build_object(
             'user_id', NEW.id,
             'email', NEW.email,
             'assets_created', 8,
-            'auto_created', true
+            'auto_created', true,
+            'wallet_setup', 'automatic'
         ),
         NOW()
     ) ON CONFLICT DO NOTHING;
@@ -62,6 +63,21 @@ BEGIN
             COALESCE(NEW.created_at, NOW()),
             NOW()
         ON CONFLICT (user_id, asset) DO NOTHING;
+        
+        -- Log the status change and wallet creation
+        INSERT INTO admin_action_logs (admin_id, action_type, action_details, created_at)
+        VALUES (
+            NEW.id,
+            'user_update',  -- Use a valid action_type
+            json_build_object(
+                'user_id', NEW.id,
+                'email', NEW.email,
+                'status_change', OLD.status || ' -> ' || NEW.status,
+                'wallets_created', 8,
+                'auto_created', true
+            ),
+            NOW()
+        ) ON CONFLICT DO NOTHING;
     END IF;
     
     RETURN NEW;
