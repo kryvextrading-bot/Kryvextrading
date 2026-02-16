@@ -50,7 +50,7 @@ export function useUnifiedWallet() {
         }
       });
       
-      // Process trading balances - simplified logic
+      // Process trading balances - only real trading wallets
       const trading: Record<string, TradingBalance> = {};
       
       Object.entries(data.balances).forEach(([asset, balance]) => {
@@ -64,18 +64,7 @@ export function useUnifiedWallet() {
         }
       });
       
-      // Create mock trading balances from funding if no dedicated trading wallets exist
-      Object.entries(data.balances).forEach(([asset, balance]) => {
-        if (!asset.includes('_TRADING') && !trading[asset]) {
-          // Allocate 20% of funding balance to trading
-          const tradingAllocation = balance.available * 0.2;
-          trading[asset] = {
-            available: tradingAllocation,
-            locked: 0,
-            total: tradingAllocation
-          };
-        }
-      });
+      // No mock trading balances - only show real transferred amounts
       
       // Instant state updates
       setFundingBalances(funding);
@@ -104,19 +93,11 @@ export function useUnifiedWallet() {
     return fundingBalances[asset] || 0;
   }, [fundingBalances]);
 
-  // Get trading balance (for active trading)
+  // Get trading balance (for active trading) - ONLY real transferred amounts
   const getTradingBalance = useCallback((asset: string = 'USDT'): number => {
-    // First try to get from dedicated trading wallet
-    const tradingBalance = tradingBalances[asset]?.available || 0;
-    
-    // If no trading wallet exists, use 20% of funding balance as fallback
-    if (tradingBalance === 0) {
-      const fundingBalance = fundingBalances[asset] || 0;
-      return fundingBalance * 0.2; // 20% allocation to trading
-    }
-    
-    return tradingBalance;
-  }, [tradingBalances, fundingBalances]);
+    // Only return actual trading wallet balance, no mock fallbacks
+    return tradingBalances[asset]?.available || 0;
+  }, [tradingBalances]);
 
   // Get locked balance (from active trades)
   const getLockedBalance = useCallback((asset: string = 'USDT'): number => {

@@ -602,10 +602,7 @@ class UnifiedWalletService {
 
   async getTradingBalances(userId: string): Promise<Record<string, { available: number; locked: number; total: number }>> {
     try {
-      // Get from trading_locks for active trades
-      const locks = await this.getActiveLocks(userId);
-      
-      // Get from wallet_balances for any dedicated trading wallet entries
+      // Get from wallet_balances for any dedicated trading wallet entries only
       const { data: balances } = await supabase
         .from('wallet_balances')
         .select('*')
@@ -614,7 +611,7 @@ class UnifiedWalletService {
       
       const trading: Record<string, { available: number; locked: number; total: number }> = {};
       
-      // Process trading-specific balances
+      // Process trading-specific balances only (no mock data)
       if (balances) {
         balances.forEach(b => {
           const baseAsset = b.asset.replace('_TRADING', '');
@@ -626,26 +623,7 @@ class UnifiedWalletService {
         });
       }
       
-      // If no dedicated trading wallet, use a portion of funding as trading (mock)
-      if (Object.keys(trading).length === 0) {
-        const { data: funding } = await supabase
-          .from('wallet_balances')
-          .select('*')
-          .eq('user_id', userId)
-          .not('asset', 'like', '%_TRADING');
-        
-        if (funding) {
-          funding.forEach(b => {
-            // Assume 20% of funding is allocated to trading by default
-            trading[b.asset] = {
-              available: b.available * 0.2,
-              locked: 0,
-              total: b.available * 0.2
-            };
-          });
-        }
-      }
-      
+      // No mock trading balances - only show real transferred amounts
       return trading;
     } catch (error) {
       console.error('Error getting trading balances:', error);

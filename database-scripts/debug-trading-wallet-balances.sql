@@ -21,22 +21,9 @@ FROM wallet_balances
 WHERE asset NOT LIKE '%_TRADING'
 GROUP BY user_id;
 
--- Step 3: Create trading wallet balances for existing users (if they don't exist)
-INSERT INTO wallet_balances (user_id, asset, available, locked, created_at, updated_at)
-SELECT 
-    wb.user_id,
-    wb.asset || '_TRADING' as trading_asset,
-    -- Start with 20% of available balance as trading balance
-    ROUND(wb.available * 0.2, 8) as trading_available,
-    0 as locked,
-    wb.created_at,
-    NOW() as updated_at
-FROM wallet_balances wb
-LEFT JOIN wallet_balances wb_trading ON wb.user_id = wb_trading.user_id AND wb_trading.asset = wb.asset || '_TRADING'
-WHERE wb_trading.user_id IS NULL  -- Only create if trading wallet doesn't exist
-AND wb.asset NOT LIKE '%_TRADING'  -- Skip existing trading wallets
-AND wb.available > 0  -- Only if there's available balance
-ON CONFLICT (user_id, asset) DO NOTHING;
+-- Step 3: Only create trading wallet balances if users explicitly transfer funds (no automatic creation)
+-- This step is removed to ensure only real transferred amounts are shown
+-- Trading wallets should only be created when users actually transfer funds
 
 -- Step 4: Verify the trading wallet creation
 SELECT 
@@ -48,21 +35,23 @@ SELECT
 FROM wallet_balances 
 GROUP BY user_id;
 
--- Step 5: Show detailed breakdown for a specific user (replace with actual user_id)
+-- Step 5: Show detailed breakdown for all users (no hardcoded user ID needed)
 SELECT 
-    'Detailed balance breakdown' as step,
-    asset,
-    available,
-    locked,
+    'Detailed balance breakdown for all users' as step,
+    u.email,
+    wb.asset,
+    wb.available,
+    wb.locked,
     CASE 
-        WHEN asset LIKE '%_TRADING' THEN 'Trading'
+        WHEN wb.asset LIKE '%_TRADING' THEN 'Trading'
         ELSE 'Funding'
     END as wallet_type
-FROM wallet_balances 
-WHERE user_id = 'YOUR_USER_ID_HERE'  -- Replace with actual user ID
+FROM wallet_balances wb
+JOIN users u ON wb.user_id = u.id
 ORDER BY 
+    u.email,
     CASE 
-        WHEN asset LIKE '%_TRADING' THEN 2
+        WHEN wb.asset LIKE '%_TRADING' THEN 2
         ELSE 1
     END,
-    asset;
+    wb.asset;
