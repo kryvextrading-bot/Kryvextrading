@@ -57,7 +57,7 @@ class SupabaseApiService {
                 registration_date: new Date().toISOString(),
                 two_factor_enabled: false,
                 risk_tolerance: 'Moderate',
-                investment_goal: 'Growth',
+                investment_goal: 'Retirement',
                 is_admin: false,
                 credit_score: 0,
               })
@@ -157,7 +157,7 @@ class SupabaseApiService {
               registration_date: new Date().toISOString(),
               two_factor_enabled: false,
               risk_tolerance: userData.risk_tolerance || 'Moderate',
-              investment_goal: userData.investment_goal || 'Growth',
+              investment_goal: userData.investment_goal || 'Retirement',
               is_admin: false,
               credit_score: 0,
             })
@@ -240,7 +240,7 @@ class SupabaseApiService {
               registration_date: new Date().toISOString(),
               two_factor_enabled: false,
               risk_tolerance: 'Moderate',
-              investment_goal: 'Growth',
+              investment_goal: 'Retirement',
               is_admin: false,
               credit_score: 0,
             })
