@@ -327,8 +327,21 @@ export default function TradingInterface() {
   useEffect(() => {
     setLoadingSymbols(true);
     setSymbolError(null);
-    fetch('https://api.binance.com/api/v3/exchangeInfo')
-      .then(res => res.json())
+    
+    // Add timeout and better error handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    fetch('https://api.binance.com/api/v3/exchangeInfo', {
+      signal: controller.signal
+    })
+      .then(res => {
+        clearTimeout(timeoutId);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        return res.json();
+      })
       .then(data => {
         const pairs = data.symbols
           .filter((s: any) => s.status === 'TRADING' && s.quoteAsset === 'USDT')
@@ -337,10 +350,21 @@ export default function TradingInterface() {
         setSymbols(pairs);
         setLoadingSymbols(false);
       })
-      .catch(() => {
-        setSymbolError('Failed to load symbols. Please try again.');
+      .catch(error => {
+        clearTimeout(timeoutId);
+        console.error('Failed to load trading symbols:', error);
+        setSymbolError('Failed to load symbols. Using fallback data.');
         setLoadingSymbols(false);
+        
+        // Fallback to common symbols if API fails
+        const fallbackSymbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'SOLUSDT'];
+        setSymbols(fallbackSymbols);
       });
+      
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, []);
 
   // Live data hooks
