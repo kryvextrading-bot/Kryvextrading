@@ -24,25 +24,42 @@ import { Separator } from '@/components/ui/separator';
 import WalletTransfer from '@/components/WalletTransfer';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 export default function WalletTransferPage() {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  
+  // Use real wallet data
+  const {
+    getFundingBalance,
+    getTradingBalance,
+    getLockedBalance,
+    getTotalBalance,
+    transferToTrading,
+    transferToFunding,
+    loading: walletLoading
+  } = useUnifiedWallet();
+  
   const [activeTab, setActiveTab] = useState<'funding-to-trading' | 'trading-to-funding'>('funding-to-trading');
   const [amount, setAmount] = useState('');
   const [selectedAsset, setSelectedAsset] = useState('USDT');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Mock data
+  // Real balances from wallet service
   const balances = {
-    funding: 12500.45,
-    trading: 8750.23,
-    locked: 1250.00
+    funding: getFundingBalance('USDT'),
+    trading: getTradingBalance('USDT'),
+    locked: getLockedBalance('USDT')
   };
 
   const assets = [
-    { symbol: 'USDT', name: 'Tether', funding: 12500.45, trading: 8750.23, icon: '₮' },
-    { symbol: 'BTC', name: 'Bitcoin', funding: 0.45, trading: 0.23, icon: '₿' },
-    { symbol: 'ETH', name: 'Ethereum', funding: 5.67, trading: 3.89, icon: 'Ξ' },
+    { symbol: 'USDT', name: 'Tether', funding: getFundingBalance('USDT'), trading: getTradingBalance('USDT'), icon: '₮' },
+    { symbol: 'BTC', name: 'Bitcoin', funding: getFundingBalance('BTC'), trading: getTradingBalance('BTC'), icon: '₿' },
+    { symbol: 'ETH', name: 'Ethereum', funding: getFundingBalance('ETH'), trading: getTradingBalance('ETH'), icon: 'Ξ' },
   ];
 
   const handleMaxClick = () => {
@@ -53,11 +70,71 @@ export default function WalletTransferPage() {
   };
 
   const handleSubmit = async () => {
+    if (!user?.id) {
+      toast({
+        title: "Error",
+        description: "Please login to transfer funds",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const transferAmount = parseFloat(amount);
+    
+    if (!transferAmount || transferAmount <= 0) {
+      toast({
+        title: "Invalid Amount",
+        description: "Please enter a valid amount greater than 0",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsSubmitting(true);
-    // Simulate transfer
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsSubmitting(false);
-    // Show success and navigate back
+    
+    try {
+      let result;
+      
+      if (activeTab === 'funding-to-trading') {
+        // Transfer from funding to trading
+        result = await transferToTrading(selectedAsset, transferAmount);
+        
+        if (result.success) {
+          toast({
+            title: "Transfer Successful",
+            description: `Successfully transferred ${transferAmount} ${selectedAsset} to trading wallet`,
+          });
+        }
+      } else {
+        // Transfer from trading to funding
+        result = await transferToFunding(selectedAsset, transferAmount);
+        
+        if (result.success) {
+          toast({
+            title: "Transfer Successful", 
+            description: `Successfully transferred ${transferAmount} ${selectedAsset} to funding wallet`,
+          });
+        }
+      }
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Transfer failed');
+      }
+      
+      // Clear amount and navigate back
+      setAmount('');
+      setTimeout(() => navigate('/wallet'), 1500);
+      
+    } catch (error) {
+      console.error('Transfer error:', error);
+      toast({
+        title: "Transfer Failed",
+        description: error instanceof Error ? error.message : 'An error occurred during transfer',
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -97,7 +174,9 @@ export default function WalletTransferPage() {
               <div className="flex items-center gap-2">
                 <Wallet className="w-4 h-4 text-[#F0B90B]" />
                 <span className="text-sm text-[#848E9C]">Total:</span>
-                <span className="text-sm font-semibold text-[#EAECEF]">$21,250.68</span>
+                <span className="text-sm font-semibold text-[#EAECEF]">
+                  ${getTotalBalance('USDT').toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+                </span>
               </div>
             </div>
           </div>
@@ -120,7 +199,13 @@ export default function WalletTransferPage() {
                 <Wallet className="w-4 h-4 text-[#F0B90B]" />
               </div>
             </div>
-            <div className="text-xl font-bold text-[#EAECEF]">${balances.funding.toLocaleString()}</div>
+            <div className="text-xl font-bold text-[#EAECEF]">
+              {walletLoading ? (
+                <div className="animate-pulse bg-[#23262F] h-6 w-24 rounded"></div>
+              ) : (
+                `${balances.funding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              )}
+            </div>
             <div className="text-xs text-[#848E9C] mt-1">Available for deposits</div>
           </Card>
 
@@ -131,7 +216,13 @@ export default function WalletTransferPage() {
                 <TrendingUp className="w-4 h-4 text-[#F0B90B]" />
               </div>
             </div>
-            <div className="text-xl font-bold text-[#EAECEF]">${balances.trading.toLocaleString()}</div>
+            <div className="text-xl font-bold text-[#EAECEF]">
+              {walletLoading ? (
+                <div className="animate-pulse bg-[#23262F] h-6 w-24 rounded"></div>
+              ) : (
+                `${balances.trading.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              )}
+            </div>
             <div className="text-xs text-[#848E9C] mt-1">Available for trading</div>
           </Card>
 
@@ -142,7 +233,13 @@ export default function WalletTransferPage() {
                 <Clock className="w-4 h-4 text-[#F0B90B]" />
               </div>
             </div>
-            <div className="text-xl font-bold text-[#EAECEF]">${balances.locked.toLocaleString()}</div>
+            <div className="text-xl font-bold text-[#EAECEF]">
+              {walletLoading ? (
+                <div className="animate-pulse bg-[#23262F] h-6 w-24 rounded"></div>
+              ) : (
+                `${balances.locked.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              )}
+            </div>
             <div className="text-xs text-[#848E9C] mt-1">In open orders</div>
           </Card>
         </motion.div>
