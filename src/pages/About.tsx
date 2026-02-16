@@ -1,4 +1,5 @@
-import { Shield, TrendingUp, Users, Globe, Award, CheckCircle } from 'lucide-react';
+import { Shield, Users, Globe, Award, CheckCircle } from 'lucide-react';
+import { TrendingUp } from '@/components/icons/TrendingUp';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';

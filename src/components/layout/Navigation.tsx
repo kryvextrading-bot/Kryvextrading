@@ -1,4 +1,5 @@
-import { Home, TrendingUp, Wallet, User, CreditCard, Settings, Shuffle, ArrowUpDown } from 'lucide-react';
+import { Home, Wallet, User, CreditCard, Settings, Shuffle, ArrowUpDown } from 'lucide-react';
+import { TrendingUp } from '@/components/icons/TrendingUp';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';

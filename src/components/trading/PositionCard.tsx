@@ -3,7 +3,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Gauge, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { Gauge, TrendingDown, AlertTriangle } from 'lucide-react';
+import { TrendingUp } from '@/components/icons/TrendingUp';
 import { Position } from '@/types/trading';
 import { 
   formatPrice, 

@@ -1,7 +1,8 @@
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
+import { TrendingDown, DollarSign } from 'lucide-react';
+import { TrendingUp } from '@/components/icons/TrendingUp';
 import { formatCurrency, formatPercentage, calculatePnL } from '@/utils/tradingCalculations';
 import { AnyTrade, FuturesTrade } from '@/types/trading-unified';
 

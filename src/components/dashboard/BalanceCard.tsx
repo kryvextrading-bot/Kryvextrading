@@ -1,4 +1,5 @@
-import { ArrowUpDown, TrendingUp } from 'lucide-react';
+import { ArrowUpDown } from 'lucide-react';
+import { TrendingUp } from '@/components/icons/TrendingUp';
 import { Card } from '@/components/ui/card';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 import { useCallback } from 'react';

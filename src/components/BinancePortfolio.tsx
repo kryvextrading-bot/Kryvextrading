@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBinance } from '@/hooks/useBinance';
 import { formatCurrency, formatPercentage } from '@/lib/utils';
-import { RefreshCw, Wallet, TrendingUp, AlertCircle } from 'lucide-react';
+import { RefreshCw, Wallet, AlertCircle } from 'lucide-react';
+import { TrendingUp } from '@/components/icons/TrendingUp';
 
 interface BinancePortfolioProps {
   apiKey: string;

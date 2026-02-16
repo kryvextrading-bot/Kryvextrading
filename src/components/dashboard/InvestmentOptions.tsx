@@ -1,4 +1,5 @@
-import { ArrowRight, Bot, Coins, CreditCard, Pickaxe, Server, TrendingUp } from 'lucide-react';
+import { ArrowRight, Bot, Coins, CreditCard, Pickaxe, Server } from 'lucide-react';
+import { TrendingUp } from '@/components/icons/TrendingUp';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 

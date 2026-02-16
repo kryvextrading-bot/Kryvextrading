@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Info, 
-  TrendingUp, 
   TrendingDown, 
   BarChart3, 
   Activity,
@@ -29,6 +28,7 @@ import {
   Settings,
   X
 } from 'lucide-react';
+import { TrendingUp } from '@/components/icons/TrendingUp';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';

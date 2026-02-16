@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingDown } from 'lucide-react';
+import { TrendingUp } from '@/components/icons/TrendingUp';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { apiService } from '@/services/api';
