@@ -46,7 +46,7 @@ import { useWallet } from '@/contexts/WalletContext';
 
 // Services
 import { transactionService } from '@/services/transactionService';
-import { walletService } from '@/services/walletService';
+import { walletService } from '@/services/wallet-service-new';
 
 // Utils
 import { formatCurrency, formatPrice, formatPercentage } from '@/utils/tradingCalculations';

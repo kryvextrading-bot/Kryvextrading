@@ -41,7 +41,7 @@ import { useTradingControl } from '@/hooks/useTradingControl';
 
 // Services
 import { tradingService } from '@/services/tradingService';
-import { walletService } from '@/services/walletService';
+import { walletService } from '@/services/wallet-service-new';
 
 // Utils
 import { formatPrice, formatCurrency, validateOrder } from '@/utils/tradingCalculations';

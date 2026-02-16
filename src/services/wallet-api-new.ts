@@ -221,10 +221,10 @@ class WalletApiService {
           user_id: entry.userId,
           asset: entry.asset,
           amount: entry.amount,
-          type: entry.type,
+          transaction_type: entry.type,
           reference: entry.reference,
           metadata: entry.metadata || {},
-          timestamp: new Date().toISOString()
+          created_at: new Date().toISOString()
         });
     } catch (error) {
       console.error('Error recording ledger entry:', error);
@@ -237,7 +237,7 @@ class WalletApiService {
         .from('ledger_entries')
         .select('*')
         .eq('user_id', userId)
-        .order('timestamp', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(limit);
 
       if (error) throw error;

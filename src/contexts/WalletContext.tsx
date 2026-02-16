@@ -7,7 +7,7 @@ import { useAuth } from './AuthContext';
 import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
 import { supabase } from '@/lib/supabase';
 import walletApiService from '@/services/wallet-api';
-import { walletService } from '@/services/walletService';
+import { walletService } from '@/services/wallet-service-new';
 import BalanceSyncService from '@/services/balance-sync';
 import { positionService } from '@/services/positionService';
 

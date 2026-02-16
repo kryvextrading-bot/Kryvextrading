@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 
 // Services
-import { walletService } from '@/services/walletService';
+import { walletService } from '@/services/wallet-service-new';
 import { tradingDataService } from '@/services/trading-data-service';
 import { depositService } from '@/services/depositService';
 import { supabase } from '@/lib/supabase';

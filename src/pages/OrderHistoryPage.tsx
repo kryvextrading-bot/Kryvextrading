@@ -41,7 +41,7 @@ import { useWallet } from '@/contexts/WalletContext';
 
 // Services
 import { tradingService } from '@/services/tradingService';
-import { walletService } from '@/services/walletService';
+import { walletService } from '@/services/wallet-service-new';
 
 // Types
 import { Transaction, TransactionStatus, TransactionType } from '@/types/trading';

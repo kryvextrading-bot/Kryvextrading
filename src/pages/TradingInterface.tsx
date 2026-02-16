@@ -47,7 +47,7 @@ import { useTradingControl } from '@/hooks/useTradingControl';
 
 // Services
 import { tradingService } from '@/services/tradingService';
-import { walletService } from '@/services/walletService';
+import { walletService } from '@/services/wallet-service-new';
 import { positionService } from '@/services/positionService';
 
 // Components

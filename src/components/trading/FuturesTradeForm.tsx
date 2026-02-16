@@ -5,7 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/use-toast';
 import { tradingService } from '@/services/tradingService';
-import { walletService } from '@/services/walletService';
+import { walletService } from '@/services/wallet-service-new';
 import { positionService } from '@/services/positionService';
 import { useAuth } from '@/contexts/AuthContext';
 import { LeverageSelector } from './LeverageSelector';

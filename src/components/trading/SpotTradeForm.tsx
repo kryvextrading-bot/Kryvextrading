@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/use-toast';
 import { tradingService } from '@/services/tradingService';
-import { walletService } from '@/services/walletService';
+import { walletService } from '@/services/wallet-service-new';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface SpotTradeFormProps {

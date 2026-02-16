@@ -9,24 +9,18 @@ SELECT
         ELSE 'MISSING'
     END as table_status;
 
--- Step 2: Check table permissions
+-- Step 2: Check table permissions using simpler approach
 SELECT 
     'Table Permissions' as step,
-    schemaname,
-    tablename,
-    tableowner,
-    hasinsert,
-    hasupdate,
-    hasselect
-FROM pg_tables t
-JOIN information_schema.table_privileges p ON t.tablename = p.table_name
-WHERE t.tablename = 'ledger_entries';
+    'Checking basic table access' as status,
+    COUNT(*) as permission_count
+FROM information_schema.role_table_grants 
+WHERE table_name = 'ledger_entries';
 
 -- Step 3: Check RLS status
 SELECT 
     'RLS Status' as step,
-    schemaname,
-    tablename,
+    'Checking row level security' as status,
     rowsecurity
 FROM pg_tables 
 WHERE tablename = 'ledger_entries';

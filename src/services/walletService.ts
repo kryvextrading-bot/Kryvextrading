@@ -25,7 +25,7 @@ class WalletService {
     const { data, error } = await supabase
       .from('wallet_balances')
       .select('available')
-      .eq('userId', userId)
+      .eq('user_id', userId)
       .eq('asset', asset)
       .maybeSingle();
 
@@ -37,7 +37,7 @@ class WalletService {
     const { data, error } = await supabase
       .from('wallet_balances')
       .select('*')
-      .eq('userId', userId);
+      .eq('user_id', userId);
 
     if (error) throw error;
     return data || [];
@@ -67,12 +67,12 @@ class WalletService {
       .from('ledger_entries')
       .insert({
         id: uuidv4(),
-        userId,
+        user_id: userId,
         asset,
         amount: -amount,
-        type,
+        transaction_type: type,
         reference,
-        timestamp: new Date().toISOString()
+        created_at: new Date().toISOString()
       });
 
     if (ledgerError) throw ledgerError;
@@ -102,12 +102,12 @@ class WalletService {
       .from('ledger_entries')
       .insert({
         id: uuidv4(),
-        userId,
+        user_id: userId,
         asset,
         amount,
-        type,
+        transaction_type: type,
         reference,
-        timestamp: new Date().toISOString()
+        created_at: new Date().toISOString()
       });
 
     if (ledgerError) throw ledgerError;
@@ -162,7 +162,7 @@ class WalletService {
     const { data, error } = await supabase
       .from('wallet_balances')
       .select('available, locked')
-      .eq('userId', userId)
+      .eq('user_id', userId)
       .eq('asset', asset)
       .maybeSingle();
 
@@ -181,8 +181,8 @@ class WalletService {
     const { data, error } = await supabase
       .from('ledger_entries')
       .select('*')
-      .eq('userId', userId)
-      .order('timestamp', { ascending: false })
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
       .limit(limit);
 
     if (error) throw error;
@@ -196,7 +196,7 @@ class WalletService {
     const { data, error } = await supabase
       .from('balance_history')
       .select('*')
-      .eq('userId', userId)
+      .eq('user_id', userId)
       .eq('asset', asset)
       .gte('timestamp', startDate.toISOString())
       .order('timestamp', { ascending: true });
