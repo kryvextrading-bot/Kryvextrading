@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { TrendingUp } from '@/components/icons/TrendingUp';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,7 @@ import {
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, ComposedChart, Scatter
 } from 'recharts';
 import {
-  Users, Shield, DollarSign, TrendingUp, TrendingDown, Settings, Activity,
+  Users, Shield, DollarSign, TrendingDown, Settings, Activity,
   AlertTriangle, CheckCircle, XCircle, Clock, Download, Filter,
   Search, Plus, Edit, Trash2, Save, RefreshCw, Eye, EyeOff,
   Home, Briefcase, CreditCard, Globe, Lock, UserCheck,
@@ -39,7 +40,7 @@ import {
   ShieldAlert, ShieldCheck, AlertOctagon, Flag, Award, Star,
   Coffee, Moon, Sun, Monitor, Battery, Wind, Compass, Wallet,
   LayoutDashboard, Users2, LineChart as LineChartIcon, PieChart as PieChartIcon2,
-  BarChart2, TrendingUp as TrendingUpIcon, Activity as ActivityIcon,
+  BarChart2, Activity as ActivityIcon,
   AlertCircle, CheckCircle2, XCircle as XCircleIcon, Info,
   Maximize2, Minimize2, RefreshCcw, DownloadCloud, UploadCloud,
   Grid, List, ChevronUp, ChevronDown, ArrowUpRight, ArrowDownRight,
@@ -132,7 +133,7 @@ const adminSections = [
   { key: 'users', label: 'User Management', icon: Users2, color: 'from-purple-500 to-pink-500' },
   { key: 'wallet', label: 'Wallet Management', icon: Wallet, color: 'from-emerald-500 to-teal-500' },
   { key: 'finance', label: 'Financial', icon: DollarSign, color: 'from-green-500 to-emerald-500' },
-  { key: 'trading', label: 'Trading', icon: TrendingUpIcon, color: 'from-blue-500 to-indigo-500' },
+  { key: 'trading', label: 'Trading', icon: TrendingUp, color: 'from-blue-500 to-indigo-500' },
   { key: 'trading-control', label: 'Trading Control', icon: Zap, color: 'from-amber-500 to-yellow-500' },
   { key: 'investment', label: 'Investment', icon: Target, color: 'from-orange-500 to-red-500' },
   { key: 'platform', label: 'Platform', icon: Settings, color: 'from-gray-500 to-slate-500' },

@@ -28,6 +28,7 @@ import { adminApiService } from '@/services/admin-api';
 import { walletApiService } from '@/services/wallet-api-new';
 import { depositService } from '@/services/depositService';
 import BalanceSyncService from '@/services/balance-sync';
+import { TrendingUp } from '@/components/icons/TrendingUp';
 import { cn } from '@/lib/utils';
 import {
   Wallet,
