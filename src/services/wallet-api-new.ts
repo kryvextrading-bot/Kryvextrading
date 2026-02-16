@@ -294,6 +294,75 @@ class WalletApiService {
     });
   }
 
+  // ==================== WALLET REQUESTS METHODS ====================
+  
+  async getWalletRequests(): Promise<any[]> {
+    try {
+      // Fetch wallet requests from Supabase with user relationships
+      const { data: walletRequests, error: walletError } = await supabase
+        .from('wallet_requests')
+        .select(`
+          *,
+          user:users!wallet_requests_user_id_fkey(
+            id,
+            email,
+            first_name,
+            last_name
+          )
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (walletError) {
+        console.error('❌ [WalletAPI] Error fetching wallet requests:', walletError);
+        throw walletError;
+      }
+      
+      return walletRequests || [];
+    } catch (error) {
+      console.error('❌ [WalletAPI] Failed to get wallet requests:', error);
+      throw error;
+    }
+  }
+
+  async approveWalletRequest(requestId: string, adminId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('wallet_requests')
+        .update({
+          status: 'approved',
+          processed_by: adminId,
+          processed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('❌ [WalletAPI] Failed to approve wallet request:', error);
+      throw error;
+    }
+  }
+
+  async rejectWalletRequest(requestId: string, adminId: string, reason: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('wallet_requests')
+        .update({
+          status: 'rejected',
+          admin_notes: reason,
+          processed_by: adminId,
+          processed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('❌ [WalletAPI] Failed to reject wallet request:', error);
+      throw error;
+    }
+  }
+
   // ==================== UTILITY METHODS ====================
   
   async getBalance(userId: string, asset: string): Promise<number> {
