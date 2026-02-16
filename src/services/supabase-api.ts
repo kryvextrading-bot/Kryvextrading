@@ -110,19 +110,20 @@ class SupabaseApiService {
         });
         
         if (error) {
+          // Handle user already exists error - don't retry
+          if (error.message?.includes('User already registered') || 
+              error.message?.includes('already exists') ||
+              error.message?.includes('already been registered') ||
+              error.status === 422) {
+            throw new Error('This email is already registered. Please login instead.');
+          }
+          
           // Handle rate limiting specifically
           if (error.status === 429 && attempt < maxRetries) {
             const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
             console.log(`Rate limited, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})`);
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
-          }
-          
-          // Handle user already exists error
-          if (error.message?.includes('User already registered') || 
-              error.message?.includes('already exists') ||
-              error.status === 422) {
-            throw new Error('This email is already registered. Please login instead.');
           }
           
           throw error;
@@ -204,8 +205,16 @@ class SupabaseApiService {
         }
         
       } catch (error) {
+        // Don't retry for "already registered" errors
+        if (error instanceof Error && (
+          error.message.includes('already registered') ||
+          error.message.includes('This email is already registered')
+        )) {
+          throw error; // Already user-friendly message
+        }
+        
         if (attempt === maxRetries) {
-          // If this is the last attempt, throw the error with a user-friendly message
+          // If this is last attempt, throw error with a user-friendly message
           if (error instanceof Error) {
             if (error.message.includes('rate limit')) {
               throw new Error('Too many registration attempts. Please wait a few minutes before trying again.');

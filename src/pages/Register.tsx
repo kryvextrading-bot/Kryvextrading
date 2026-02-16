@@ -142,8 +142,10 @@ export default function Register() {
       if (error instanceof Error) {
         if (error.message.includes('rate limit') || error.message.includes('Too many registration attempts')) {
           errorMessage = "⏱️ Too many registration attempts. Please wait a few minutes before trying again.";
-        } else if (error.message.includes('User already registered')) {
+        } else if (error.message.includes('already registered') || error.message.includes('This email is already registered')) {
           errorMessage = "📧 This email is already registered. Please try logging in instead.";
+        } else if (error.message.includes('check your email to confirm')) {
+          errorMessage = "📧 Please check your email to confirm your registration before logging in.";
         } else if (error.message.includes('Password should be')) {
           errorMessage = "🔑 Password requirements not met. Please choose a stronger password.";
         } else {

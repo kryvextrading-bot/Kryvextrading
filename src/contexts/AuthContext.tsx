@@ -79,17 +79,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('Email and password are required');
       }
       
-      const { profile } = await supabaseApi.signUp(
+      const result = await supabaseApi.signUp(
         userData.email,
         userData.password,
         userData
       );
-      if (profile) {
-        setUser(profile);
+      
+      // Handle email confirmation requirement
+      if (result.requiresConfirmation) {
+        throw new Error('Please check your email to confirm your registration before logging in.');
+      }
+      
+      if (result.profile) {
+        setUser(result.profile);
       }
     } catch (error) {
       console.error('Registration failed:', error);
-      throw error;
+      
+      // Re-throw the error with the same message for UI handling
+      if (error instanceof Error) {
+        throw error;
+      }
+      
+      throw new Error('Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
