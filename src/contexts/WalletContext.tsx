@@ -1128,7 +1128,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [user?.id, unlockBalance, toast]);
 
-  // Set up Supabase real-time subscription for wallet changes - ENABLED WITH DEBOUNCE
+  // Set up Supabase real-time subscription for wallet changes - OPTIMIZED
   useEffect(() => {
     if (!user?.id) return;
 
@@ -1145,16 +1145,16 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         (payload) => {
           console.log('[WalletContext] Real-time wallet change detected:', payload);
           
-          // Debounce refresh to prevent multiple rapid refreshes
+          // Reduced debounce for instant updates
           if (refreshTimeoutRef.current) {
             clearTimeout(refreshTimeoutRef.current);
           }
           
           refreshTimeoutRef.current = setTimeout(() => {
             if (isMounted.current) {
-              refreshBalance();
+              refreshUnifiedData();
             }
-          }, 1000);
+          }, 200); // Reduced from 1000ms to 200ms
         }
       )
       .subscribe();
@@ -1165,9 +1165,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         clearTimeout(refreshTimeoutRef.current);
       }
     };
-  }, [user?.id, refreshBalance]);
+  }, [user?.id, refreshUnifiedData]);
 
-  // Listen for balance update events
+  // Listen for balance update events - OPTIMIZED
   useEffect(() => {
     const handleBalanceUpdate = (event: Event) => {
       const customEvent = event as CustomEvent;
@@ -1179,9 +1179,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       
       refreshTimeoutRef.current = setTimeout(() => {
         if (isMounted.current) {
-          refreshBalance();
+          refreshUnifiedData();
         }
-      }, 500);
+      }, 100); // Reduced from 500ms to 100ms
     };
     
     window.addEventListener('balanceUpdate', handleBalanceUpdate);
@@ -1189,7 +1189,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => {
       window.removeEventListener('balanceUpdate', handleBalanceUpdate);
     };
-  }, [refreshBalance]);
+  }, [refreshUnifiedData]);
 
   // Load initial data
   useEffect(() => {

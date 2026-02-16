@@ -44,10 +44,51 @@ export interface BalanceResult {
 }
 
 class UnifiedWalletService {
+  // In-memory cache for instant reads
+  private balanceCache = new Map<string, { data: any; timestamp: number }>();
+  private readonly CACHE_TTL = 30000; // 30 seconds cache
+
+  private getCacheKey(userId: string, operation: string): string {
+    return `${userId}_${operation}`;
+  }
+
+  private setCache(key: string, data: any): void {
+    this.balanceCache.set(key, { data, timestamp: Date.now() });
+  }
+
+  private getCache(key: string): any | null {
+    const cached = this.balanceCache.get(key);
+    if (!cached) return null;
+    
+    if (Date.now() - cached.timestamp > this.CACHE_TTL) {
+      this.balanceCache.delete(key);
+      return null;
+    }
+    
+    return cached.data;
+  }
+
+  private invalidateCache(userId: string): void {
+    const keysToDelete: string[] = [];
+    this.balanceCache.forEach((_, key) => {
+      if (key.startsWith(userId)) {
+        keysToDelete.push(key);
+      }
+    });
+    keysToDelete.forEach(key => this.balanceCache.delete(key));
+  }
   // ==================== GET BALANCES (FROM WALLET_BALANCES) ====================
 
   async getUserBalances(userId: string): Promise<Record<string, WalletBalance>> {
     try {
+      // Check cache first for instant response
+      const cacheKey = this.getCacheKey(userId, 'balances');
+      const cached = this.getCache(cacheKey);
+      if (cached) {
+        console.log('📋 [UnifiedWalletService] Cache hit for balances');
+        return cached;
+      }
+
       // Get from wallet_balances (primary)
       const { data: balances, error } = await supabase
         .from('wallet_balances')
@@ -97,6 +138,9 @@ class UnifiedWalletService {
           };
         }
       }
+
+      // Cache the result
+      this.setCache(cacheKey, result);
 
       return result;
     } catch (error) {
@@ -255,6 +299,9 @@ class UnifiedWalletService {
     const transactionId = uuidv4();
 
     try {
+      // Invalidate cache for this user
+      this.invalidateCache(operation.userId);
+
       // Get current balance
       const currentAvailable = await this.getBalance(operation.userId, operation.asset);
       
@@ -292,8 +339,7 @@ class UnifiedWalletService {
       return {
         success: true,
         newAvailable,
-        newLocked: currentLocked,
-        transactionId
+        newLocked: currentLocked
       };
     } catch (error) {
       console.error('Error deducting balance:', error);
@@ -618,33 +664,60 @@ class UnifiedWalletService {
     locks: TradingLock[];
     stats: { activeLocks: number; totalLockedAmount: number; locksByAsset: Record<string, number> };
   }> {
-    const [balances, locks, stats] = await Promise.all([
-      this.getUserBalances(userId),
-      this.getActiveLocks(userId),
-      this.getLockStats(userId)
-    ]);
+    // Single optimized query to get all balance data at once
+    const { data: allBalances } = await supabase
+      .from('wallet_balances')
+      .select('*')
+      .eq('user_id', userId);
 
-    // Also fetch trading wallet balances and include them in the response
-    const assets = ['USDT', 'BTC', 'ETH', 'SOL', 'BNB', 'ADA', 'XRP', 'DOT'];
-    
-    for (const asset of assets) {
-      const tradingBalance = await this.getTradingWalletBalance(userId, asset);
-      if (tradingBalance > 0) {
-        const tradingAssetKey = `${asset}_TRADING`;
-        balances[tradingAssetKey] = {
-          asset: tradingAssetKey,
-          available: tradingBalance,
-          locked: 0,
-          total: tradingBalance,
-          updatedAt: new Date().toISOString()
+    // Single query to get all locks
+    const { data: locks } = await supabase
+      .from('trading_locks')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'locked');
+
+    // Get wallet info for deposit addresses
+    const { data: wallets } = await supabase
+      .from('wallets')
+      .select('currency, deposit_address, is_active')
+      .eq('user_id', userId);
+
+    // Process all data in memory
+    const balances: Record<string, WalletBalance> = {};
+    const stats = { 
+      activeLocks: locks?.length || 0, 
+      totalLockedAmount: 0, 
+      locksByAsset: {} as Record<string, number> 
+    };
+
+    // Process balances
+    if (allBalances) {
+      allBalances.forEach(b => {
+        const wallet = wallets?.find(w => w.currency === b.asset);
+        balances[b.asset] = {
+          asset: b.asset,
+          available: Number(b.available) || 0,
+          locked: Number(b.locked) || 0,
+          total: (Number(b.available) || 0) + (Number(b.locked) || 0),
+          depositAddress: wallet?.deposit_address,
+          isActive: wallet?.is_active,
+          updatedAt: b.updated_at
         };
-      }
+      });
     }
 
+    // Process locks and update stats
+    if (locks) {
+      locks.forEach(lock => {
+        stats.totalLockedAmount += lock.amount;
+        stats.locksByAsset[lock.asset] = (stats.locksByAsset[lock.asset] || 0) + lock.amount;
+      });
+    }
 
     return {
       balances,
-      locks,
+      locks: locks || [],
       stats
     };
   }

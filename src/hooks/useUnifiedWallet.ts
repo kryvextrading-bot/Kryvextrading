@@ -33,12 +33,12 @@ export function useUnifiedWallet() {
 
     setRefreshing(true);
     try {
-      console.log('🔄 [useUnifiedWallet] Starting data refresh for user:', user.id);
+      console.log('🔄 [useUnifiedWallet] Starting optimized data refresh for user:', user.id);
       const data = await unifiedWalletService.refreshAllWalletData(user.id);
       
       console.log('📊 [useUnifiedWallet] Raw data from service:', data);
       
-      // Process funding balances (from wallet_balances)
+      // Process funding balances (from wallet_balances) - instant state update
       const funding: Record<string, number> = {};
       const details: Record<string, WalletBalance> = {};
       
@@ -50,29 +50,21 @@ export function useUnifiedWallet() {
         }
       });
       
-      // Process trading balances (from trading_locks + special handling)
+      // Process trading balances - simplified logic
       const trading: Record<string, TradingBalance> = {};
       
-      // Get trading balances from the service
-      const tradingWalletData = await unifiedWalletService.getTradingBalances(user.id);
-      Object.entries(tradingWalletData).forEach(([asset, balance]) => {
-        trading[asset] = balance;
+      Object.entries(data.balances).forEach(([asset, balance]) => {
+        if (asset.includes('_TRADING')) {
+          const baseAsset = asset.replace('_TRADING', '');
+          trading[baseAsset] = {
+            available: balance.available,
+            locked: balance.locked,
+            total: balance.total
+          };
+        }
       });
       
-      // If no trading wallet data, create from funding with _TRADING suffix
-      if (Object.keys(trading).length === 0) {
-        Object.entries(data.balances).forEach(([asset, balance]) => {
-          if (asset.includes('_TRADING')) {
-            const baseAsset = asset.replace('_TRADING', '');
-            trading[baseAsset] = {
-              available: balance.available,
-              locked: balance.locked,
-              total: balance.total
-            };
-          }
-        });
-      }
-      
+      // Instant state updates
       setFundingBalances(funding);
       setFundingDetails(details);
       setTradingBalances(trading);
@@ -119,55 +111,42 @@ export function useUnifiedWallet() {
     return getFundingBalance(asset);
   }, [getFundingBalance]);
 
-  // Transfer from funding to trading
+  // Transfer from funding to trading - with instant optimistic update
   const transferToTrading = useCallback(async (asset: string, amount: number): Promise<{ success: boolean; error?: string }> => {
     if (!user?.id) return { success: false, error: 'Not authenticated' };
     
-    try {
-      // Check if enough funding balance
-      const fundingBalance = getFundingBalance(asset);
-      if (fundingBalance < amount) {
-        return { success: false, error: `Insufficient funding balance. Have ${fundingBalance}, need ${amount}` };
-      }
-      
-      // Update funding wallet (decrease)
-      setFundingBalances(prev => ({
-        ...prev,
-        [asset]: (prev[asset] || 0) - amount
-      }));
-      
-      // Update trading wallet (increase)
-      setTradingBalances(prev => ({
-        ...prev,
-        [asset]: {
-          available: (prev[asset]?.available || 0) + amount,
-          locked: prev[asset]?.locked || 0,
-          total: (prev[asset]?.total || 0) + amount
-        }
-      }));
-      
-      // Update database via API
-      await unifiedWalletService.transferToTradingWallet(user.id, asset, amount);
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Transfer failed:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Transfer failed' };
+    // Check if enough funding balance
+    const fundingBalance = getFundingBalance(asset);
+    if (fundingBalance < amount) {
+      return { success: false, error: `Insufficient funding balance. Have ${fundingBalance}, need ${amount}` };
     }
-  }, [user?.id, getFundingBalance]);
-
-  // Transfer from trading to funding
-  const transferToFunding = useCallback(async (asset: string, amount: number): Promise<{ success: boolean; error?: string }> => {
-    if (!user?.id) return { success: false, error: 'Not authenticated' };
+    
+    // Instant optimistic update - update UI immediately
+    setFundingBalances(prev => ({
+      ...prev,
+      [asset]: (prev[asset] || 0) - amount
+    }));
+    
+    setTradingBalances(prev => ({
+      ...prev,
+      [asset]: {
+        available: (prev[asset]?.available || 0) + amount,
+        locked: prev[asset]?.locked || 0,
+        total: (prev[asset]?.total || 0) + amount
+      }
+    }));
     
     try {
-      // Check if enough trading balance
-      const tradingBalance = getTradingBalance(asset);
-      if (tradingBalance < amount) {
-        return { success: false, error: `Insufficient trading balance. Have ${tradingBalance}, need ${amount}` };
-      }
+      // Update database in background
+      await unifiedWalletService.transferToTradingWallet(user.id, asset, amount);
+      return { success: true };
+    } catch (error) {
+      // Revert optimistic update on error
+      setFundingBalances(prev => ({
+        ...prev,
+        [asset]: (prev[asset] || 0) + amount
+      }));
       
-      // Update trading wallet (decrease)
       setTradingBalances(prev => ({
         ...prev,
         [asset]: {
@@ -177,17 +156,56 @@ export function useUnifiedWallet() {
         }
       }));
       
-      // Update funding wallet (increase)
-      setFundingBalances(prev => ({
-        ...prev,
-        [asset]: (prev[asset] || 0) + amount
-      }));
-      
-      // Update database via API
+      console.error('Transfer failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Transfer failed' };
+    }
+  }, [user?.id, getFundingBalance]);
+
+  // Transfer from trading to funding - with instant optimistic update
+  const transferToFunding = useCallback(async (asset: string, amount: number): Promise<{ success: boolean; error?: string }> => {
+    if (!user?.id) return { success: false, error: 'Not authenticated' };
+    
+    // Check if enough trading balance
+    const tradingBalance = getTradingBalance(asset);
+    if (tradingBalance < amount) {
+      return { success: false, error: `Insufficient trading balance. Have ${tradingBalance}, need ${amount}` };
+    }
+    
+    // Instant optimistic update - update UI immediately
+    setTradingBalances(prev => ({
+      ...prev,
+      [asset]: {
+        available: (prev[asset]?.available || 0) - amount,
+        locked: prev[asset]?.locked || 0,
+        total: (prev[asset]?.total || 0) - amount
+      }
+    }));
+    
+    setFundingBalances(prev => ({
+      ...prev,
+      [asset]: (prev[asset] || 0) + amount
+    }));
+    
+    try {
+      // Update database in background
       await unifiedWalletService.transferToFundingWallet(user.id, asset, amount);
-      
       return { success: true };
     } catch (error) {
+      // Revert optimistic update on error
+      setTradingBalances(prev => ({
+        ...prev,
+        [asset]: {
+          available: (prev[asset]?.available || 0) + amount,
+          locked: prev[asset]?.locked || 0,
+          total: (prev[asset]?.total || 0) + amount
+        }
+      }));
+      
+      setFundingBalances(prev => ({
+        ...prev,
+        [asset]: (prev[asset] || 0) - amount
+      }));
+      
       console.error('Transfer failed:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Transfer failed' };
     }
