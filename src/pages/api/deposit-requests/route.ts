@@ -67,6 +67,53 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const requestId = searchParams.get('requestId') || request.url.split('/').pop();
+    
+    if (!requestId) {
+      return NextResponse.json(
+        { error: 'Missing request ID' },
+        { status: 400 }
+      );
+    }
+
+    const body = await request.json();
+    const { status, adminId, adminNotes } = body;
+
+    if (!status) {
+      return NextResponse.json(
+        { error: 'Missing status' },
+        { status: 400 }
+      );
+    }
+
+    // Update deposit request status
+    const updatedRequest = await DepositApiService.updateDepositStatus(
+      requestId, 
+      status.toLowerCase(), 
+      adminNotes
+    );
+
+    return NextResponse.json({
+      success: true,
+      message: 'Deposit request updated successfully',
+      data: updatedRequest
+    });
+
+  } catch (error) {
+    console.error('💥 [API] Error updating deposit request:', error);
+    return NextResponse.json(
+      { 
+        error: 'Failed to update deposit request',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
 

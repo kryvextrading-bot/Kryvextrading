@@ -388,15 +388,15 @@ const HoldingsTable = ({ assets, hideBalances }: { assets: PortfolioAsset[]; hid
                   <div className="mt-3 pt-3 border-t border-[#2B3139] text-xs space-y-2">
                     <div className="flex justify-between">
                       <span className="text-[#848E9C]">24h High/Low</span>
-                      <span className="text-[#EAECEF]">$52,100 / $49,800</span>
+                      <span className="text-[#EAECEF]">--</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-[#848E9C]">Volume (24h)</span>
-                      <span className="text-[#EAECEF]">$1.2B</span>
+                      <span className="text-[#EAECEF]">--</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-[#848E9C]">Market Cap</span>
-                      <span className="text-[#EAECEF]">$980B</span>
+                      <span className="text-[#EAECEF]">--</span>
                     </div>
                   </div>
                 </motion.div>
@@ -1232,18 +1232,7 @@ export default function Portfolio() {
                   {performanceMetrics.daily.percentage > 0 ? ' Your portfolio is up' : ' Your portfolio is down'} {Math.abs(performanceMetrics.daily.percentage).toFixed(1)}% today.
                 </p>
                 <div className="flex gap-1 md:gap-2 flex-wrap">
-                  <Badge className="bg-[#F0B90B]/10 text-[#F0B90B] border-0 text-[10px] md:text-xs">
-                    Sharpe: 1.24
-                  </Badge>
-                  <Badge className="bg-[#F0B90B]/10 text-[#F0B90B] border-0 text-[10px] md:text-xs">
-                    Vol: 12.3%
-                  </Badge>
-                  <Badge className="bg-[#F0B90B]/10 text-[#F0B90B] border-0 text-[10px] md:text-xs">
-                    Beta: 0.89
-                  </Badge>
-                  <Badge className="bg-[#F0B90B]/10 text-[#F0B90B] border-0 text-[10px] md:text-xs">
-                    Win Rate: 64%
-                  </Badge>
+                  {/* Portfolio metrics will be calculated from real data */}
                 </div>
               </div>
             </div>

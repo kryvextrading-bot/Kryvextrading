@@ -443,46 +443,7 @@ export default function WalletTransferPage() {
           </Card>
         </motion.div>
 
-        {/* Recent Transfers (Optional) */}
-        <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="mt-6"
-        >
-          <Card className="bg-[#1E2329] border border-[#2B3139] p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-[#EAECEF]">Recent Transfers</h3>
-              <button className="text-xs text-[#F0B90B] hover:text-yellow-400 transition-colors flex items-center gap-1">
-                View All
-                <ChevronRight className="w-3 h-3" />
-              </button>
-            </div>
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-[#2B3139]/50 last:border-0">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#23262F] flex items-center justify-center">
-                      <ArrowUpDown className="w-4 h-4 text-[#F0B90B]" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-[#EAECEF]">Funding → Trading</div>
-                      <div className="text-xs text-[#848E9C]">Today, 10:30 AM</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-semibold text-[#EAECEF]">1,000 USDT</div>
-                    <Badge className="bg-green-500/15 text-green-400 border-green-500/20 text-[10px]">
-                      <CheckCircle className="w-2 h-2 mr-1" />
-                      Completed
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </motion.div>
-      </main>
+              </main>
     </div>
   );
 }

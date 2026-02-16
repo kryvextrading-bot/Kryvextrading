@@ -7,7 +7,7 @@ class PositionService {
     const { data, error } = await supabase
       .from('positions')
       .select('*')
-      .eq('userId', userId)
+      .eq('user_id', userId)
       .eq('status', 'open')
       .order('createdAt', { ascending: false });
 
@@ -210,7 +210,7 @@ class PositionService {
           event: '*',
           schema: 'public',
           table: 'positions',
-          filter: `userId=eq.${userId}`
+          filter: `user_id=eq.${userId}`
         },
         async () => {
           const positions = await this.getUserPositions(userId);

@@ -234,7 +234,7 @@ class TradingService {
     const { data, error } = await supabase
       .from('transactions')
       .select('*')
-      .eq('userId', userId)
+      .eq('user_id', userId)
       .order('createdAt', { ascending: false });
 
     if (error) throw error;
@@ -245,7 +245,7 @@ class TradingService {
     const { data, error } = await supabase
       .from('positions')
       .select('*')
-      .eq('userId', userId)
+      .eq('user_id', userId)
       .eq('status', 'open')
       .order('createdAt', { ascending: false });
 
