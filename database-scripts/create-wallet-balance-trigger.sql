@@ -31,7 +31,7 @@ CREATE TRIGGER on_user_created_create_wallet_balances
 CREATE OR REPLACE FUNCTION sync_all_users_to_wallet_balances()
 RETURNS TABLE(
     user_id UUID,
-    email TEXT,
+    user_email TEXT,
     assets_created INTEGER,
     sync_status TEXT
 ) AS $$
@@ -39,13 +39,14 @@ DECLARE
     user_record RECORD;
     assets_to_create TEXT[] := ARRAY['USDT', 'BTC', 'ETH', 'BNB', 'ADA', 'SOL', 'XRP', 'DOGE'];
     asset_record TEXT;
-    created_count INTEGER;
+    total_created INTEGER;
+    insert_count INTEGER;
 BEGIN
     -- Loop through all active users
     FOR user_record IN 
         SELECT id, email FROM users WHERE status = 'Active'
     LOOP
-        created_count := 0;
+        total_created := 0;
         
         -- Create wallet balances for each asset if they don't exist
         FOREACH asset_record IN ARRAY assets_to_create
@@ -55,18 +56,18 @@ BEGIN
             ON CONFLICT (user_id, asset) DO NOTHING;
             
             -- Check if we actually inserted a new record
-            GET DIAGNOSTICS created_count = ROW_COUNT;
-            IF created_count > 0 THEN
-                created_count := created_count + 1;
+            GET DIAGNOSTICS insert_count = ROW_COUNT;
+            IF insert_count > 0 THEN
+                total_created := total_created + 1;
             END IF;
         END LOOP;
         
         -- Return the sync status for this user
         user_id := user_record.id;
-        email := user_record.email;
-        assets_created := created_count;
+        user_email := user_record.email;
+        assets_created := total_created;
         sync_status := CASE 
-            WHEN created_count > 0 THEN 'Created new wallet balances'
+            WHEN total_created > 0 THEN 'Created new wallet balances'
             ELSE 'Already had wallet balances'
         END;
         
