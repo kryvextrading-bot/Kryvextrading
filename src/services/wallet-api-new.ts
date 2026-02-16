@@ -320,4 +320,5 @@ class WalletApiService {
   }
 }
 
+export const walletApiService = new WalletApiService();
 export default new WalletApiService();
