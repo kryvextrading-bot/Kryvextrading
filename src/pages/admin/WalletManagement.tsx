@@ -25,7 +25,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { adminApiService } from '@/services/admin-api';
-import walletApiService from '@/services/wallet-api';
+import { walletApiService } from '@/services/wallet-api-new';
+import { depositService } from '@/services/depositService';
 import BalanceSyncService from '@/services/balance-sync';
 import { cn } from '@/lib/utils';
 import {
@@ -42,10 +43,6 @@ import {
   Eye,
   EyeOff,
   DollarSign,
-  CreditCard,
-  BanknoteIcon,
-  TrendingUp,
-  TrendingDown,
   Users,
   Calendar,
   MoreHorizontal,
@@ -1225,39 +1222,44 @@ export default function WalletManagement() {
       // Get wallet requests from our new wallet API service (includes admin actions)
       const walletRequests = await walletApiService.getWalletRequests();
       
-      // Get deposit requests from main server
+      // Get deposit requests from Supabase
       let depositRequests = [];
       try {
-        const response = await fetch('/api/deposit-requests');
-        if (response.ok) {
-          const data = await response.json();
-          depositRequests = data.requests || [];
+        const { data, error } = await supabase
+          .from('deposit_requests')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('Error fetching deposit requests:', error);
+        } else {
+          depositRequests = data || [];
         }
       } catch (error) {
         console.error('Error fetching deposit requests:', error);
       }
       
-      // Transform proxy deposit requests to wallet request format
+      // Transform Supabase deposit requests to wallet request format
       const transformedDepositRequests: WalletRequest[] = depositRequests.map((req: any) => ({
         id: req.id,
-        userId: req.userId,
-        userEmail: req.userEmail,
-        userName: req.userName || req.userEmail?.split('@')[0] || 'Unknown',
+        userId: req.user_id,
+        userEmail: req.user_email,
+        userName: req.user_name || req.user_email?.split('@')[0] || 'Unknown',
         type: 'deposit',
         amount: req.amount,
         currency: req.currency || 'USD',
         status: req.status,
         method: req.method || 'bank_transfer',
-        address: req.address || `0x${req.userId?.slice(0, 8)}...`,
-        transactionHash: req.transactionHash || req.id,
-        description: req.description || req.reason || 'Deposit request',
-        fee: req.fee || 0,
-        riskScore: req.riskScore || 0,
-        kycVerified: req.kycVerified || false,
-        processedBy: req.processedBy,
-        processedAt: req.processedAt,
-        createdAt: req.createdAt,
-        updatedAt: req.updatedAt,
+        address: req.address || `0x${req.user_id?.slice(0, 8)}...`,
+        transactionHash: req.id,
+        description: `Deposit request - ${req.currency} ${req.amount}`,
+        fee: 0,
+        riskScore: 0,
+        kycVerified: false,
+        processedBy: req.processed_by,
+        processedAt: req.processed_at,
+        createdAt: req.created_at,
+        updatedAt: req.updated_at,
         metadata: req.metadata || {}
       }));
       
