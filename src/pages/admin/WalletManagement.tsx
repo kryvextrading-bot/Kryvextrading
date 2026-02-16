@@ -1417,58 +1417,75 @@ export default function WalletManagement() {
             description: error instanceof Error ? error.message : 'Failed to approve deposit',
             variant: "destructive",
           });
-          return;
         }
-      }
-
-      // Update request status to approved (only for non-deposit requests)
-      if (!isDepositRequest) {
-        setRequests(prev => prev.map(req => 
-          req.id === requestId 
-            ? { ...req, status: 'approved', processedAt: new Date().toISOString() }
-            : req
-        ));
-      }
-
-      // Process the wallet balance change for non-deposit requests
-      if (!isDepositRequest && request.type === 'deposit') {
-        await walletApiService.adminAddFunds(
-          request.userId, 
-          request.amount, 
-          request.currency, 
-          `Approved deposit: ${request.description}`
-        );
-        
-        // Update to completed after successful processing
-        setRequests(prev => prev.map(req => 
-          req.id === requestId 
-            ? { ...req, status: 'completed' }
-            : req
-        ));
-
-        toast({
-          title: "Deposit Approved & Processed",
-          description: `${request.currency} ${request.amount.toLocaleString()} has been added to user wallet`,
-        });
-      } else if (request.type === 'withdrawal') {
-        await walletApiService.adminRemoveFunds(
-          request.userId, 
-          request.amount, 
-          request.currency, 
-          `Approved withdrawal: ${request.description}`
-        );
-        
-        // Update to completed after successful processing
-        setRequests(prev => prev.map(req => 
-          req.id === requestId 
-            ? { ...req, status: 'completed' }
-            : req
-        ));
-
-        toast({
-          title: "Withdrawal Approved & Processed",
-          description: `${request.currency} ${request.amount.toLocaleString()} has been deducted from user wallet`,
-        });
+      } else {
+        try {
+          // Process wallet balance change for all approved requests
+          if (request.type === 'deposit') {
+            try {
+              await walletApiService.adminAddFunds(
+                request.userId, 
+                request.amount, 
+                request.currency, 
+                `Approved deposit: ${request.description}`
+              );
+              
+              // Update to completed after successful processing
+              setRequests(prev => prev.map(req => 
+                req.id === requestId 
+                  ? { ...req, status: 'completed' }
+                  : req
+              ));
+              
+              toast({
+                title: "Success",
+                description: `${request.currency} ${request.amount.toLocaleString()} has been added to user wallet`,
+              });
+            } catch (error) {
+              console.error('Error adding funds to wallet:', error);
+              toast({
+                title: "Error",
+                description: error instanceof Error ? error.message : 'Failed to add funds to wallet',
+                variant: "destructive",
+              });
+            }
+          } else {
+            try {
+              await walletApiService.adminRemoveFunds(
+                request.userId, 
+                request.amount, 
+                request.currency, 
+                `Approved withdrawal: ${request.description}`
+              );
+              
+              // Update to completed after successful processing
+              setRequests(prev => prev.map(req => 
+                req.id === requestId 
+                  ? { ...req, status: 'completed' }
+                  : req
+              ));
+              
+              toast({
+                title: "Withdrawal Approved & Processed",
+                description: `${request.currency} ${request.amount.toLocaleString()} has been deducted from user wallet`,
+              });
+            } catch (error) {
+              console.error('Error removing funds from wallet:', error);
+              toast({
+                title: "Error",
+                description: error instanceof Error ? error.message : 'Failed to remove funds from wallet',
+                variant: "destructive",
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error processing request:', error);
+          toast({
+            title: "Error",
+            description: "Failed to process request",
+            variant: "destructive",
+          });
+        }
       }
       
     } catch (error) {
