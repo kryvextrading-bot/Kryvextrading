@@ -20,7 +20,7 @@ import {
   Edit, 
   Trash2, 
   TrendingUp, 
-  TrendingDown, 
+  TrendingDown as TrendDownIcon, 
   DollarSign, 
   BarChart3, 
   PieChart, 
@@ -48,10 +48,9 @@ import {
   Lock,
   Unlock,
   Zap,
-  Target,
   Award,
   Star,
-  TrendingDown as TrendDownIcon
+  Target
 } from 'lucide-react';
 
 // ==================== TYPES ====================
@@ -204,7 +203,7 @@ export default function InvestmentAdmin() {
         actualReturn: product.actual_return || 0,
         duration: product.duration,
         durationDays: product.duration_days || 365,
-        riskLevel: (product.risk_level === 'very-high' ? 'high' : product.risk_level) as 'low' | 'medium' | 'high',
+        riskLevel: product.risk_level as 'low' | 'medium' | 'high',
         status: (product.status === 'coming-soon' ? 'pending' : product.status === 'ended' ? 'suspended' : product.status) as 'active' | 'inactive' | 'suspended' | 'pending',
         icon: product.icon || '📊',
         imageUrl: product.image_url || '',
@@ -580,7 +579,7 @@ export default function InvestmentAdmin() {
                         {investment.performance >= 0 ? (
                           <TrendingUp className="w-4 h-4 text-green-400" />
                         ) : (
-                          <TrendingDownIcon className="w-4 h-4 text-red-400" />
+                          <TrendDownIcon className="w-4 h-4 text-red-400" />
                         )}
                       </div>
                     </TableCell>
@@ -614,7 +613,7 @@ export default function InvestmentAdmin() {
 
       {/* Create/Edit Investment Dialog */}
       {(showCreateDialog || editingInvestment) && (
-        <Dialog open={true} onOpenChange={(open) => !open && (setShowCreateDialog(false) || setEditingInvestment(null))}>
+        <Dialog open={true} onOpenChange={(open) => { if (!open) { setShowCreateDialog(false); setEditingInvestment(null); } }}>
           <DialogContent className="bg-[#1E2329] text-[#EAECEF] max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
@@ -798,7 +797,7 @@ export default function InvestmentAdmin() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowCreateDialog(false) || setEditingInvestment(null)}>
+              <Button variant="outline" onClick={() => { setShowCreateDialog(false); setEditingInvestment(null); }}>
                 Cancel
               </Button>
               <Button onClick={editingInvestment ? handleSaveInvestment : handleCreateInvestment} className="bg-[#F0B90B] text-black hover:bg-yellow-400">

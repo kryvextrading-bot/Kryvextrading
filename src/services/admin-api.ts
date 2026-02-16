@@ -330,6 +330,24 @@ export class AdminApiService {
     });
   }
 
+  // ==================== INVESTMENT PRODUCTS ====================
+
+  async getInvestmentProducts(): Promise<any[]> {
+    return this.withAuth(async () => {
+      const { data, error } = await supabase
+        .from('investment_products')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching investment products:', error);
+        throw error;
+      }
+
+      return data || [];
+    });
+  }
+
   // ==================== AUDIT LOGS ====================
 
   async getAuditLogs(filters?: AdminFilters): Promise<PaginatedResponse<any>> {
