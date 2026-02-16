@@ -54,21 +54,21 @@ export interface Database {
           first_name: string | null
           last_name: string | null
           phone: string | null
-          status: 'Active' | 'Pending' | 'Suspended'
-          kyc_status: 'Verified' | 'Pending' | 'Rejected'
-          account_type: 'Traditional IRA' | 'Roth IRA'
+          status: 'Active' | 'Pending' | 'Suspended' | null
+          kyc_status: 'Verified' | 'Pending' | 'Rejected' | null
+          account_type: 'Traditional IRA' | 'Roth IRA' | 'Admin' | null
           account_number: string | null
-          balance: number
+          balance: number | null
           last_login: string | null
-          registration_date: string
-          two_factor_enabled: boolean
-          risk_tolerance: 'Conservative' | 'Moderate' | 'Aggressive'
-          investment_goal: 'Retirement' | 'Wealth Building' | 'Tax Savings'
-          is_admin: boolean
+          registration_date: string | null
+          two_factor_enabled: boolean | null
+          risk_tolerance: 'Conservative' | 'Moderate' | 'Aggressive' | 'Admin' | null
+          investment_goal: 'Retirement' | 'Wealth Building' | 'Tax Savings' | 'Admin' | null
+          is_admin: boolean | null
           admin_role: 'admin' | 'superadmin' | 'finance' | 'support' | null
           credit_score: number | null
-          created_at: string
-          updated_at: string
+          created_at: string | null
+          updated_at: string | null
         }
         Insert: Omit<Database['public']['Tables']['users']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['users']['Row']>

@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User as SupabaseUser } from '@supabase/supabase-js';
-import supabaseApi from '@/services/supabase-api';
+import { supabaseApi } from '@/services/supabase-api';
+import { UserInsert } from '@/types/user-validation';
 import { Database } from '@/lib/supabase';
 
 type User = Database['public']['Tables']['users']['Row'];
@@ -79,10 +80,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('Email and password are required');
       }
       
+      // Convert Partial<User> to UserInsert for the API
+      const userInsertData: UserInsert = {
+        email: userData.email,
+        first_name: userData.first_name || null,
+        last_name: userData.last_name || null,
+        phone: userData.phone || null,
+        status: userData.status || 'Pending',
+        kyc_status: userData.kyc_status || 'Pending',
+        account_type: userData.account_type || 'Traditional IRA',
+        account_number: userData.account_number || null,
+        balance: userData.balance || 0,
+        two_factor_enabled: userData.two_factor_enabled || false,
+        risk_tolerance: userData.risk_tolerance || 'Moderate',
+        investment_goal: userData.investment_goal || 'Retirement',
+        is_admin: userData.is_admin || false,
+        admin_role: userData.admin_role || null,
+        credit_score: userData.credit_score || null
+      };
+      
       const result = await supabaseApi.signUp(
         userData.email,
         userData.password,
-        userData
+        userInsertData
       );
       
       // Handle email confirmation requirement

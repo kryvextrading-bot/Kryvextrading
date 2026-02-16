@@ -1,7 +1,7 @@
 import { supabase, Database } from '@/lib/supabase'
 import { PostgrestError } from '@supabase/supabase-js'
+import { User, UserInsert, UserUpdate, validateUserInsert, validateUserUpdate } from '@/types/user-validation'
 
-type User = Database['public']['Tables']['users']['Row']
 type Transaction = Database['public']['Tables']['transactions']['Row']
 type KYCDocument = Database['public']['Tables']['kyc_documents']['Row']
 type SystemSetting = Database['public']['Tables']['system_settings']['Row']
@@ -91,9 +91,15 @@ class SupabaseApiService {
     }
   }
 
-  async signUp(email: string, password: string, userData: Partial<User>) {
+  async signUp(email: string, password: string, userData: UserInsert) {
     const maxRetries = 3;
     const baseDelay = 1000; // 1 second
+    
+    // Validate user data before proceeding
+    const validationErrors = validateUserInsert({ ...userData, email });
+    if (validationErrors.length > 0) {
+      throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
+    }
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -368,8 +374,14 @@ class SupabaseApiService {
     }
   }
 
-  async updateUser(id: string, data: Partial<User>): Promise<User | null> {
+  async updateUser(id: string, data: UserUpdate): Promise<User | null> {
     try {
+      // Validate update data
+      const validationErrors = validateUserUpdate(data);
+      if (validationErrors.length > 0) {
+        throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
+      }
+      
       const { data: updatedUser, error } = await supabase
         .from('users')
         .update({ ...data, updated_at: new Date().toISOString() })
