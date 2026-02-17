@@ -288,6 +288,7 @@ export default function Settings() {
             </div>
           </motion.div>
         </div>
+        </div>
       </div>
     </div>
   );
