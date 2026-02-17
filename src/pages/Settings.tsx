@@ -441,61 +441,220 @@ export default function SettingsPage() {
 
                 <Button
                   variant="ghost"
-                  className="w-full justify-start text-[#848E9C] hover:text-red-400 hover:bg-red-500/10"
+                  className="w-full justify-start text-[#848E9C] hover:text-red-400 hover:bg-red-500/10 py-3 px-4 sm:py-4 sm:px-6 text-sm sm:text-base"
                   onClick={handleLogout}
                 >
-                  <LogOutIcon className="w-4 h-4 mr-3" />
-                  Sign Out
+                  <LogOutIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" />
+                  <span className="hidden sm:inline">Sign Out</span>
+                  <span className="sm:hidden">Logout</span>
                 </Button>
               </CardContent>
             </Card>
           </motion.div>
 
-            {activeTab === 'trading' && (
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <Label htmlFor="default-amount">{t('Default Trade Amount')}</Label>
-                  <Input
-                    id="default-amount"
-                    type="number"
-                    placeholder="100"
-                    className="bg-muted"
-                  />
-                </div>
+          {/* Settings Content */}
+          <motion.div variants={itemVariants} className="lg:col-span-9">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Card className="bg-[#1E2329] border-[#2B3139] overflow-hidden">
+                  <CardHeader className="border-b border-[#2B3139] bg-gradient-to-r from-[#F0B90B]/5 to-transparent">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${
+                          settingsSections.find(s => s.id === activeTab)?.color
+                        } flex items-center justify-center`}>
+                          {React.createElement(
+                            settingsSections.find(s => s.id === activeTab)?.icon || SettingsIcon,
+                            { className: "w-5 h-5 text-[#0B0E11]" }
+                          )}
+                        </div>
+                        <div>
+                          <CardTitle className="text-[#EAECEF]">
+                            {settingsSections.find(s => s.id === activeTab)?.label}
+                          </CardTitle>
+                          <CardDescription className="text-[#848E9C]">
+                            {settingsSections.find(s => s.id === activeTab)?.description}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      {activeTab !== 'about' && (
+                        <div className="flex gap-2">
+                          {isEditing ? (
+                            <>
+                              <Button
+                                variant="outline"
+                                onClick={() => setIsEditing(false)}
+                                className="border-[#2B3139] text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139]"
+                              >
+                                <XIcon className="w-4 h-4 mr-2" />
+                                Cancel
+                              </Button>
+                              <Button
+                                onClick={handleSave}
+                                disabled={isLoading}
+                                className="bg-[#F0B90B] text-[#0B0E11] hover:bg-[#F0B90B]/90"
+                              >
+                                {isLoading ? (
+                                  <>
+                                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                    Saving...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Check className="w-4 h-4 mr-2" />
+                                    Save Changes
+                                  </>
+                                )}
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              onClick={() => setIsEditing(true)}
+                              className="border-[#2B3139] text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139]"
+                            >
+                              <Edit className="w-4 h-4 mr-2" />
+                              Edit Settings
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </CardHeader>
 
-                <div className="space-y-4">
-                  <Label htmlFor="leverage">{t('Default Leverage')}</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="1x, 5x, 10x, 20x" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1x</SelectItem>
-                      <SelectItem value="5">5x</SelectItem>
-                      <SelectItem value="10">10x</SelectItem>
-                      <SelectItem value="20">20x</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <CardContent className="p-6">
+                    {/* General Settings */}
+                    {activeTab === 'general' && (
+                      <motion.div variants={itemVariants} className="space-y-8">
+                        <div>
+                          <h3 className="text-lg font-semibold text-[#EAECEF] mb-4 flex items-center gap-2">
+                            <Palette className="w-5 h-5 text-[#F0B90B]" />
+                            Appearance
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {[
+                              { id: 'light', icon: Sun, label: 'Light' },
+                              { id: 'dark', icon: Moon, label: 'Dark' },
+                              { id: 'system', icon: Monitor, label: 'System' }
+                            ].map((option) => (
+                              <motion.button
+                                key={option.id}
+                                whileHover={{ scale: 1.02, y: -2 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => setTheme(option.id)}
+                                className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                                  theme === option.id
+                                    ? 'border-[#F0B90B] bg-[#F0B90B]/10'
+                                    : 'border-[#2B3139] hover:border-[#F0B90B]/50'
+                                }`}
+                              >
+                                <option.icon className={`w-6 h-6 mx-auto mb-2 ${
+                                  theme === option.id ? 'text-[#F0B90B]' : 'text-[#848E9C]'
+                                }`} />
+                                <p className={`text-sm font-medium ${
+                                  theme === option.id ? 'text-[#F0B90B]' : 'text-[#848E9C]'
+                                }`}>
+                                  {option.label}
+                                </p>
+                              </motion.button>
+                            ))}
+                          </div>
+                        </div>
 
-                <div className="space-y-4">
-                  <Label htmlFor="slippage">{t('Slippage Tolerance')}</Label>
-                  <Input
-                    id="slippage"
-                    type="number"
-                    placeholder="0.1"
-                    step="0.01"
-                    className="bg-muted"
-                  />
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  </motion.div>
-</div>
+                        <Separator className="bg-[#2B3139]" />
+
+                        <div>
+                          <h3 className="text-lg font-semibold text-[#EAECEF] mb-4 flex items-center gap-2">
+                            <Volume2 className="w-5 h-5 text-[#F0B90B]" />
+                            Sound & Notifications
+                          </h3>
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label className="text-[#EAECEF]">Sound Effects</Label>
+                                <p className="text-xs text-[#848E9C]">Play sounds for actions</p>
+                              </div>
+                              <Switch defaultChecked className="data-[state=checked]:bg-[#F0B90B]" />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label className="text-[#EAECEF]">Trading Sounds</Label>
+                                <p className="text-xs text-[#848E9C]">Audio alerts for trades</p>
+                              </div>
+                              <Switch className="data-[state=checked]:bg-[#F0B90B]" />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-[#EAECEF]">Volume</Label>
+                              <Slider defaultValue={[70]} max={100} step={1} className="w-full" />
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* Account Settings */}
+                    {activeTab === 'account' && (
+                      <motion.div variants={itemVariants} className="space-y-6">
+                        <div className="flex items-center gap-6 pb-6 border-b border-[#2B3139]">
+                          <Avatar className="w-20 h-20 border-2 border-[#F0B90B]">
+                            <AvatarImage src={user?.avatar} />
+                            <AvatarFallback className="bg-gradient-to-br from-[#F0B90B] to-yellow-500 text-[#0B0E11] text-2xl">
+                              {user?.email?.[0]?.toUpperCase() || 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <h3 className="text-xl font-bold text-[#EAECEF] mb-1">
+                              {user?.name || 'User Name'}
+                            </h3>
+                            <p className="text-[#848E9C] text-sm mb-3">Member since {new Date().getFullYear()}</p>
+                            <Button variant="outline" size="sm" className="border-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]">
+                              <Upload className="w-4 h-4 mr-2" />
+                              Change Avatar
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="firstName" className="text-[#848E9C]">First Name</Label>
+                            <Input
+                              id="firstName"
+                              defaultValue={user?.firstName || ''}
+                              disabled={!isEditing}
+                              className="bg-[#0B0E11] border-[#2B3139] text-[#EAECEF] disabled:opacity-70"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="lastName" className="text-[#848E9C]">Last Name</Label>
+                            <Input
+                              id="lastName"
+                              defaultValue={user?.lastName || ''}
+                              disabled={!isEditing}
+                              className="bg-[#0B0E11] border-[#2B3139] text-[#EAECEF] disabled:opacity-70"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="email" className="text-[#848E9C]">Email Address</Label>
+                            <Input
+                              id="email"
+                              type="email"
+                              defaultValue={user?.email || 'user@example.com'}
+                              disabled={!isEditing}
+                              className="bg-[#0B0E11] border-[#2B3139] text-[#EAECEF] disabled:opacity-70"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="phone" className="text-[#848E9C]">Phone Number</Label>
+                            <Input
+                              id="phone"
+                              type="tel"
+                              defaultValue={user?.phone || '+1 (555) 000-0000'}
                               disabled={!isEditing}
                               className="bg-[#0B0E11] border-[#2B3139] text-[#EAECEF] disabled:opacity-70"
                             />
