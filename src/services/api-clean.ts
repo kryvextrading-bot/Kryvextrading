@@ -1,4 +1,4 @@
-// API Service Layer for Swan IRA Platform - Clean Version
+// API Service Layer for Kryvex Trading Platform - Clean Version
 // This handles all backend communication and data management
 
 import { supabase } from '@/lib/supabase';

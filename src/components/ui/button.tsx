@@ -5,27 +5,31 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F0B90B] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-gradient-primary text-primary-foreground hover:shadow-glow hover:scale-105",
+        default: "bg-[#F0B90B] text-[#0B0E11] hover:bg-[#F0B90B]/90 shadow-lg hover:shadow-xl hover:scale-[1.02]",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+          "bg-[#F6465D] text-white hover:bg-[#D63F53] shadow-lg hover:shadow-xl",
         outline:
-          "border border-input bg-transparent hover:bg-accent hover:text-accent-foreground",
+          "border border-[#2B3139] bg-[#1E2329] text-[#EAECEF] hover:bg-[#2B3139] hover:border-[#F0B90B]/50",
         secondary:
-          "bg-gradient-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-        success: "bg-success text-success-foreground hover:bg-success/90",
-        gradient: "bg-gradient-primary text-primary-foreground hover:shadow-elegant hover:scale-105 transition-all duration-300",
+          "bg-[#2B3139] text-[#EAECEF] hover:bg-[#373B42] border border-[#2B3139]",
+        ghost: "hover:bg-[#2B3139] hover:text-[#EAECEF] text-[#848E9C]",
+        link: "text-[#F0B90B] underline-offset-4 hover:underline",
+        success: "bg-[#0ECB81] text-[#0B0E11] hover:bg-[#0FB37E] shadow-lg hover:shadow-xl",
+        warning: "bg-[#F78D4B] text-white hover:bg-[#E67F44] shadow-lg hover:shadow-xl",
+        info: "bg-[#5096FF] text-white hover:bg-[#4785E6] shadow-lg hover:shadow-xl",
+        binance: "bg-gradient-to-r from-[#F0B90B] to-[#FCD535] text-[#0B0E11] hover:from-[#F0B90B]/90 hover:to-[#FCD535]/90 shadow-lg hover:shadow-xl hover:scale-[1.02]",
+        dark: "bg-[#1E2329] text-[#EAECEF] hover:bg-[#23262F] border border-[#2B3139]",
       },
       size: {
         default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
+        sm: "h-9 rounded-md px-3 text-xs",
+        lg: "h-12 rounded-lg px-6 text-base",
         icon: "h-10 w-10",
+        xl: "h-14 rounded-lg px-8 text-lg",
       },
     },
     defaultVariants: {
@@ -42,29 +46,15 @@ export interface ButtonProps
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'default', asChild = false, ...props }, ref) => {
-    const base = 'font-bold rounded-lg transition-all shadow focus:outline-none focus:ring-2 focus:ring-[#F0B90B]';
-    let color = '';
-    if (variant === 'default') {
-      color = 'bg-[#F0B90B] text-black hover:bg-[#FFD666]';
-    } else if (variant === 'outline') {
-      color = 'bg-transparent border border-[#F0B90B] text-[#F0B90B] hover:bg-[#23262F]';
-    } else if (variant === 'secondary') {
-      color = 'bg-[#23262F] text-white hover:bg-[#181A20]';
-    } else if (variant === 'destructive') {
-      color = 'bg-[#F6465D] text-white hover:bg-[#ff7b8a]';
-    }
-    
-    const Comp = asChild ? Slot : "button";
-    
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button"
     return (
-      <Comp 
-        className={`${base} ${color} px-5 py-2 ${className || ''}`} 
-        {...(asChild ? {} : { type: "button" })} 
-        {...props} 
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        {...props}
       />
-    );
+    )
   }
 );
 

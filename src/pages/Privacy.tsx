@@ -155,8 +155,8 @@ export default function Privacy() {
                   </p>
                   <div className="bg-secondary p-4 rounded-lg">
                     <p className="text-muted-foreground">
-                      <strong>Swan IRA Privacy Team</strong><br />
-                      Email: privacy@swan-ira.com<br />
+                      <strong>Kryvex Trading Privacy Team</strong><br />
+                      Email: privacy@kryvex.com<br />
                       Phone: +1 (800) 555-0123<br />
                       Address: 123 Financial District, New York, NY 10001
                     </p>
@@ -176,7 +176,7 @@ export default function Privacy() {
               <Eye className="h-12 w-12 text-primary mx-auto" />
               <h3 className="text-xl font-semibold">Our Privacy Commitment</h3>
               <p className="text-muted-foreground">
-                At Swan IRA, we are committed to protecting your privacy and maintaining the confidentiality of your personal information. 
+                At Kryvex Trading, we are committed to protecting your privacy and maintaining the confidentiality of your personal information. 
                 We follow industry best practices and comply with all applicable privacy laws and regulations.
               </p>
               <div className="flex items-center justify-center space-x-2 text-sm text-muted-foreground">

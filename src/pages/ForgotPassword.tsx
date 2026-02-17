@@ -335,9 +335,9 @@ export default function ForgotPassword() {
                   Need help? Contact our support team
                 </p>
                 <div className="flex items-center justify-center gap-4 text-[10px] text-[#5E6673]">
-                  <span>📧 support@swan-ira.com</span>
+                  <span>📧 support@kryvex.com</span>
                   <span>•</span>
-                  <span>📞 1-800-SWAN-IRA</span>
+                  <span>📞 1-800-KRYVEX</span>
                 </div>
               </div>
             </div>

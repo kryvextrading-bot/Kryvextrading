@@ -153,10 +153,10 @@ const NETWORKS: Record<string, Network[]> = {
     { name: 'Ripple', symbol: 'XRP', address: 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh', fee: 0.25, minDeposit: 1, minWithdrawal: 5, confirmationTime: '~10 sec', requiresMemo: true, memo: '123456789' }
   ],
   ADA: [
-    { name: 'Cardano', symbol: 'ADA', address: 'addr1q9d5u0w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2', fee: 1, minDeposit: 5, minWithdrawal: 10, confirmationTime: '~2 min' }
+    { name: 'Cardano', symbol: 'ADA', address: 'addr1q9d5u0w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2', fee: 1, minDeposit: 5, minWithdrawal: 10, confirmationTime: '~2 min' }
   ],
   DOGE: [
-    { name: 'Dogecoin', symbol: 'DOGE', address: 'D5d8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8', fee: 5, minDeposit: 10, minWithdrawal: 20, confirmationTime: '~10 min' }
+    { name: 'Dogecoin', symbol: 'DOGE', address: 'D5d8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b', fee: 5, minDeposit: 10, minWithdrawal: 20, confirmationTime: '~10 min' }
   ]
 };
 
@@ -750,13 +750,24 @@ export default function WalletPage() {
     try {
       const result = await transferToTrading(asset, amount);
       if (result.success) {
-        toast.success(`Successfully transferred ${formatCurrency(amount)} ${asset} to trading wallet`);
+        toast({
+          title: "Success",
+          description: `Successfully transferred ${formatCurrency(amount)} ${asset} to trading wallet`,
+        });
         await handleRefresh();
       } else {
-        toast.error(result.error || 'Transfer failed');
+        toast({
+          title: "Error",
+          description: result.error || 'Transfer failed',
+          variant: "destructive"
+        });
       }
     } catch (error) {
-      toast.error('Transfer failed');
+      toast({
+        title: "Error",
+        description: 'Transfer failed',
+        variant: "destructive"
+      });
     }
   };
 
@@ -764,13 +775,24 @@ export default function WalletPage() {
     try {
       const result = await transferToFunding(asset, amount);
       if (result.success) {
-        toast.success(`Successfully transferred ${formatCurrency(amount)} ${asset} to funding wallet`);
+        toast({
+          title: "Success",
+          description: `Successfully transferred ${formatCurrency(amount)} ${asset} to funding wallet`,
+        });
         await handleRefresh();
       } else {
-        toast.error(result.error || 'Transfer failed');
+        toast({
+          title: "Error",
+          description: result.error || 'Transfer failed',
+          variant: "destructive"
+        });
       }
     } catch (error) {
-      toast.error('Transfer failed');
+      toast({
+        title: "Error",
+        description: 'Transfer failed',
+        variant: "destructive"
+      });
     }
   };
 
@@ -810,7 +832,6 @@ export default function WalletPage() {
 
     const amount = parseFloat(modalState.depositAmount);
     const network = modalState.depositNetwork;
-    const address = modalState.depositAddress;
     const proofFile = modalState.depositProof;
 
     // Validation
@@ -839,18 +860,8 @@ export default function WalletPage() {
         hasProof: !!proofFile
       });
 
-      console.log('🔍 [Wallet] Debug - proofFile details:', {
-        file: proofFile,
-        name: proofFile?.name,
-        type: proofFile?.type,
-        size: proofFile?.size,
-        isFile: proofFile instanceof File
-      });
-
       // Get the platform's deposit address for the selected network
       const platformAddress = NETWORKS[selectedAsset.symbol]?.find(n => n.name === network)?.address || '';
-
-      console.log('🔍 [Wallet] Debug - platformAddress:', platformAddress);
 
       const result = await depositService.createDepositRequest({
         user_id: user?.id || '',
@@ -859,7 +870,7 @@ export default function WalletPage() {
         amount: amount,
         currency: selectedAsset.symbol,
         network: network,
-        address: platformAddress, // Use platform address, not user input
+        address: platformAddress,
         status: 'Pending'
       }, proofFile);
 
@@ -879,13 +890,8 @@ export default function WalletPage() {
       });
 
       // Reset and close modal
-      setShowDepositModal(false);
+      setModal(null);
       resetModalState();
-
-      // Redirect back to wallet page using React Router
-      setTimeout(() => {
-        navigate('/wallet');
-      }, 2000);
 
     } catch (error) {
       console.error('❌ [Wallet] Deposit request error:', error);
@@ -1766,7 +1772,14 @@ export default function WalletPage() {
         {/* Wallet Transfer Modal */}
         <AnimatePresence>
           {showTransferModal && (
-            <WalletTransfer onClose={() => setShowTransferModal(false)} />
+            <WalletTransferModal 
+              isOpen={showTransferModal}
+              onClose={() => setShowTransferModal(false)}
+              onTransfer={handleTransferToTrading}
+              onTransferBack={handleTransferToFunding}
+              fundingBalance={getFundingBalance('USDT')}
+              tradingBalance={getTradingBalance('USDT')}
+            />
           )}
         </AnimatePresence>
 

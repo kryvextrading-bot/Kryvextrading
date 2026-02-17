@@ -35,14 +35,18 @@ import PaymentMethods from './pages/PaymentMethods';
 import TransactionHistory from './pages/TransactionHistory';
 import OrderHistoryPage from './pages/OrderHistoryPage';
 import WalletTransfer from './pages/WalletTransfer';
+import PresalePage from './pages/PresalePage';
 import AdminDashboard from './pages/admin/Dashboard';
 import UserDetailsPage from './pages/admin/UserDetailsPage';
 import TradingAdminPanel from './pages/admin/TradingAdmin';
+import AssetSelectorPage from './pages/AssetSelectorPage';
+import TradingPage from './pages/TradingPage';
+import ChartView from './pages/ChartView';
 
 // Admin Dashboard Redirect Component
 const AdminDashboardRedirect = () => {
   const { isAdmin, isSuperAdmin } = useAuth();
-  const redirectPath = (isAdmin || isSuperAdmin) ? '/admin/dashboard' : '/portfolio';
+  const redirectPath = (isAdmin || isSuperAdmin) ? '/admin/dashboard' : '/';
   return <Navigate to={redirectPath} replace />;
 };
 
@@ -59,7 +63,10 @@ export default function AppRoutes() {
       <Route path="/legal" element={<Legal />} />
       <Route path="/white-paper" element={<WhitePaper />} />
       <Route path="/share" element={<Share />} />
-      <Route path="/trading" element={<Trading />} />
+      <Route path="/trading" element={<AssetSelectorPage />} />
+      <Route path="/trading/:symbol" element={<TradingPage />} />
+      <Route path="/trading/:symbol/:tab" element={<TradingPage />} />
+      <Route path="/trading/:symbol/chart" element={<ChartView />} />
       <Route path="/trading/interface" element={<TradingInterface />} />
       <Route path="/trading/options" element={<OptionsTradingPage />} />
       <Route path="/arbitrage" element={<ArbitragePage />} />
@@ -158,6 +165,11 @@ export default function AppRoutes() {
       <Route path="/loan" element={
         <ProtectedRoute>
           <LoanPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/presale" element={
+        <ProtectedRoute>
+          <PresalePage />
         </ProtectedRoute>
       } />
       

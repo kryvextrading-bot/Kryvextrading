@@ -36,8 +36,8 @@ export default function WhitePaper() {
           <li>Q4 2024: Global expansion, new asset listings, and DeFi integration</li>
         </ul>
         <h3 className="font-bold mb-2">Conclusion</h3>
-        <p className="mb-6">Swan IRA is committed to building a secure, transparent, and innovative platform for cryptocurrency investment. We invite you to join our community and participate in the future of digital finance.</p>
-        <p className="mt-6 text-xs text-gray-400">For the latest version and full details, visit the official Swan IRA White Paper at <a href="https://swan-ira.org/#/web_view" className="text-[#F0B90B] underline" target="_blank" rel="noopener noreferrer">https://swan-ira.org/#/web_view</a></p>
+        <p className="mb-6">Kryvex Trading is committed to building a secure, transparent, and innovative platform for cryptocurrency trading. We invite you to join our community and participate in the future of digital finance.</p>
+        <p className="mt-6 text-xs text-gray-400">For the latest version and full details, visit the official Kryvex Trading White Paper at <a href="https://kryvex.com/#/web_view" className="text-[#F0B90B] underline" target="_blank" rel="noopener noreferrer">https://kryvex.com/#/web_view</a></p>
       </div>
     </div>
   );

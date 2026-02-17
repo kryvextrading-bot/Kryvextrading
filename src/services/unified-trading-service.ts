@@ -1,6 +1,7 @@
 // src/services/unified-trading-service.ts
 import { supabase, supabaseAdmin } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
+import { OptionOrder } from '@/types/options-trading';
 
 // ==================== TYPES ====================
 
@@ -152,6 +153,145 @@ class UnifiedTradingService {
         });
     } catch (error) {
       console.error('Error creating notification:', error);
+    }
+  }
+
+  // ==================== OPTIONS TRADING ====================
+
+  async getActiveOptionsOrders(userId: string): Promise<OptionOrder[]> {
+    try {
+      const { data, error } = await supabase
+        .from('option_orders')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'ACTIVE')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching active options orders:', error);
+        return [];
+      }
+
+      return data?.map(order => ({
+        id: order.id,
+        userId: order.user_id,
+        symbol: order.symbol,
+        direction: order.direction,
+        stake: order.stake,
+        entryPrice: order.entry_price,
+        expiryPrice: order.expiry_price,
+        profit: order.profit,
+        fee: order.fee,
+        duration: order.duration,
+        startTime: order.start_time,
+        endTime: order.end_time,
+        status: order.status,
+        payoutRate: order.payout_rate,
+        fluctuationRange: order.fluctuation_range,
+        createdAt: order.created_at,
+        completedAt: order.completed_at,
+        pnl: order.pnl
+      })) || [];
+    } catch (error) {
+      console.error('Error in getActiveOptionsOrders:', error);
+      return [];
+    }
+  }
+
+  async getCompletedOptionsOrders(userId: string): Promise<OptionOrder[]> {
+    try {
+      const { data, error } = await supabase
+        .from('option_orders')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'COMPLETED')
+        .order('completed_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching completed options orders:', error);
+        return [];
+      }
+
+      return data?.map(order => ({
+        id: order.id,
+        userId: order.user_id,
+        symbol: order.symbol,
+        direction: order.direction,
+        stake: order.stake,
+        entryPrice: order.entry_price,
+        expiryPrice: order.expiry_price,
+        profit: order.profit,
+        fee: order.fee,
+        duration: order.duration,
+        startTime: order.start_time,
+        endTime: order.end_time,
+        status: order.status,
+        payoutRate: order.payout_rate,
+        fluctuationRange: order.fluctuation_range,
+        createdAt: order.created_at,
+        completedAt: order.completed_at,
+        pnl: order.pnl
+      })) || [];
+    } catch (error) {
+      console.error('Error in getCompletedOptionsOrders:', error);
+      return [];
+    }
+  }
+
+  async saveOptionOrder(order: OptionOrder): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('option_orders')
+        .insert({
+          id: order.id,
+          user_id: order.userId,
+          symbol: order.symbol,
+          direction: order.direction,
+          stake: order.stake,
+          entry_price: order.entryPrice,
+          expiry_price: order.expiryPrice,
+          profit: order.profit,
+          fee: order.fee,
+          duration: order.duration,
+          start_time: order.startTime,
+          end_time: order.endTime,
+          status: order.status,
+          payout_rate: order.payoutRate,
+          fluctuation_range: order.fluctuationRange,
+          created_at: order.createdAt,
+          completed_at: order.completedAt,
+          pnl: order.pnl
+        });
+
+      if (error) {
+        console.error('Error saving option order:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error in saveOptionOrder:', error);
+      throw error;
+    }
+  }
+
+  async updateOptionOrder(order: OptionOrder): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('option_orders')
+        .update({
+          expiry_price: order.expiryPrice,
+          status: order.status,
+          completed_at: order.completedAt,
+          pnl: order.pnl
+        })
+        .eq('id', order.id);
+
+      if (error) {
+        console.error('Error updating option order:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error in updateOptionOrder:', error);
+      throw error;
     }
   }
 

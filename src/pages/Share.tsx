@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaFacebook, FaTelegram, FaXTwitter, FaInstagram } from 'react-icons/fa6';
 
-const REFERRAL_LINK = 'https://swan-ira.org/#/?code=93460388';
+const REFERRAL_LINK = 'https://kryvex.com/#/?code=93460388';
 
 export default function Share() {
   const navigate = useNavigate();

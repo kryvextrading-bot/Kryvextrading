@@ -295,6 +295,23 @@ export function useUnifiedWallet() {
     return result;
   }, [user?.id, refreshData]);
 
+  const updateBalance = useCallback(async (asset: string, amount: number, operation: 'add' | 'subtract'): Promise<{ success: boolean; error?: string }> => {
+    if (!user?.id) return { success: false, error: 'Not authenticated' };
+    
+    try {
+      if (operation === 'add') {
+        const result = await addBalance(asset, amount, 'option_win', `option_order_${Date.now()}`);
+        return result;
+      } else {
+        const result = await deductBalance(asset, amount, 'option_stake', `option_order_${Date.now()}`);
+        return result;
+      }
+    } catch (error) {
+      console.error('Error in updateBalance:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }, [user?.id, addBalance, deductBalance]);
+
   return {
     // Funding wallet
     fundingBalances,
@@ -331,6 +348,7 @@ export function useUnifiedWallet() {
     deductBalance,
     lockBalance,
     unlockBalance,
+    updateBalance,
     
     // Refresh
     refreshData

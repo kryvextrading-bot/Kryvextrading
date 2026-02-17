@@ -744,7 +744,7 @@ export default function AccountManagementPage() {
               <MenuSection title="Privacy & Legal" options={privacyOptions} />
               
               {/* About */}
-              <MenuSection title="About Swan-IRA" options={aboutOptions} />
+              <MenuSection title="About Kryvex" options={aboutOptions} />
               
               {/* Version Info */}
               <Card className="bg-[#1E2329] border border-[#2B3139] p-4 text-center">
@@ -753,7 +753,7 @@ export default function AccountManagementPage() {
                   <span className="text-xs text-[#848E9C]">System Status: Operational</span>
                 </div>
                 <p className="text-[10px] text-[#5E6673]">
-                  Swan-IRA v2.4.0 • © 2024 Swan IRA Financial Services
+                  Kryvex Trading v1.0.0 • © 2024 Kryvex Trading
                 </p>
                 <p className="text-[9px] text-[#5E6673] mt-1">
                   Last updated: {new Date().toLocaleDateString()}

@@ -32,6 +32,20 @@ export function useBinanceStream(symbol: string, type: 'trade' | 'depth' | 'klin
     if (type === 'depth') stream += '5@100ms';
     
     try {
+      // Only connect to WebSocket if we have a valid symbol
+      if (!symbol || symbol === 'undefined') {
+        console.log('Invalid symbol for WebSocket connection:', symbol);
+        setIsLoading(false);
+        return {
+          p: '67000.00',
+          priceChange: 0,
+          currentPrice: 67000,
+          priceChange24h: 0,
+          raw: null,
+          isLoading: false
+        };
+      }
+      
       const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${stream}`);
       wsRef.current = ws;
       
@@ -83,10 +97,10 @@ export function useBinanceStream(symbol: string, type: 'trade' | 'depth' | 'klin
   
   // Return an object with default values
   return {
-    p: data?.p || '67000',
-    priceChange: data?.priceChange || 2.34,
+    p: data?.p || '67000.00',
+    priceChange: data?.priceChange || 0,
     currentPrice: data?.p ? parseFloat(data.p) : 67000,
-    priceChange24h: data?.priceChange || 2.34,
+    priceChange24h: data?.priceChange || 0,
     raw: data,
     isLoading
   };

@@ -463,8 +463,8 @@ export default function KycVerification() {
   };
 
   if (loading) return <LoadingScreen />;
-  if (kycStatus === 'under_review') return <StatusScreen status="under_review" onDashboard={() => navigate('/dashboard')} />;
-  if (kycStatus === 'approved') return <StatusScreen status="approved" onDashboard={() => navigate('/dashboard')} />;
+  if (kycStatus === 'under_review') return <StatusScreen status="under_review" onDashboard={() => navigate('/')} />;
+  if (kycStatus === 'approved') return <StatusScreen status="approved" onDashboard={() => navigate('/')} />;
 
   return (
     <motion.div 
@@ -917,7 +917,7 @@ export default function KycVerification() {
                   </div>
                   <div>
                     <div className="text-sm font-semibold text-[#EAECEF]">Bank Transfer Instructions</div>
-                    <div className="text-xs text-[#848E9C]">SWAN IRA • Account #12345678</div>
+                    <div className="text-xs text-[#848E9C]">KRYVEX TRADING • Account #12345678</div>
                   </div>
                 </div>
                 
@@ -1015,8 +1015,8 @@ export default function KycVerification() {
                     <div className="text-xs text-[#EAECEF]">
                       <span className="font-semibold">Client Agreement v2.4</span>
                       <p className="text-[#848E9C] mt-1">
-                        By entering the verification code, you agree to the terms and conditions of Swan IRA's 
-                        Crypto Retirement Account, including fee schedule, custody arrangements, and risk disclosures.
+                        By entering the verification code, you agree to the terms and conditions of Kryvex Trading's 
+                        Crypto Trading Account, including fee schedule, custody arrangements, and risk disclosures.
                       </p>
                     </div>
                   </div>
@@ -1078,7 +1078,7 @@ export default function KycVerification() {
               
               <Button 
                 className="w-full bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20] font-bold h-11"
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate('/')}
               >
                 Go to Dashboard
                 <ChevronRight size={16} className="ml-2" />

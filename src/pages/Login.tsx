@@ -32,7 +32,7 @@ export default function Login() {
   const { login, user, isAdmin } = useAuth();
   const { toast } = useToast();
 
-  const from = location.state?.from?.pathname || '/dashboard';
+  const from = location.state?.from?.pathname || '/';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +42,7 @@ export default function Login() {
       setPendingRedirect(true);
       toast({
         title: "✨ Welcome Back!",
-        description: "Successfully signed in to Swan IRA.",
+        description: "Successfully signed in to Kryvex Trading.",
       });
     } catch (error) {
       toast({
@@ -122,7 +122,7 @@ export default function Login() {
             className="text-[#848E9C] text-sm sm:text-base"
             variants={fadeInUp}
           >
-            Sign in to continue to Swan IRA
+            Sign in to continue to Kryvex Trading
           </motion.p>
         </motion.div>
 
@@ -291,7 +291,7 @@ export default function Login() {
 
         {/* Version Info - Mobile */}
         <div className="mt-4 text-center text-[10px] text-[#5E6673]">
-          <span>Version 2.4.0 | © 2024 Swan IRA</span>
+          <span>Version 2.4.0 | © 2024 Kryvex Trading</span>
         </div>
       </motion.div>
 

@@ -174,28 +174,28 @@ export function validateUserInsert(user: UserInsert): string[] {
   // Required fields
   errors.push(...validateUserEmail(user.email));
   
-  // Optional fields with validation
-  if (user.status) {
+  // Optional fields with validation (only validate if provided)
+  if (user.status && user.status !== null) {
     errors.push(...validateUserStatus(user.status));
   }
   
-  if (user.kyc_status) {
+  if (user.kyc_status && user.kyc_status !== null) {
     errors.push(...validateKYCStatus(user.kyc_status));
   }
   
-  if (user.account_type) {
+  if (user.account_type && user.account_type !== null) {
     errors.push(...validateAccountType(user.account_type));
   }
   
-  if (user.admin_role) {
+  if (user.admin_role && user.admin_role !== null) {
     errors.push(...validateAdminRole(user.admin_role));
   }
   
-  if (user.risk_tolerance) {
+  if (user.risk_tolerance && user.risk_tolerance !== null) {
     errors.push(...validateRiskTolerance(user.risk_tolerance));
   }
   
-  if (user.investment_goal) {
+  if (user.investment_goal && user.investment_goal !== null) {
     errors.push(...validateInvestmentGoal(user.investment_goal));
   }
   
@@ -207,16 +207,16 @@ export function validateUserInsert(user: UserInsert): string[] {
     errors.push(...validateBalance(user.balance));
   }
   
-  // Name validation
-  if (user.first_name && user.first_name.length > 100) {
+  // Name validation (only if provided)
+  if (user.first_name && user.first_name !== null && user.first_name.length > 100) {
     errors.push('First name must be less than 100 characters');
   }
   
-  if (user.last_name && user.last_name.length > 100) {
+  if (user.last_name && user.last_name !== null && user.last_name.length > 100) {
     errors.push('Last name must be less than 100 characters');
   }
   
-  if (user.phone && user.phone.length > 20) {
+  if (user.phone && user.phone !== null && user.phone.length > 20) {
     errors.push('Phone number must be less than 20 characters');
   }
   

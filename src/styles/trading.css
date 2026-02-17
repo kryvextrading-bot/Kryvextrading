@@ -16,6 +16,24 @@
   background: #F0B90B;
 }
 
+/* Hide scrollbar class */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide::-moz-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide::-ms-scrollbar {
+  display: none;
+}
+
 /* TradingView widget container */
 .tradingview-widget-container {
   height: 500px;

@@ -71,7 +71,23 @@ export interface ArbitrageTrade extends BaseTrade {
   endTime?: string;
 }
 
-export type AnyTrade = SpotTrade | FuturesTrade | OptionsTrade | ArbitrageTrade;
+export interface ScheduledTrade extends BaseTrade {
+  type: 'spot' | 'futures' | 'options';
+  scheduledTimeUtc: string;  // Scheduled execution time in UTC
+  direction: 'up' | 'down' | 'buy' | 'sell' | 'long' | 'short';
+  assetPair: string;        // Trading pair symbol
+  amount: number;          // Trade amount
+  expectedPrice?: number;   // Expected execution price
+  orderType?: 'market' | 'limit' | 'stop';
+  leverage?: number;        // For futures trades
+  timeFrame?: number;       // For options trades
+  payout?: number;          // For options trades
+  optionDuration?: number;  // Options duration in seconds
+  fluctuationRange?: number; // Fluctuation range percentage
+  strikePrice?: number;     // Strike price for options
+}
+
+export type AnyTrade = SpotTrade | FuturesTrade | OptionsTrade | ArbitrageTrade | ScheduledTrade;
 
 export interface TradeExecutionResult {
   success: boolean;

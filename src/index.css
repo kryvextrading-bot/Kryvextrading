@@ -1,58 +1,48 @@
 /* Trading page styles */
 @import './styles/trading.css';
 
-/* Login page mobile optimization */
-@media (max-width: 640px) {
-  .login-page input, .login-page button {
-    font-size: 16px !important; /* Prevents zoom on mobile */
-  }
-  .login-page .rounded-2xl {
-    border-radius: 1.5rem;
-  }
-  .login-page button {
-    min-height: 48px; /* Better touch target */
-  }
-}
+/* Inter Fonts - Binance uses Inter font family */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Inter+Mono:wght@400;500;600&display=swap');
 
-/* Forgot password page mobile optimization */
+/* Mobile optimizations */
 @media (max-width: 640px) {
-  .forgot-password-page input, .forgot-password-page button {
-    font-size: 16px !important; /* Prevents zoom on mobile */
-  }
-  .forgot-password-page .rounded-2xl {
-    border-radius: 1.5rem;
-  }
-  .forgot-password-page button {
-    min-height: 48px; /* Better touch target */
-  }
-}
-
-/* Portfolio page mobile optimization */
-@media (max-width: 640px) {
+  .login-page input, .login-page button,
+  .forgot-password-page input, .forgot-password-page button,
   .portfolio-page input, .portfolio-page select, .portfolio-page button {
     font-size: 16px !important; /* Prevents zoom on mobile */
   }
+  .login-page .rounded-2xl,
+  .forgot-password-page .rounded-2xl,
   .portfolio-page .rounded-2xl {
     border-radius: 1.5rem;
   }
+  .login-page button,
+  .forgot-password-page button,
   .portfolio-page button {
     min-height: 48px; /* Better touch target */
   }
 }
 
-/* Portfolio custom scrollbar */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+/* Binance-style custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar,
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-.custom-scrollbar::-webkit-scrollbar-track {
+
+.custom-scrollbar::-webkit-scrollbar-track,
+::-webkit-scrollbar-track {
   background: #1E2329;
 }
-.custom-scrollbar::-webkit-scrollbar-thumb {
+
+.custom-scrollbar::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb {
   background: #2B3139;
-  border-radius: 4px;
+  border-radius: 3px;
 }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:hover {
   background: #F0B90B;
 }
 
@@ -60,113 +50,65 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Swan IRA Design System - Cryptocurrency Investment Platform
-All colors MUST be HSL. Blue gradient theme with modern crypto styling.
+/* Kryvex Trading Design System - Binance Theme
+Professional cryptocurrency trading platform styling
 */
 
 @layer base {
   :root {
-    /* Core brand colors - Swan IRA blue theme */
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-
-    /* Card and surface colors */
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-
-    --popover: 240 5% 6%;
-    --popover-foreground: 0 0% 98%;
-
-    /* Primary blue gradient colors */
-    --primary: 214 100% 50%;
-    --primary-foreground: 0 0% 98%;
-    --primary-glow: 214 100% 60%;
-    --primary-dark: 214 100% 40%;
-
-    /* Secondary colors */
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 0 0% 98%;
-
-    /* Muted colors for subtle elements */
-    --muted: 240 5% 6%;
-    --muted-foreground: 240 5% 64.9%;
-
-    /* Accent colors */
-    --accent: 240 5% 6%;
-    --accent-foreground: 0 0% 98%;
-
-    /* Success and error colors */
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 98%;
-    --destructive: 0 84.2% 60.2%;
+    /* Binance color system */
+    --background: 210 15% 4%;
+    --foreground: 210 5% 91%;
+    --card: 210 15% 8%;
+    --card-foreground: 210 5% 91%;
+    --popover: 210 15% 8%;
+    --popover-foreground: 210 5% 91%;
+    --primary: 45 91% 58%;
+    --primary-foreground: 210 15% 4%;
+    --secondary: 210 15% 16%;
+    --secondary-foreground: 210 5% 91%;
+    --muted: 210 15% 16%;
+    --muted-foreground: 210 5% 53%;
+    --accent: 210 15% 16%;
+    --accent-foreground: 45 91% 58%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-
-    /* Border and input colors */
-    --border: 240 5.9% 10%;
-    --input: 240 5.9% 10%;
-    --ring: 214 100% 50%;
-
-    /* Design system properties */
+    --border: 210 15% 23%;
+    --input: 210 15% 16%;
+    --ring: 45 91% 58%;
     --radius: 0.75rem;
     
-    /* Custom gradients for Swan IRA theme */
-    --gradient-primary: linear-gradient(135deg, hsl(214 100% 50%), hsl(214 100% 60%));
-    --gradient-secondary: linear-gradient(135deg, hsl(240 5% 6%), hsl(240 10% 3.9%));
-    --gradient-card: linear-gradient(135deg, hsl(240 5% 6%), hsl(240 5% 8%));
-    
-    /* Box shadows */
-    --shadow-elegant: 0 10px 30px -10px hsl(214 100% 50% / 0.3);
-    --shadow-glow: 0 0 40px hsl(214 100% 50% / 0.2);
-    --shadow-card: 0 4px 20px hsl(240 10% 3.9% / 0.3);
-    
-    /* Transitions */
-    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
+    /* Sidebar variables */
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
     --sidebar-primary: 240 5.9% 10%;
-
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
     --sidebar-accent-foreground: 240 5.9% 10%;
-
     --sidebar-border: 220 13% 91%;
-
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --background: 210 15% 4%;
+    --foreground: 210 5% 91%;
+    --card: 210 15% 8%;
+    --card-foreground: 210 5% 91%;
+    --popover: 210 15% 8%;
+    --popover-foreground: 210 5% 91%;
+    --primary: 45 91% 58%;
+    --primary-foreground: 210 15% 4%;
+    --secondary: 210 15% 16%;
+    --secondary-foreground: 210 5% 91%;
+    --muted: 210 15% 16%;
+    --muted-foreground: 210 5% 53%;
+    --accent: 210 15% 16%;
+    --accent-foreground: 45 91% 58%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 210 15% 23%;
+    --input: 210 15% 16%;
+    --ring: 45 91% 58%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -184,7 +126,75 @@ All colors MUST be HSL. Blue gradient theme with modern crypto styling.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-[#0B0E11] text-[#EAECEF] antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  /* Selection color - Binance yellow */
+  ::selection {
+    background: #F0B90B;
+    color: #0B0E11;
+  }
+
+  /* Focus outline */
+  :focus-visible {
+    outline: 2px solid #F0B90B;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Card styles */
+  .binance-card {
+    @apply bg-[#1E2329] border border-[#2B3139] rounded-xl hover:border-[#F0B90B]/30 transition-all duration-300;
+  }
+
+  .gradient-card {
+    @apply bg-gradient-to-br from-[#1E2329] to-[#2B3139] border border-[#3A3F4A] rounded-xl;
+  }
+
+  /* Button styles */
+  .btn-primary {
+    @apply bg-[#F0B90B] hover:bg-[#F0B90B]/90 text-[#0B0E11] font-semibold rounded-lg transition-all duration-200;
+  }
+
+  .btn-secondary {
+    @apply bg-[#2B3139] hover:bg-[#3A3F4A] text-[#EAECEF] border border-[#3A3F4A] rounded-lg transition-all duration-200;
+  }
+
+  .btn-success {
+    @apply bg-[#0ECB81] hover:bg-[#0ECB81]/90 text-[#0B0E11] font-semibold rounded-lg transition-all duration-200;
+  }
+
+  .btn-danger {
+    @apply bg-[#F6465D] hover:bg-[#F6465D]/90 text-white font-semibold rounded-lg transition-all duration-200;
+  }
+
+  /* Price tags */
+  .price-positive {
+    @apply text-[#0ECB81] font-mono font-medium;
+  }
+
+  .price-negative {
+    @apply text-[#F6465D] font-mono font-medium;
+  }
+
+  /* Badges */
+  .badge-primary {
+    @apply bg-[#F0B90B]/10 text-[#F0B90B] border border-[#F0B90B]/20 text-xs px-2 py-0.5 rounded-full;
+  }
+
+  .badge-success {
+    @apply bg-[#0ECB81]/10 text-[#0ECB81] border border-[#0ECB81]/20 text-xs px-2 py-0.5 rounded-full;
+  }
+
+  .badge-warning {
+    @apply bg-[#F0B90B]/10 text-[#F0B90B] border border-[#F0B90B]/20 text-xs px-2 py-0.5 rounded-full;
+  }
+
+  .badge-danger {
+    @apply bg-[#F6465D]/10 text-[#F6465D] border border-[#F6465D]/20 text-xs px-2 py-0.5 rounded-full;
   }
 }
 
@@ -242,6 +252,43 @@ input[type="range"].binance-slider:focus {
 }
 input[type="range"].binance-slider::-ms-tooltip {
   display: none;
+}
+
+/* Loading skeleton animation */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(
+    to right,
+    #1E2329 4%,
+    #2B3139 25%,
+    #1E2329 36%
+  );
+  background-size: 1000px 100%;
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  input, select, textarea, button {
+    font-size: 16px !important;
+  }
+  
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 /* Shimmer animation for buttons */

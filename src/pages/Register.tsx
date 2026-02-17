@@ -132,10 +132,10 @@ export default function Register() {
       
       toast({
         title: "✨ Account Created Successfully!",
-        description: "Welcome to Swan IRA! Please complete your KYC verification to start trading.",
+        description: "Welcome to Kryvex Trading! Please complete your KYC verification to start trading.",
       });
       
-      navigate('/dashboard');
+      navigate('/');
     } catch (error) {
       let errorMessage = "Failed to create account. Please try again.";
       
@@ -226,7 +226,7 @@ export default function Register() {
             className="text-sm text-[#848E9C] max-w-xs mx-auto"
             variants={fadeInUp}
           >
-            Join Swan IRA and start your crypto investment journey with institutional-grade security
+            Join Kryvex Trading and start your crypto investment journey with institutional-grade security
           </motion.p>
         </motion.div>
 
@@ -419,7 +419,7 @@ export default function Register() {
                     className="mt-1 border-[#2B3139] data-[state=checked]:bg-[#F0B90B] data-[state=checked]:border-[#F0B90B]"
                   />
                   <Label htmlFor="agreeToMarketing" className="text-xs text-[#848E9C] leading-relaxed">
-                    I agree to receive marketing communications and updates from Swan IRA
+                    I agree to receive marketing communications and updates from Kryvex Trading
                   </Label>
                 </div>
               </div>

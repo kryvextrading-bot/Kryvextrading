@@ -98,6 +98,8 @@ class SupabaseApiService {
     // Validate user data before proceeding
     const validationErrors = validateUserInsert({ ...userData, email });
     if (validationErrors.length > 0) {
+      console.error('🚨 User validation failed:', validationErrors);
+      console.error('🔍 User data being validated:', { ...userData, email });
       throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
     }
     

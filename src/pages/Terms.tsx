@@ -37,14 +37,14 @@ export default function Terms() {
                 <section>
                   <h3 className="text-xl font-semibold mb-4">1. Acceptance of Terms</h3>
                   <p className="text-muted-foreground mb-4">
-                    By accessing and using Swan IRA's platform, you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.
+                    By accessing and using Kryvex Trading's platform, you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.
                   </p>
                 </section>
 
                 <section>
                   <h3 className="text-xl font-semibold mb-4">2. Description of Service</h3>
                   <p className="text-muted-foreground mb-4">
-                    Swan IRA provides cryptocurrency Individual Retirement Account (IRA) services, including but not limited to account management, trading capabilities, and investment advisory services. Our platform allows users to invest in cryptocurrencies within a tax-advantaged retirement account structure.
+                    Kryvex Trading provides cryptocurrency trading services, including but not limited to account management, trading capabilities, and investment advisory services. Our platform allows users to invest in cryptocurrencies with institutional-grade security and professional trading tools.
                   </p>
                 </section>
 
@@ -72,7 +72,7 @@ export default function Terms() {
                 <section>
                   <h3 className="text-xl font-semibold mb-4">6. Fees and Charges</h3>
                   <p className="text-muted-foreground mb-4">
-                    Swan IRA charges various fees for our services, including account maintenance fees, trading fees, and other applicable charges. All fees are clearly disclosed in our fee schedule and may be updated from time to time with appropriate notice.
+                    Kryvex Trading charges various fees for our services, including account maintenance fees, trading fees, and other applicable charges. All fees are clearly disclosed in our fee schedule and may be updated from time to time with appropriate notice.
                   </p>
                 </section>
 
@@ -86,14 +86,14 @@ export default function Terms() {
                 <section>
                   <h3 className="text-xl font-semibold mb-4">8. Compliance</h3>
                   <p className="text-muted-foreground mb-4">
-                    Users must comply with all applicable laws and regulations, including but not limited to tax laws, securities laws, and anti-money laundering regulations. Swan IRA reserves the right to report suspicious activities to appropriate authorities.
+                    Users must comply with all applicable laws and regulations, including but not limited to tax laws, securities laws, and anti-money laundering regulations. Kryvex Trading reserves the right to report suspicious activities to appropriate authorities.
                   </p>
                 </section>
 
                 <section>
                   <h3 className="text-xl font-semibold mb-4">9. Limitation of Liability</h3>
                   <p className="text-muted-foreground mb-4">
-                    Swan IRA shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including but not limited to loss of profits, data, or use, arising out of or relating to your use of our services.
+                    Kryvex Trading shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including but not limited to loss of profits, data, or use, arising out of or relating to your use of our services.
                   </p>
                 </section>
 
@@ -118,8 +118,8 @@ export default function Terms() {
                   </p>
                   <div className="bg-secondary p-4 rounded-lg">
                     <p className="text-muted-foreground">
-                      <strong>Swan IRA</strong><br />
-                      Email: legal@swan-ira.com<br />
+                      <strong>Kryvex Trading</strong><br />
+                      Email: legal@kryvex.com<br />
                       Phone: +1 (800) 555-0123<br />
                       Address: 123 Financial District, New York, NY 10001
                     </p>
@@ -139,7 +139,7 @@ export default function Terms() {
               <Shield className="h-12 w-12 text-primary mx-auto" />
               <h3 className="text-xl font-semibold">Important Notice</h3>
               <p className="text-muted-foreground">
-                These terms constitute a legally binding agreement between you and Swan IRA. 
+                These terms constitute a legally binding agreement between you and Kryvex Trading. 
                 By using our platform, you acknowledge that you have read, understood, and agree to be bound by these terms.
               </p>
               <div className="flex items-center justify-center space-x-2 text-sm text-muted-foreground">

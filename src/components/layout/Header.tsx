@@ -25,10 +25,10 @@ export function Header() {
         <div className="flex items-center justify-between">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-primary rounded-full flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">S</span>
+            <div className="w-8 h-8 bg-[#F0B90B] rounded-full flex items-center justify-center">
+              <span className="text-[#0B0E11] font-bold text-sm">K</span>
             </div>
-            <span className="font-bold text-xl">Swan-IRA</span>
+            <span className="font-bold text-xl text-[#EAECEF]">Kryvex</span>
           </Link>
 
           {/* Right side */}
@@ -44,11 +44,11 @@ export function Header() {
                     <Button className="flex items-center space-x-2 p-2 hover:bg-muted rounded-full">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback>
-                          {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
+                          {user?.first_name?.charAt(0)}{user?.last_name?.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
                       <span className="hidden md:block text-sm font-medium">
-                        {user?.firstName} {user?.lastName}
+                        {user?.first_name} {user?.last_name}
                       </span>
                       <ChevronDown className="h-4 w-4" />
                     </Button>
@@ -57,7 +57,7 @@ export function Header() {
                     <DropdownMenuLabel>
                       <div className="flex flex-col space-y-1">
                         <p className="text-sm font-medium leading-none">
-                          {user?.firstName} {user?.lastName}
+                          {user?.first_name} {user?.last_name}
                         </p>
                         <p className="text-xs leading-none text-muted-foreground">
                           {user?.email}
