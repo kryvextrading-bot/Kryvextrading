@@ -45,6 +45,7 @@ import { useRecentTrades } from '@/hooks/useRecentTrades';
 import { toast } from 'react-hot-toast';
 import { formatCurrency, formatPrice } from '@/utils/tradingCalculations';
 import Countdown from 'react-countdown';
+import { supabase } from '@/lib/supabase';
 
 // ============================================
 // TYPES
@@ -925,6 +926,7 @@ export default function UnifiedTradingPage() {
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
   const [scheduledOrders, setScheduledOrders] = useState<Order[]>([]);
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
+  const [ordersLoaded, setOrdersLoaded] = useState(false);
   
   // Spot and Futures Orders
   const [spotOrders, setSpotOrders] = useState<Order[]>([]);
@@ -958,8 +960,64 @@ export default function UnifiedTradingPage() {
     };
   }, []);
 
+  // Load orders from database on component mount
+  useEffect(() => {
+    const loadOrdersFromDatabase = async () => {
+      if (!isAuthenticated || !user?.id) return;
+      
+      try {
+        // Load completed orders from database
+        const { data: completedData, error: completedError } = await supabase
+          .from('trades')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('type', 'options')
+          .eq('status', 'completed')
+          .order('created_at', { ascending: false });
+          
+        if (completedError) {
+          console.error('Error loading completed orders:', completedError);
+        } else if (completedData) {
+          const formattedOrders = completedData.map(trade => ({
+            id: trade.id,
+            symbol: trade.metadata?.symbol || 'XAUUSDT',
+            side: trade.metadata?.direction || 'UP',
+            amount: trade.amount,
+            price: trade.price,
+            type: 'option' as const,
+            status: 'completed' as const,
+            timestamp: trade.created_at,
+            direction: trade.metadata?.direction || 'UP',
+            duration: trade.metadata?.duration || 60,
+            payout: trade.metadata?.payout || 0.176,
+            move: trade.metadata?.move || 0.01,
+            fee: trade.fee || 0,
+            entryPrice: trade.metadata?.entryPrice,
+            expiryPrice: trade.metadata?.expiryPrice,
+            startTime: trade.metadata?.startTime,
+            endTime: trade.metadata?.endTime,
+            stake: trade.amount,
+            pnl: trade.pnl,
+            result: (trade.pnl && trade.pnl > 0 ? 'win' : 'loss') as 'win' | 'loss',
+            durationLabel: trade.metadata?.durationLabel || `${trade.metadata?.duration}s`
+          }));
+          setCompletedOrders(formattedOrders);
+        }
+        
+        setOrdersLoaded(true);
+      } catch (error) {
+        console.error('Error loading orders:', error);
+        setOrdersLoaded(true);
+      }
+    };
+    
+    loadOrdersFromDatabase();
+  }, [isAuthenticated, user?.id]);
+
   // Monitor active orders and move expired ones to completed
   useEffect(() => {
+    if (!ordersLoaded) return;
+    
     const checkExpiredOrders = async () => {
       const now = new Date();
       
@@ -968,71 +1026,125 @@ export default function UnifiedTradingPage() {
           order.expiryTime && new Date(order.expiryTime) <= now
         );
         
+        // Process expired orders asynchronously (outside of setState)
         if (expiredOrders.length > 0) {
-          // Process expired orders asynchronously
-          expiredOrders.forEach(async (order) => {
-            // Calculate final result based on current price vs entry price
-            const priceDiff = displayPrice - order.entryPrice!;
-            const isWin = order.direction === 'UP' ? priceDiff > 0 : priceDiff < 0;
-            
-            // Calculate PNL based on payout ratio
-            const pnl = isWin ? order.amount * order.payout! : -order.amount;
-            
-            // Add winnings to trading wallet if won
-            if (isWin) {
-              const result = await addBalance('USDT', pnl, 'option_win', `option_win_${order.id}`, { 
-                orderId: order.id,
-                entryPrice: order.entryPrice,
-                exitPrice: displayPrice,
-                direction: order.direction
-              });
-              if (result.success) {
-                toast.success(`🎉 You won $${pnl.toFixed(2)} USDT!`);
-              }
-            } else {
-              // Loss amount already deducted when order was placed
-              toast.error(`Trade lost: -$${order.amount.toFixed(2)} USDT`);
-            }
-          });
-          
-          // Move expired orders to completed with final results
-          const completedOrdersData = expiredOrders.map(order => {
-            const priceDiff = displayPrice - order.entryPrice!;
-            const isWin = order.direction === 'UP' ? priceDiff > 0 : priceDiff < 0;
-            const pnl = isWin ? order.amount * order.payout! : -order.amount;
-            
-            return {
-              ...order,
-              status: 'COMPLETED' as const,
-              pnl: pnl,
-              stake: order.amount,
-              expiryPrice: displayPrice,
-              endTime: now.toISOString(),
-              startTime: order.timestamp || now.toISOString(),
-              fee: order.fee || (order.amount * 0.001), // Default 0.1% fee
-              result: isWin ? 'win' : 'loss' as 'win' | 'loss',
-              move: order.move || 0.01,
-              payout: order.payout || 0.176,
-              durationLabel: order.durationLabel || `${order.duration}s`
-            };
-          });
-          
-          setCompletedOrders(prevCompleted => [...prevCompleted, ...completedOrdersData]);
-          
-          // Show notifications for expired orders
-          completedOrdersData.forEach(order => {
-            if (order.pnl && order.pnl > 0) {
-              toast.success(`🎉 Trade Won! +${order.pnl.toFixed(2)} USDT`);
-            } else {
-              toast.error(`Trade Lost. ${order.pnl?.toFixed(2) || '0'} USDT`);
-            }
-          });
+          setTimeout(() => processExpiredOrders(expiredOrders, now, displayPrice), 0);
         }
         
         // Keep only non-expired orders in active
         return prev.filter(order => 
           !order.expiryTime || new Date(order.expiryTime) > now
         );
+      });
+    };
+    
+    // Separate function to process expired orders
+    const processExpiredOrders = async (expiredOrders: Order[], now: Date, currentPrice: number) => {
+      for (const order of expiredOrders) {
+        // Calculate final result based on current price vs entry price
+        const priceDiff = currentPrice - order.entryPrice!;
+        const isWin = order.direction === 'UP' ? priceDiff > 0 : priceDiff < 0;
+        
+        // Calculate PNL based on payout ratio
+        const pnl = isWin ? order.amount * order.payout! : -order.amount;
+        
+        // Add winnings to trading wallet if won
+        if (isWin) {
+          const result = await addBalance('USDT', pnl, 'option_win', `option_win_${order.id}`, { 
+            orderId: order.id,
+            entryPrice: order.entryPrice,
+            exitPrice: currentPrice,
+            direction: order.direction
+          });
+          if (result.success) {
+            toast.success(`🎉 You won $${pnl.toFixed(2)} USDT!`);
+          }
+        } else {
+          // Loss amount already deducted when order was placed
+          toast.error(`Trade lost: -$${order.amount.toFixed(2)} USDT`);
+        }
+      }
+      
+      // Move expired orders to completed with final results
+      const completedOrdersData = expiredOrders.map(order => {
+        const priceDiff = currentPrice - order.entryPrice!;
+        const isWin = order.direction === 'UP' ? priceDiff > 0 : priceDiff < 0;
+        const pnl = isWin ? order.amount * order.payout! : -order.amount;
+        
+        return {
+          ...order,
+          status: 'completed' as const,
+          pnl: pnl,
+          stake: order.amount,
+          expiryPrice: currentPrice,
+          endTime: now.toISOString(),
+          startTime: order.timestamp || now.toISOString(),
+          fee: order.fee || (order.amount * 0.001), // Default 0.1% fee
+          result: isWin ? 'win' : 'loss' as 'win' | 'loss',
+          move: order.move || 0.01,
+          payout: order.payout || 0.176,
+          durationLabel: order.durationLabel || `${order.duration}s`
+        };
+      });
+      
+      setCompletedOrders(prevCompleted => [...prevCompleted, ...completedOrdersData]);
+      
+      // Save completed orders to database
+      for (const order of completedOrdersData) {
+        try {
+          await supabase.from('trades').insert({
+            id: order.id,
+            user_id: user?.id,
+            type: 'options',
+            status: 'completed',
+            asset: 'USDT',
+            amount: order.amount,
+            price: order.price,
+            pnl: order.pnl,
+            fee: order.fee,
+            metadata: {
+              symbol: order.symbol,
+              direction: order.direction,
+              duration: order.duration,
+              payout: order.payout,
+              move: order.move,
+              entryPrice: order.entryPrice,
+              expiryPrice: order.expiryPrice,
+              startTime: order.startTime,
+              endTime: order.endTime,
+              durationLabel: order.durationLabel,
+              result: order.result
+            },
+            created_at: order.timestamp
+          });
+        } catch (error) {
+          console.error('Error saving completed order to database:', error);
+        }
+      }
+      
+      // Release trading locks for completed orders
+      for (const order of completedOrdersData) {
+        try {
+          await supabase.from('trading_locks')
+            .update({ 
+              status: 'released', 
+              released_at: now.toISOString() 
+            })
+            .eq('reference_id', order.id)
+            .eq('status', 'locked');
+          console.log('Released trading lock for order:', order.id);
+        } catch (error) {
+          console.error('Error releasing trading lock:', error);
+        }
+      }
+      
+      // Show notifications for expired orders
+      completedOrdersData.forEach(order => {
+        if (order.pnl && order.pnl > 0) {
+          toast.success(`🎉 Trade Won! +${order.pnl.toFixed(2)} USDT`);
+        } else {
+          toast.error(`Trade Lost. ${order.pnl?.toFixed(2) || '0'} USDT`);
+        }
       });
     };
 
@@ -1317,13 +1429,6 @@ export default function UnifiedTradingPage() {
     try {
       console.log('Starting option trade execution...');
       
-      // Deduct from trading wallet (premium paid for option)
-      const deducted = await deductFromTradingWallet(parsedAmount, 'Option purchase');
-      if (!deducted) {
-        toast.error('Failed to process transaction');
-        return;
-      }
-
       // Execute options trade
       const tradeData: Order = {
         id: Date.now().toString(),
@@ -1346,9 +1451,44 @@ export default function UnifiedTradingPage() {
         ).toISOString() : null,
         expiryTime: isScheduled ? null : new Date(Date.now() + optionDuration * 1000).toISOString()
       };
+      
+      // Deduct from trading wallet (premium paid for option)
+      const deducted = await deductFromTradingWallet(parsedAmount, 'Option purchase');
+      if (!deducted) {
+        toast.error('Failed to process transaction');
+        return;
+      }
 
+      
       console.log('Trade data prepared:', tradeData);
       console.log('Executing options trade:', tradeData);
+      
+      // Lock the stake amount in trading_locks table (after tradeData is fully prepared)
+      try {
+        const lockData = {
+          user_id: user?.id,
+          asset: 'USDT',
+          amount: parsedAmount,
+          trade_type: 'options',
+          reference_id: tradeData.id,
+          status: 'locked',
+          expires_at: isScheduled ? null : new Date(Date.now() + optionDuration * 1000).toISOString(),
+          metadata: {
+            symbol: selectedPair.symbol,
+            direction: optionDirection,
+            duration: optionDuration,
+            payout: optionPayout,
+            entryPrice: displayPrice,
+            type: 'option_stake'
+          }
+        };
+        
+        await supabase.from('trading_locks').insert(lockData);
+        console.log('Trading lock created:', lockData);
+      } catch (error) {
+        console.error('Error creating trading lock:', error);
+        // Continue with trade even if lock fails, but log the error
+      }
       
       if (isScheduled) {
         console.log('Processing scheduled trade...');
