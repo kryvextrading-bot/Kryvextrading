@@ -24,6 +24,7 @@ import Portfolio from './pages/Portfolio';
 import LoanPage from './pages/Loan';
 import KycVerification from './pages/KycVerification';
 import LanguagePage from './pages/LanguagePage';
+import Settings from './pages/Settings';
 import FAQ from './pages/FAQ';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Legal from './pages/Legal';
@@ -143,6 +144,11 @@ export default function AppRoutes() {
       <Route path="/settings/language" element={
         <ProtectedRoute>
           <LanguagePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/settings" element={
+        <ProtectedRoute>
+          <Settings />
         </ProtectedRoute>
       } />
       <Route path="/credit-score" element={
