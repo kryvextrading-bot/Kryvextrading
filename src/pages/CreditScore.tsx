@@ -20,15 +20,26 @@ export default function CreditScore() {
       setScore(s);
       setEditScore(s.toString());
       setLoading(false);
+    }).catch(error => {
+      console.error('Failed to fetch credit score:', error);
+      setScore(700); // Set default score on error
+      setEditScore('700');
+      setLoading(false);
     });
   }, [user]);
 
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
-    await apiService.setCreditScore(user.id, Number(editScore));
-    setScore(Number(editScore));
-    setSaving(false);
+    try {
+      await apiService.setCreditScore(user.id, Number(editScore));
+      setScore(Number(editScore));
+    } catch (error) {
+      console.error('Failed to save credit score:', error);
+      // Optionally show an error message to the user
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

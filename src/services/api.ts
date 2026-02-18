@@ -533,6 +533,27 @@ export class ApiService {
     
     return mockPrices;
   }
+
+  // Credit Score Management
+  async getCreditScore(userId: string): Promise<number> {
+    try {
+      const user = await this.getUser(userId);
+      return user.creditScore;
+    } catch (error) {
+      console.error('Error fetching credit score:', error);
+      // Return default credit score if user not found or error occurs
+      return 700;
+    }
+  }
+
+  async setCreditScore(userId: string, score: number): Promise<void> {
+    try {
+      await this.updateUser(userId, { creditScore: score });
+    } catch (error) {
+      console.error('Error setting credit score:', error);
+      throw error;
+    }
+  }
 }
 
 // Create and export singleton instance
