@@ -31,6 +31,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
 import { useTradingControl } from '@/hooks/useTradingControl';
 import { useUnifiedTrading } from '@/hooks/useUnifiedTrading';
+import { unifiedTradingService } from '@/services/unified-trading-service';
+import { TradeType, ArbitrageContract } from '@/services/unified-trading-service';
 
 // Icons
 import { 
@@ -47,6 +49,7 @@ import {
 } from 'react-icons/si';
 
 // ==================== TYPES ====================
+// Using real types from unified-trading-service
 interface ArbitrageProduct {
   id: string;
   label: string;
@@ -430,13 +433,85 @@ export default function ArbitragePage() {
   const loadUserData = async () => {
     setLoading(true);
     try {
-      // Initialize with empty data - will be populated by real API calls
+      if (!user?.id) {
+        // Initialize with empty data if not authenticated
+        setActiveContracts([]);
+        setContractHistory([]);
+        setStakingPositions([]);
+        setStakingHistory([]);
+        setStats({
+          totalInvested: 0,
+          totalEarned: 0,
+          activeContracts: 0,
+          activeStaking: 0,
+          avgDailyReturn: 0
+        });
+        return;
+      }
+
+      // Load real arbitrage contracts from trading service
+      const arbitrageTrades = await unifiedTradingService.getUserTrades(user.id, 'arbitrage');
+      const stakingTrades = await unifiedTradingService.getUserTrades(user.id, 'staking');
+
+      // Filter and map arbitrage contracts
+      const activeArbitrage = arbitrageTrades
+        .filter(trade => trade.status === 'active')
+        .map(trade => trade as ArbitrageContract);
+
+      const completedArbitrage = arbitrageTrades
+        .filter(trade => trade.status === 'completed' || trade.status === 'failed')
+        .map(trade => trade as ArbitrageContract);
+
+      // Filter and map staking positions
+      const activeStaking = stakingTrades
+        .filter(trade => trade.status === 'active')
+        .map(trade => ({
+          id: trade.id,
+          amount: trade.amount,
+          startTime: trade.createdAt,
+          dailyRate: 0.001, // Default rate, should come from trade metadata
+          accumulatedRewards: trade.pnl || 0,
+          status: trade.status as 'active' | 'completed' | 'unstaked'
+        }));
+
+      const completedStaking = stakingTrades
+        .filter(trade => trade.status === 'completed' || trade.status === 'failed')
+        .map(trade => ({
+          id: trade.id,
+          amount: trade.amount,
+          startTime: trade.createdAt,
+          dailyRate: 0.001,
+          accumulatedRewards: trade.pnl || 0,
+          status: trade.status as 'active' | 'completed' | 'unstaked'
+        }));
+
+      // Update state with real data
+      setActiveContracts(activeArbitrage);
+      setContractHistory(completedArbitrage);
+      setStakingPositions(activeStaking);
+      setStakingHistory(completedStaking);
+
+      // Calculate real stats
+      const totalInvested = [...arbitrageTrades, ...stakingTrades].reduce((sum, trade) => sum + trade.amount, 0);
+      const totalEarned = [...arbitrageTrades, ...stakingTrades].reduce((sum, trade) => sum + (trade.pnl || 0), 0);
+
+      setStats({
+        totalInvested,
+        totalEarned,
+        activeContracts: activeArbitrage.length,
+        activeStaking: activeStaking.length,
+        avgDailyReturn: totalInvested > 0 ? (totalEarned / totalInvested) * 100 : 0
+      });
+
+    } catch (error) {
+      console.error('Failed to load user data:', error);
+      toast.error('Failed to load your arbitrage data');
+      
+      // Initialize with empty data on error
       setActiveContracts([]);
       setContractHistory([]);
       setStakingPositions([]);
       setStakingHistory([]);
-
-      // Initialize stats with zero values
       setStats({
         totalInvested: 0,
         totalEarned: 0,
@@ -444,18 +519,6 @@ export default function ArbitragePage() {
         activeStaking: 0,
         avgDailyReturn: 0
       });
-
-      // TODO: Replace with actual API calls
-      // Example:
-      // const response = await fetch('/api/user/arbitrage-data');
-      // const data = await response.json();
-      // setActiveContracts(data.activeContracts);
-      // setContractHistory(data.contractHistory);
-      // etc.
-
-    } catch (error) {
-      console.error('Failed to load user data:', error);
-      toast.error('Failed to load your arbitrage data');
     } finally {
       setLoading(false);
     }
@@ -487,77 +550,45 @@ export default function ArbitragePage() {
     setExecuting(true);
 
     try {
-      // Check if this contract should win based on admin settings
-      const wins = await shouldWin('arbitrage');
-      
-      const contractId = `arb_${Date.now()}`;
-      const duration = selectedProduct.duration * 24 * 60 * 60 * 1000;
-      const dailyRate = parseFloat(selectedProduct.dailyReturn.split('–')[0].replace('%', '')) / 100;
-
-      // Lock the funds
-      const lockResult = await lockBalance('USDT', amount, contractId, {
-        productId: selectedProduct.id,
-        productLabel: selectedProduct.label,
-        duration: selectedProduct.duration
-      });
-
-      if (!lockResult.success) {
-        throw new Error(lockResult.error || 'Failed to lock funds');
-      }
-
-      // Create contract
-      const newContract: ArbitrageContract = {
-        id: contractId,
-        productId: selectedProduct.id,
-        productLabel: selectedProduct.label,
+      // Execute arbitrage trade through unified trading service
+      const result = await executeTrade('arbitrage', {
         amount,
-        startTime: new Date().toISOString(),
-        endTime: new Date(Date.now() + duration).toISOString(),
-        dailyRate,
-        status: 'active'
-      };
-
-      setActiveContracts(prev => [newContract, ...prev]);
-      
-      toast.success({
-        title: 'Contract Started',
-        description: `You invested ${formatCurrency(amount)} in ${selectedProduct.label}`,
+        productId: selectedProduct.id,
+        productLabel: selectedProduct.label,
+        duration: selectedProduct.duration,
+        asset: 'USDT'
       });
 
-      // Schedule completion
-      setTimeout(async () => {
-        const totalReturn = amount * (1 + dailyRate * selectedProduct.duration);
-        const profit = totalReturn - amount;
-
-        // Update contract status
-        setActiveContracts(prev => prev.filter(c => c.id !== contractId));
-        setContractHistory(prev => [{
-          ...newContract,
-          status: 'completed',
-          pnl: profit,
-          claimed: profit
-        }, ...prev]);
-
-        // Add profit to wallet
-        await addBalance('USDT', totalReturn, 'arbitrage_profit', contractId);
-        
-        toast.success({
-          title: 'Contract Completed',
-          description: `You earned ${formatCurrency(profit)} from your arbitrage contract`,
+      if (result.success) {
+        toast({
+          title: 'Arbitrage Started!',
+          description: `Your ${selectedProduct.label} contract has been activated.`,
         });
-      }, duration);
-
-      // Clear form
-      setInvestmentAmount('');
-      setSelectedProduct(null);
+        
+        // Reset form
+        setSelectedProduct(null);
+        setInvestmentAmount('');
+        
+        // Reload data to show new contract
+        await loadUserData();
+        
+        // Refresh wallet balance
+        refreshData();
+      } else {
+        throw new Error(result.error || 'Failed to start arbitrage');
+      }
 
     } catch (error) {
       console.error('Failed to start arbitrage:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to start arbitrage');
+      toast({
+        title: 'Failed to Start Arbitrage',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive'
+      });
     } finally {
       setExecuting(false);
     }
-  }, [isAuthenticated, selectedProduct, investmentAmount, getBalance, lockBalance, addBalance, shouldWin, toast]);
+  }, [isAuthenticated, selectedProduct, investmentAmount, executeTrade, loadUserData, refreshData, toast]);
 
   // Handle staking start
   const handleStartStaking = useCallback(async () => {
@@ -583,80 +614,43 @@ export default function ArbitragePage() {
     setExecuting(true);
 
     try {
-      const positionId = `stake_${Date.now()}`;
-
-      // Lock the funds
-      const lockResult = await lockBalance('USDT', amount, positionId, {
-        type: 'staking',
-        tier: tier.range,
-        dailyRate: tier.dailyRate
-      });
-
-      if (!lockResult.success) {
-        throw new Error(lockResult.error || 'Failed to lock funds');
-      }
-
-      // Create staking position
-      const newPosition: StakingPosition = {
-        id: positionId,
+      // Execute staking trade through unified trading service
+      const result = await executeTrade('staking', {
         amount,
-        startTime: new Date().toISOString(),
+        tier: tier.range,
         dailyRate: tier.dailyRate,
-        accumulatedRewards: 0,
-        status: 'active'
-      };
-
-      setStakingPositions(prev => [newPosition, ...prev]);
-
-      toast.success({
-        title: 'Staking Started',
-        description: `You staked ${formatCurrency(amount)} at ${(tier.dailyRate * 100).toFixed(2)}% daily`,
+        asset: 'USDT'
       });
 
-      // Start reward accumulation
-      const interval = setInterval(async () => {
-        setStakingPositions(prev => 
-          prev.map(pos => 
-            pos.id === positionId
-              ? { ...pos, accumulatedRewards: pos.accumulatedRewards + (amount * tier.dailyRate / 86400) }
-              : pos
-          )
-        );
-      }, 1000);
-
-      // Schedule unstaking (30 days)
-      setTimeout(async () => {
-        clearInterval(interval);
+      if (result.success) {
+        toast({
+          title: 'Staking Started!',
+          description: `Your ${tier.range} staking position has been activated.`,
+        });
         
-        const position = stakingPositions.find(p => p.id === positionId);
-        if (position) {
-          const totalReturn = amount + position.accumulatedRewards;
-          
-          setStakingPositions(prev => prev.filter(p => p.id !== positionId));
-          setStakingHistory(prev => [{
-            ...position,
-            status: 'completed'
-          }, ...prev]);
-
-          await unlockBalance('USDT', amount, positionId);
-          await addBalance('USDT', position.accumulatedRewards, 'staking_reward', `${positionId}_reward`);
-
-          toast.success({
-            title: 'Staking Completed',
-            description: `You earned ${formatCurrency(position.accumulatedRewards)} from staking`,
-          });
-        }
-      }, 30 * 24 * 60 * 60 * 1000);
-
-      setStakingAmount('');
+        // Reset form
+        setStakingAmount('');
+        
+        // Reload data to show new position
+        await loadUserData();
+        
+        // Refresh wallet balance
+        refreshData();
+      } else {
+        throw new Error(result.error || 'Failed to start staking');
+      }
 
     } catch (error) {
       console.error('Failed to start staking:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to start staking');
+      toast({
+        title: 'Failed to Start Staking',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive'
+      });
     } finally {
       setExecuting(false);
     }
-  }, [isAuthenticated, stakingAmount, getBalance, lockBalance, unlockBalance, addBalance, toast]);
+  }, [isAuthenticated, stakingAmount, executeTrade, loadUserData, refreshData, toast]);
 
   return (
     <motion.div 
@@ -1639,14 +1633,26 @@ export default function ArbitragePage() {
                   <History className="text-[#F0B90B]" />
                   Transaction History
                 </h2>
-                <motion.button
-                  whileHover={{ scale: 1.1, rotate: 90 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setRecordsOpen(false)}
-                  className="text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139] rounded-lg w-10 h-10 flex items-center justify-center transition-colors"
-                >
-                  <X size={20} />
-                </motion.button>
+                <div className="flex items-center gap-2">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => loadUserData()}
+                    disabled={loading}
+                    className="text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139] rounded-lg w-10 h-10 flex items-center justify-center transition-colors"
+                    title="Refresh data"
+                  >
+                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.1, rotate: 90 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setRecordsOpen(false)}
+                    className="text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139] rounded-lg w-10 h-10 flex items-center justify-center transition-colors"
+                  >
+                    <X size={20} />
+                  </motion.button>
+                </div>
               </div>
               
               <div className="p-6">
@@ -1680,7 +1686,7 @@ export default function ArbitragePage() {
                               <div className="w-8 h-8 bg-[#F0B90B]/10 rounded-lg flex items-center justify-center">
                                 <Zap className="w-4 h-4 text-[#F0B90B]" />
                               </div>
-                              <span className="font-medium text-[#EAECEF]">{contract.productLabel}</span>
+                              <span className="font-medium text-[#EAECEF]">{contract.productLabel || contract.metadata?.productLabel || 'Arbitrage Contract'}</span>
                             </div>
                             <Badge className="bg-green-400/10 text-green-400 border-green-400/20">Active</Badge>
                           </div>
@@ -1695,7 +1701,7 @@ export default function ArbitragePage() {
                             </div>
                             <div className="bg-[#1E2329] rounded-lg p-2">
                               <span className="text-xs text-[#848E9C] block mb-1">Remaining</span>
-                              <p className="font-medium text-[#F0B90B]">{formatTimeRemaining(contract.endTime)}</p>
+                              <p className="font-medium text-[#F0B90B]">{formatTimeRemaining(contract.endTime || contract.updatedAt)}</p>
                             </div>
                           </div>
                         </motion.div>
@@ -1756,7 +1762,7 @@ export default function ArbitragePage() {
                               <div className="w-8 h-8 bg-[#F0B90B]/10 rounded-lg flex items-center justify-center">
                                 <Zap className="w-4 h-4 text-[#F0B90B]" />
                               </div>
-                              <span className="font-medium text-[#EAECEF]">{contract.productLabel}</span>
+                              <span className="font-medium text-[#EAECEF]">{contract.productLabel || contract.metadata?.productLabel || 'Arbitrage Contract'}</span>
                             </div>
                             <Badge className="bg-green-400/10 text-green-400 border-green-400/20">Completed</Badge>
                           </div>
@@ -1771,7 +1777,7 @@ export default function ArbitragePage() {
                             </div>
                             <div className="bg-[#1E2329] rounded-lg p-2">
                               <span className="text-xs text-[#848E9C] block mb-1">Date</span>
-                              <p className="font-medium text-[#F0B90B]">{new Date(contract.endTime).toLocaleDateString()}</p>
+                              <p className="font-medium text-[#F0B90B]">{new Date(contract.endTime || contract.updatedAt).toLocaleDateString()}</p>
                             </div>
                           </div>
                         </motion.div>
