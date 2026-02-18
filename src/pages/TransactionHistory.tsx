@@ -39,47 +39,53 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Hooks
 import { useAuth } from '@/contexts/AuthContext';
-import { useWallet } from '@/contexts/WalletContext';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useTradingControl } from '@/hooks/useTradingControl';
 
 // Services
-import { transactionService } from '@/services/transactionService';
-import { walletService } from '@/services/wallet-service-new';
+import { supabase } from '@/lib/supabase';
 
 // Utils
-import { formatCurrency, formatPrice, formatPercentage } from '@/utils/tradingCalculations';
+import { formatCurrency as formatCurrencyUtil, formatPrice, formatPercentage } from '@/utils/tradingCalculations';
 
 // Types
 interface Transaction {
   id: string;
-  userId: string;
+  user_id: string;
   type: 'deposit' | 'withdrawal' | 'swap' | 'trade' | 'staking' | 'options' | 'fee' | 'funding' | 'referral' | 'airdrop';
-  status: 'completed' | 'pending' | 'processing' | 'failed' | 'cancelled';
+  status: 'completed' | 'pending' | 'processing' | 'failed' | 'cancelled' | 'active' | 'expired';
   amount: number;
-  currency: string;
-  fromCurrency?: string;
-  toCurrency?: string;
-  description: string;
-  date: string;
-  txHash?: string;
+  asset: string;
+  from_currency?: string;
+  to_currency?: string;
+  description?: string;
+  created_at: string;
+  updated_at?: string;
+  tx_hash?: string;
   fee?: number;
   metadata?: {
     direction?: 'up' | 'down';
     leverage?: number;
-    timeFrame?: number;
+    duration?: number;
     payout?: number;
-    expiresAt?: number;
-    shouldWin?: boolean;
+    expires_at?: string;
+    should_win?: boolean;
     outcome?: 'win' | 'loss';
     pnl?: number;
-    orderType?: string;
-    positionId?: string;
+    order_type?: string;
+    position_id?: string;
+    entry_price?: number;
+    expiry_price?: number;
+    stake?: number;
   };
   confirmations?: number;
   network?: string;
   address?: string;
+  reference_id?: string;
 }
 
 // Constants
@@ -89,7 +95,23 @@ export default function TransactionHistory() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, isAuthenticated } = useAuth();
-  const { balances, refreshBalances, getBalance } = useWallet();
+  
+  // Use unified wallet
+  const {
+    getFundingBalance,
+    getTradingBalance,
+    getLockedBalance,
+    getTotalBalance,
+    refreshBalances,
+    loading: walletLoading
+  } = useUnifiedWallet();
+  
+  const {
+    userOutcome,
+    activeWindows,
+    shouldWin,
+    loading: controlsLoading
+  } = useTradingControl();
 
   // State
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -108,7 +130,7 @@ export default function TransactionHistory() {
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'type'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // Load transactions
+  // Load transactions from Supabase
   useEffect(() => {
     if (user?.id) {
       loadTransactions();
@@ -120,8 +142,78 @@ export default function TransactionHistory() {
     
     try {
       setLoading(true);
-      const data = await transactionService.getUserTransactions(user.id);
-      setTransactions(data);
+      
+      // Fetch from trades table
+      const { data: trades, error: tradesError } = await supabase
+        .from('trades')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (tradesError) throw tradesError;
+      
+      // Fetch from wallet_transactions table
+      const { data: walletTxs, error: walletError } = await supabase
+        .from('wallet_transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (walletError) throw walletError;
+      
+      // Format trades as transactions
+      const formattedTrades: Transaction[] = (trades || []).map(trade => {
+        const metadata = trade.metadata || {};
+        const isWin = trade.pnl > 0;
+        
+        return {
+          id: trade.id,
+          user_id: trade.user_id,
+          type: trade.type || 'trade',
+          status: trade.status?.toLowerCase() || 'completed',
+          amount: Math.abs(trade.amount || 0),
+          asset: trade.asset || 'USDT',
+          description: `${metadata.direction || ''} ${metadata.symbol || 'Trade'} - ${isWin ? 'Win' : 'Loss'}`,
+          created_at: trade.created_at,
+          updated_at: trade.updated_at,
+          fee: trade.fee,
+          metadata: {
+            direction: metadata.direction,
+            duration: metadata.duration,
+            payout: metadata.payout,
+            should_win: metadata.shouldWin,
+            outcome: isWin ? 'win' : 'loss',
+            pnl: trade.pnl,
+            entry_price: metadata.entryPrice,
+            expiry_price: metadata.expiryPrice,
+            stake: metadata.stake || Math.abs(trade.amount)
+          }
+        };
+      });
+      
+      // Format wallet transactions
+      const formattedWalletTxs: Transaction[] = (walletTxs || []).map(tx => ({
+        id: tx.id,
+        user_id: tx.user_id,
+        type: tx.type,
+        status: tx.status || 'completed',
+        amount: Math.abs(tx.amount || 0),
+        asset: tx.currency || 'USDT',
+        description: tx.description || `${tx.type} transaction`,
+        created_at: tx.created_at,
+        fee: tx.fee,
+        network: tx.network,
+        address: tx.address,
+        tx_hash: tx.tx_hash,
+        reference_id: tx.reference_id
+      }));
+      
+      // Combine and sort by date
+      const allTransactions = [...formattedTrades, ...formattedWalletTxs].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      
+      setTransactions(allTransactions);
       await refreshBalances();
     } catch (error) {
       console.error('Failed to load transactions:', error);
@@ -152,11 +244,12 @@ export default function TransactionHistory() {
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
         const matches = 
-          transaction.description.toLowerCase().includes(term) ||
-          transaction.currency.toLowerCase().includes(term) ||
+          (transaction.description?.toLowerCase().includes(term) || false) ||
+          transaction.asset.toLowerCase().includes(term) ||
           transaction.id.toLowerCase().includes(term) ||
-          (transaction.txHash && transaction.txHash.toLowerCase().includes(term)) ||
-          (transaction.address && transaction.address.toLowerCase().includes(term));
+          (transaction.tx_hash && transaction.tx_hash.toLowerCase().includes(term)) ||
+          (transaction.address && transaction.address.toLowerCase().includes(term)) ||
+          (transaction.reference_id && transaction.reference_id.toLowerCase().includes(term));
         
         if (!matches) return false;
       }
@@ -173,7 +266,7 @@ export default function TransactionHistory() {
       
       // Date filter
       if (dateRange !== 'all') {
-        const txDate = new Date(transaction.date);
+        const txDate = new Date(transaction.created_at);
         const now = new Date();
         now.setHours(0, 0, 0, 0);
         
@@ -210,7 +303,7 @@ export default function TransactionHistory() {
       
       switch (sortBy) {
         case 'date':
-          comparison = new Date(b.date).getTime() - new Date(a.date).getTime();
+          comparison = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
           break;
         case 'amount':
           comparison = b.amount - a.amount;
@@ -238,8 +331,8 @@ export default function TransactionHistory() {
   const stats = useMemo(() => {
     const total = filteredTransactions.length;
     const completed = filteredTransactions.filter(t => t.status === 'completed').length;
-    const pending = filteredTransactions.filter(t => t.status === 'pending' || t.status === 'processing').length;
-    const failed = filteredTransactions.filter(t => t.status === 'failed' || t.status === 'cancelled').length;
+    const pending = filteredTransactions.filter(t => t.status === 'pending' || t.status === 'processing' || t.status === 'active').length;
+    const failed = filteredTransactions.filter(t => t.status === 'failed' || t.status === 'cancelled' || t.status === 'expired').length;
     
     const totalDeposits = filteredTransactions
       .filter(t => t.type === 'deposit' && t.status === 'completed')
@@ -263,16 +356,16 @@ export default function TransactionHistory() {
     const losses = filteredTransactions
       .filter(t => t.metadata?.outcome === 'loss').length;
       
-    // Group by currency
-    const byCurrency = filteredTransactions.reduce((acc, t) => {
-      if (!acc[t.currency]) {
-        acc[t.currency] = { deposits: 0, withdrawals: 0, trades: 0, volume: 0 };
+    // Group by asset
+    const byAsset = filteredTransactions.reduce((acc, t) => {
+      if (!acc[t.asset]) {
+        acc[t.asset] = { deposits: 0, withdrawals: 0, trades: 0, volume: 0 };
       }
-      if (t.type === 'deposit') acc[t.currency].deposits += t.amount;
-      if (t.type === 'withdrawal') acc[t.currency].withdrawals += t.amount;
-      if (t.type === 'trade') {
-        acc[t.currency].trades++;
-        acc[t.currency].volume += t.amount;
+      if (t.type === 'deposit') acc[t.asset].deposits += t.amount;
+      if (t.type === 'withdrawal') acc[t.asset].withdrawals += t.amount;
+      if (t.type === 'trade' || t.type === 'options') {
+        acc[t.asset].trades++;
+        acc[t.asset].volume += t.amount;
       }
       return acc;
     }, {} as Record<string, { deposits: number; withdrawals: number; trades: number; volume: number }>);
@@ -289,7 +382,7 @@ export default function TransactionHistory() {
       wins,
       losses,
       winRate: wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0,
-      byCurrency
+      byAsset
     };
   }, [filteredTransactions]);
 
@@ -370,6 +463,7 @@ export default function TransactionHistory() {
           label: 'Pending'
         };
       case 'processing':
+      case 'active':
         return {
           icon: <RefreshCw className="w-4 h-4 animate-spin" />,
           color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -382,10 +476,11 @@ export default function TransactionHistory() {
           label: 'Failed'
         };
       case 'cancelled':
+      case 'expired':
         return {
           icon: <XCircle className="w-4 h-4" />,
           color: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-          label: 'Cancelled'
+          label: status === 'cancelled' ? 'Cancelled' : 'Expired'
         };
       default:
         return {
@@ -423,6 +518,13 @@ export default function TransactionHistory() {
     return formatDate(dateString);
   };
 
+  const formatCurrency = (value: number): string => {
+    return value.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
   const handleExport = (format: 'csv' | 'json' = 'csv') => {
     try {
       if (format === 'csv') {
@@ -431,7 +533,7 @@ export default function TransactionHistory() {
           'Type',
           'Status',
           'Amount',
-          'Currency',
+          'Asset',
           'From/To',
           'Description',
           'Date',
@@ -446,11 +548,11 @@ export default function TransactionHistory() {
           tx.type,
           tx.status,
           tx.amount,
-          tx.currency,
-          tx.fromCurrency ? `${tx.fromCurrency}→${tx.toCurrency}` : '',
-          `"${tx.description.replace(/"/g, '""')}"`,
-          new Date(tx.date).toISOString(),
-          tx.txHash || '',
+          tx.asset,
+          tx.from_currency && tx.to_currency ? `${tx.from_currency}→${tx.to_currency}` : '',
+          `"${(tx.description || '').replace(/"/g, '""')}"`,
+          new Date(tx.created_at).toISOString(),
+          tx.tx_hash || '',
           tx.fee || '',
           tx.network || '',
           tx.address || ''
@@ -589,7 +691,8 @@ export default function TransactionHistory() {
               <div>
                 <p className="text-xs text-[#848E9C]">Total Balance</p>
                 <p className="text-xl font-bold text-[#EAECEF]">
-                  {showBalances ? formatCurrency(getBalance('USDT')) : '••••••'}
+                  {walletLoading ? <Skeleton className="h-6 w-20" /> : 
+                   showBalances ? formatCurrency(getTotalBalance('USDT')) : '••••••'}
                 </p>
               </div>
               <Wallet className="w-8 h-8 text-[#F0B90B] opacity-50" />
@@ -601,7 +704,8 @@ export default function TransactionHistory() {
               <div>
                 <p className="text-xs text-[#848E9C]">Deposits</p>
                 <p className="text-xl font-bold text-green-400">
-                  {showBalances ? formatCurrency(stats.totalDeposits) : '••••••'}
+                  {loading ? <Skeleton className="h-6 w-20" /> :
+                   showBalances ? formatCurrency(stats.totalDeposits) : '••••••'}
                 </p>
               </div>
               <ArrowDownLeft className="w-8 h-8 text-green-400 opacity-50" />
@@ -613,7 +717,8 @@ export default function TransactionHistory() {
               <div>
                 <p className="text-xs text-[#848E9C]">Withdrawals</p>
                 <p className="text-xl font-bold text-red-400">
-                  {showBalances ? formatCurrency(stats.totalWithdrawals) : '••••••'}
+                  {loading ? <Skeleton className="h-6 w-20" /> :
+                   showBalances ? formatCurrency(stats.totalWithdrawals) : '••••••'}
                 </p>
               </div>
               <ArrowUpRight className="w-8 h-8 text-red-400 opacity-50" />
@@ -625,7 +730,8 @@ export default function TransactionHistory() {
               <div>
                 <p className="text-xs text-[#848E9C]">Total P&L</p>
                 <p className={`text-xl font-bold ${stats.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {showBalances ? (
+                  {loading ? <Skeleton className="h-6 w-20" /> :
+                   showBalances ? (
                     <>{stats.totalPnl >= 0 ? '+' : ''}{formatCurrency(stats.totalPnl)}</>
                   ) : '••••••'}
                 </p>
@@ -666,8 +772,8 @@ export default function TransactionHistory() {
                   <SelectItem value="deposit">Deposit</SelectItem>
                   <SelectItem value="withdrawal">Withdrawal</SelectItem>
                   <SelectItem value="trade">Trade</SelectItem>
-                  <SelectItem value="swap">Swap</SelectItem>
                   <SelectItem value="options">Options</SelectItem>
+                  <SelectItem value="swap">Swap</SelectItem>
                   <SelectItem value="staking">Staking</SelectItem>
                   <SelectItem value="fee">Fee</SelectItem>
                   <SelectItem value="funding">Funding</SelectItem>
@@ -688,8 +794,10 @@ export default function TransactionHistory() {
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="failed">Failed</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="expired">Expired</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -773,8 +881,19 @@ export default function TransactionHistory() {
 
         {/* Transaction List */}
         {loading ? (
-          <div className="flex justify-center py-12">
-            <RefreshCw className="w-8 h-8 text-[#F0B90B] animate-spin" />
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5].map(i => (
+              <Card key={i} className="bg-[#181A20] border-[#2B3139] p-4">
+                <div className="flex items-start gap-4">
+                  <Skeleton className="w-12 h-12 rounded-lg" />
+                  <div className="flex-1">
+                    <Skeleton className="h-4 w-32 mb-2" />
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                  <Skeleton className="h-8 w-20" />
+                </div>
+              </Card>
+            ))}
           </div>
         ) : filteredTransactions.length === 0 ? (
           <Card className="bg-[#181A20] border-[#2B3139] p-12 text-center">
@@ -802,8 +921,10 @@ export default function TransactionHistory() {
                     exit={{ opacity: 0 }}
                     transition={{ delay: index * 0.05 }}
                   >
-                    <Card className="bg-[#181A20] border-[#2B3139] p-4 hover:bg-[#1E2329] transition-colors cursor-pointer"
-                          onClick={() => viewTransactionDetails(transaction)}>
+                    <Card 
+                      className="bg-[#181A20] border-[#2B3139] p-4 hover:bg-[#1E2329] transition-colors cursor-pointer"
+                      onClick={() => viewTransactionDetails(transaction)}
+                    >
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-4">
                           <div className={`p-3 rounded-lg border ${typeConfig.color}`}>
@@ -819,7 +940,7 @@ export default function TransactionHistory() {
                                 {statusConfig.icon}
                                 <span className="ml-1 capitalize">{statusConfig.label}</span>
                               </Badge>
-                              {transaction.metadata?.shouldWin && (
+                              {transaction.metadata?.should_win && (
                                 <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
                                   <Crown className="w-3 h-3 mr-1" />
                                   Force Win
@@ -827,19 +948,19 @@ export default function TransactionHistory() {
                               )}
                             </div>
                             
-                            <p className="text-sm text-[#848E9C] mb-2">{transaction.description}</p>
+                            <p className="text-sm text-[#848E9C] mb-2">{transaction.description || transaction.type}</p>
                             
                             <div className="flex flex-wrap gap-3 text-xs">
-                              {transaction.txHash && (
+                              {transaction.tx_hash && (
                                 <button
                                   className="text-[#5E6673] hover:text-[#F0B90B] flex items-center gap-1"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    copyToClipboard(transaction.txHash!, 'Transaction hash');
+                                    copyToClipboard(transaction.tx_hash!, 'Transaction hash');
                                   }}
                                 >
                                   <span className="font-mono">
-                                    {transaction.txHash.slice(0, 10)}...{transaction.txHash.slice(-8)}
+                                    {transaction.tx_hash.slice(0, 10)}...{transaction.tx_hash.slice(-8)}
                                   </span>
                                   <Copy className="w-3 h-3" />
                                 </button>
@@ -861,7 +982,7 @@ export default function TransactionHistory() {
                               )}
                               
                               <span className="text-[#5E6673]">
-                                {formatRelativeTime(transaction.date)}
+                                {formatRelativeTime(transaction.created_at)}
                               </span>
                             </div>
                           </div>
@@ -873,25 +994,33 @@ export default function TransactionHistory() {
                               ? 'text-green-400'
                               : transaction.type === 'withdrawal'
                                 ? 'text-red-400'
-                                : 'text-[#EAECEF]'
+                                : transaction.metadata?.outcome === 'win'
+                                  ? 'text-green-400'
+                                  : transaction.metadata?.outcome === 'loss'
+                                    ? 'text-red-400'
+                                    : 'text-[#EAECEF]'
                           }`}>
                             {transaction.type === 'deposit' || transaction.type === 'staking' || transaction.type === 'referral' || transaction.type === 'airdrop'
                               ? '+'
                               : transaction.type === 'withdrawal'
                                 ? '-'
-                                : ''}
-                            {transaction.amount} {transaction.currency}
+                                : transaction.metadata?.outcome === 'win'
+                                  ? '+'
+                                  : transaction.metadata?.outcome === 'loss'
+                                    ? '-'
+                                    : ''}
+                            {transaction.amount} {transaction.asset}
                           </div>
                           
-                          {transaction.fromCurrency && transaction.toCurrency && (
+                          {transaction.from_currency && transaction.to_currency && (
                             <div className="text-xs text-[#848E9C] mt-1">
-                              {transaction.fromCurrency} → {transaction.toCurrency}
+                              {transaction.from_currency} → {transaction.to_currency}
                             </div>
                           )}
                           
                           {transaction.fee ? (
                             <div className="text-xs text-[#848E9C] mt-1">
-                              Fee: {transaction.fee} {transaction.currency}
+                              Fee: {transaction.fee} {transaction.asset}
                             </div>
                           ) : transaction.metadata?.pnl ? (
                             <div className={`text-xs mt-1 ${transaction.metadata.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -928,8 +1057,10 @@ export default function TransactionHistory() {
                     exit={{ opacity: 0 }}
                     transition={{ delay: index * 0.05 }}
                   >
-                    <Card className="bg-[#181A20] border-[#2B3139] p-4 hover:bg-[#1E2329] transition-colors cursor-pointer h-full"
-                          onClick={() => viewTransactionDetails(transaction)}>
+                    <Card 
+                      className="bg-[#181A20] border-[#2B3139] p-4 hover:bg-[#1E2329] transition-colors cursor-pointer h-full"
+                      onClick={() => viewTransactionDetails(transaction)}
+                    >
                       <div className="flex items-center gap-3 mb-3">
                         <div className={`p-2 rounded-lg border ${typeConfig.color}`}>
                           {typeConfig.icon}
@@ -943,7 +1074,7 @@ export default function TransactionHistory() {
                         </div>
                       </div>
                       
-                      <p className="text-sm text-[#848E9C] mb-3 line-clamp-2">{transaction.description}</p>
+                      <p className="text-sm text-[#848E9C] mb-3 line-clamp-2">{transaction.description || transaction.type}</p>
                       
                       <div className="mb-3">
                         <div className={`text-xl font-bold ${
@@ -951,14 +1082,22 @@ export default function TransactionHistory() {
                             ? 'text-green-400'
                             : transaction.type === 'withdrawal'
                               ? 'text-red-400'
-                              : 'text-[#EAECEF]'
+                              : transaction.metadata?.outcome === 'win'
+                                ? 'text-green-400'
+                                : transaction.metadata?.outcome === 'loss'
+                                  ? 'text-red-400'
+                                  : 'text-[#EAECEF]'
                         }`}>
                           {transaction.type === 'deposit' || transaction.type === 'staking' || transaction.type === 'referral' || transaction.type === 'airdrop'
                             ? '+'
                             : transaction.type === 'withdrawal'
                               ? '-'
-                              : ''}
-                          {transaction.amount} {transaction.currency}
+                              : transaction.metadata?.outcome === 'win'
+                                ? '+'
+                                : transaction.metadata?.outcome === 'loss'
+                                  ? '-'
+                                  : ''}
+                          {transaction.amount} {transaction.asset}
                         </div>
                         
                         {transaction.metadata?.pnl && (
@@ -969,19 +1108,19 @@ export default function TransactionHistory() {
                       </div>
                       
                       <div className="text-xs text-[#5E6673]">
-                        {formatDate(transaction.date)}
+                        {formatDate(transaction.created_at)}
                       </div>
                       
-                      {transaction.txHash && (
+                      {transaction.tx_hash && (
                         <button
                           className="mt-2 text-xs text-[#5E6673] hover:text-[#F0B90B] flex items-center gap-1"
                           onClick={(e) => {
                             e.stopPropagation();
-                            copyToClipboard(transaction.txHash!, 'Transaction hash');
+                            copyToClipboard(transaction.tx_hash!, 'Transaction hash');
                           }}
                         >
                           <span className="font-mono">
-                            {transaction.txHash.slice(0, 10)}...{transaction.txHash.slice(-8)}
+                            {transaction.tx_hash.slice(0, 10)}...{transaction.tx_hash.slice(-8)}
                           </span>
                           <Copy className="w-3 h-3" />
                         </button>
@@ -1055,15 +1194,15 @@ export default function TransactionHistory() {
           </div>
         )}
 
-        {/* Summary by Currency */}
-        {Object.keys(stats.byCurrency).length > 0 && (
+        {/* Summary by Asset */}
+        {Object.keys(stats.byAsset).length > 0 && (
           <Card className="bg-[#181A20] border-[#2B3139] p-6 mt-6">
             <h3 className="text-lg font-semibold text-[#EAECEF] mb-4">Summary by Asset</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.entries(stats.byCurrency).map(([currency, data]) => (
-                <div key={currency} className="bg-[#1E2329] rounded-lg p-4">
+              {Object.entries(stats.byAsset).map(([asset, data]) => (
+                <div key={asset} className="bg-[#1E2329] rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-[#EAECEF]">{currency}</span>
+                    <span className="font-medium text-[#EAECEF]">{asset}</span>
                     <Badge className="bg-[#2B3139] text-[#848E9C]">{data.trades} trades</Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
@@ -1094,232 +1233,293 @@ export default function TransactionHistory() {
       </div>
 
       {/* Transaction Details Modal */}
-      {showDetails && selectedTransaction && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <AnimatePresence>
+        {showDetails && selectedTransaction && (
           <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-[#181A20] border border-[#2B3139] rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowDetails(false)}
           >
-            <div className="p-4 border-b border-[#2B3139] flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-[#EAECEF]">Transaction Details</h3>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowDetails(false)}
-              >
-                <XCircle className="h-5 w-5 text-[#848E9C]" />
-              </Button>
-            </div>
-
-            <div className="p-4 space-y-4">
-              {/* Header with type and status */}
-              <div className="flex items-center gap-3">
-                <div className={`p-3 rounded-lg border ${getTransactionConfig(selectedTransaction.type).color}`}>
-                  {getTransactionConfig(selectedTransaction.type).icon}
-                </div>
-                <div>
-                  <h4 className="text-xl font-bold text-[#EAECEF] capitalize">
-                    {getTransactionConfig(selectedTransaction.type).label}
-                  </h4>
-                  <Badge className={`mt-1 ${getStatusConfig(selectedTransaction.status).color}`}>
-                    {getStatusConfig(selectedTransaction.status).icon}
-                    <span className="ml-1 capitalize">{selectedTransaction.status}</span>
-                  </Badge>
-                </div>
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#181A20] border border-[#2B3139] rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-[#2B3139] flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-[#EAECEF]">Transaction Details</h3>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowDetails(false)}
+                >
+                  <XCircle className="h-5 w-5 text-[#848E9C]" />
+                </Button>
               </div>
 
-              {/* Transaction ID */}
-              <div>
-                <div className="text-xs text-[#848E9C] mb-1">Transaction ID</div>
-                <div className="text-sm text-[#EAECEF] font-mono break-all flex items-center gap-2">
-                  {selectedTransaction.id}
-                  <button
-                    onClick={() => copyToClipboard(selectedTransaction.id, 'Transaction ID')}
-                    className="text-[#848E9C] hover:text-[#F0B90B]"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Amount and Currency */}
-              <div className="bg-[#1E2329] rounded-lg p-4">
-                <div className="text-xs text-[#848E9C] mb-1">Amount</div>
-                <div className={`text-2xl font-bold ${
-                  selectedTransaction.type === 'deposit' || selectedTransaction.type === 'staking' || selectedTransaction.type === 'referral' || selectedTransaction.type === 'airdrop'
-                    ? 'text-green-400'
-                    : selectedTransaction.type === 'withdrawal'
-                      ? 'text-red-400'
-                      : 'text-[#EAECEF]'
-                }`}>
-                  {selectedTransaction.type === 'deposit' || selectedTransaction.type === 'staking' || selectedTransaction.type === 'referral' || selectedTransaction.type === 'airdrop'
-                    ? '+'
-                    : selectedTransaction.type === 'withdrawal'
-                      ? '-'
-                      : ''}
-                  {selectedTransaction.amount} {selectedTransaction.currency}
-                </div>
-              </div>
-
-              {/* Details Grid */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="text-xs text-[#848E9C]">Date</div>
-                  <div className="text-sm text-[#EAECEF]">{formatDate(selectedTransaction.date)}</div>
-                </div>
-                
-                <div>
-                  <div className="text-xs text-[#848E9C]">Network</div>
-                  <div className="text-sm text-[#EAECEF]">{selectedTransaction.network || 'Mainnet'}</div>
-                </div>
-
-                {selectedTransaction.fromCurrency && selectedTransaction.toCurrency && (
-                  <>
-                    <div>
-                      <div className="text-xs text-[#848E9C]">From</div>
-                      <div className="text-sm text-[#EAECEF]">{selectedTransaction.fromCurrency}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-[#848E9C]">To</div>
-                      <div className="text-sm text-[#EAECEF]">{selectedTransaction.toCurrency}</div>
-                    </div>
-                  </>
-                )}
-
-                {selectedTransaction.fee && (
-                  <div>
-                    <div className="text-xs text-[#848E9C]">Fee</div>
-                    <div className="text-sm text-[#EAECEF]">{selectedTransaction.fee} {selectedTransaction.currency}</div>
+              <div className="p-4 space-y-4">
+                {/* Header with type and status */}
+                <div className="flex items-center gap-3">
+                  <div className={`p-3 rounded-lg border ${getTransactionConfig(selectedTransaction.type).color}`}>
+                    {getTransactionConfig(selectedTransaction.type).icon}
                   </div>
-                )}
-
-                {selectedTransaction.confirmations !== undefined && (
                   <div>
-                    <div className="text-xs text-[#848E9C]">Confirmations</div>
-                    <div className="text-sm text-[#EAECEF]">{selectedTransaction.confirmations}</div>
+                    <h4 className="text-xl font-bold text-[#EAECEF] capitalize">
+                      {getTransactionConfig(selectedTransaction.type).label}
+                    </h4>
+                    <Badge className={`mt-1 ${getStatusConfig(selectedTransaction.status).color}`}>
+                      {getStatusConfig(selectedTransaction.status).icon}
+                      <span className="ml-1 capitalize">{selectedTransaction.status}</span>
+                    </Badge>
                   </div>
-                )}
-              </div>
+                </div>
 
-              {/* Addresses */}
-              {selectedTransaction.address && (
+                {/* Transaction ID */}
                 <div>
-                  <div className="text-xs text-[#848E9C] mb-1">Address</div>
+                  <div className="text-xs text-[#848E9C] mb-1">Transaction ID</div>
                   <div className="text-sm text-[#EAECEF] font-mono break-all flex items-center gap-2">
-                    {selectedTransaction.address}
+                    {selectedTransaction.id}
                     <button
-                      onClick={() => copyToClipboard(selectedTransaction.address!, 'Address')}
+                      onClick={() => copyToClipboard(selectedTransaction.id, 'Transaction ID')}
                       className="text-[#848E9C] hover:text-[#F0B90B]"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
-              )}
 
-              {/* Transaction Hash */}
-              {selectedTransaction.txHash && (
-                <div>
-                  <div className="text-xs text-[#848E9C] mb-1">Transaction Hash</div>
-                  <div className="text-sm text-[#EAECEF] font-mono break-all flex items-center gap-2">
-                    {selectedTransaction.txHash}
-                    <button
-                      onClick={() => copyToClipboard(selectedTransaction.txHash!, 'Transaction hash')}
-                      className="text-[#848E9C] hover:text-[#F0B90B]"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                    <a
-                      href={`https://etherscan.io/tx/${selectedTransaction.txHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#848E9C] hover:text-[#F0B90B]"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
+                {/* Reference ID */}
+                {selectedTransaction.reference_id && (
+                  <div>
+                    <div className="text-xs text-[#848E9C] mb-1">Reference ID</div>
+                    <div className="text-sm text-[#EAECEF] font-mono break-all flex items-center gap-2">
+                      {selectedTransaction.reference_id}
+                      <button
+                        onClick={() => copyToClipboard(selectedTransaction.reference_id!, 'Reference ID')}
+                        className="text-[#848E9C] hover:text-[#F0B90B]"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Amount and Asset */}
+                <div className="bg-[#1E2329] rounded-lg p-4">
+                  <div className="text-xs text-[#848E9C] mb-1">Amount</div>
+                  <div className={`text-2xl font-bold ${
+                    selectedTransaction.type === 'deposit' || selectedTransaction.type === 'staking' || selectedTransaction.type === 'referral' || selectedTransaction.type === 'airdrop'
+                      ? 'text-green-400'
+                      : selectedTransaction.type === 'withdrawal'
+                        ? 'text-red-400'
+                        : selectedTransaction.metadata?.outcome === 'win'
+                          ? 'text-green-400'
+                          : selectedTransaction.metadata?.outcome === 'loss'
+                            ? 'text-red-400'
+                            : 'text-[#EAECEF]'
+                  }`}>
+                    {selectedTransaction.type === 'deposit' || selectedTransaction.type === 'staking' || selectedTransaction.type === 'referral' || selectedTransaction.type === 'airdrop'
+                      ? '+'
+                      : selectedTransaction.type === 'withdrawal'
+                        ? '-'
+                        : selectedTransaction.metadata?.outcome === 'win'
+                          ? '+'
+                          : selectedTransaction.metadata?.outcome === 'loss'
+                            ? '-'
+                            : ''}
+                    {selectedTransaction.amount} {selectedTransaction.asset}
                   </div>
                 </div>
-              )}
 
-              {/* Description */}
-              <div>
-                <div className="text-xs text-[#848E9C] mb-1">Description</div>
-                <div className="text-sm text-[#EAECEF]">{selectedTransaction.description}</div>
+                {/* Details Grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-[#848E9C]">Date</div>
+                    <div className="text-sm text-[#EAECEF]">{formatDate(selectedTransaction.created_at)}</div>
+                  </div>
+                  
+                  {selectedTransaction.updated_at && (
+                    <div>
+                      <div className="text-xs text-[#848E9C]">Updated</div>
+                      <div className="text-sm text-[#EAECEF]">{formatDate(selectedTransaction.updated_at)}</div>
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="text-xs text-[#848E9C]">Network</div>
+                    <div className="text-sm text-[#EAECEF]">{selectedTransaction.network || 'Mainnet'}</div>
+                  </div>
+
+                  {selectedTransaction.from_currency && selectedTransaction.to_currency && (
+                    <>
+                      <div>
+                        <div className="text-xs text-[#848E9C]">From</div>
+                        <div className="text-sm text-[#EAECEF]">{selectedTransaction.from_currency}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-[#848E9C]">To</div>
+                        <div className="text-sm text-[#EAECEF]">{selectedTransaction.to_currency}</div>
+                      </div>
+                    </>
+                  )}
+
+                  {selectedTransaction.fee && (
+                    <div>
+                      <div className="text-xs text-[#848E9C]">Fee</div>
+                      <div className="text-sm text-[#EAECEF]">{selectedTransaction.fee} {selectedTransaction.asset}</div>
+                    </div>
+                  )}
+
+                  {selectedTransaction.confirmations !== undefined && (
+                    <div>
+                      <div className="text-xs text-[#848E9C]">Confirmations</div>
+                      <div className="text-sm text-[#EAECEF]">{selectedTransaction.confirmations}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Addresses */}
+                {selectedTransaction.address && (
+                  <div>
+                    <div className="text-xs text-[#848E9C] mb-1">Address</div>
+                    <div className="text-sm text-[#EAECEF] font-mono break-all flex items-center gap-2">
+                      {selectedTransaction.address}
+                      <button
+                        onClick={() => copyToClipboard(selectedTransaction.address!, 'Address')}
+                        className="text-[#848E9C] hover:text-[#F0B90B]"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Transaction Hash */}
+                {selectedTransaction.tx_hash && (
+                  <div>
+                    <div className="text-xs text-[#848E9C] mb-1">Transaction Hash</div>
+                    <div className="text-sm text-[#EAECEF] font-mono break-all flex items-center gap-2">
+                      {selectedTransaction.tx_hash}
+                      <button
+                        onClick={() => copyToClipboard(selectedTransaction.tx_hash!, 'Transaction hash')}
+                        className="text-[#848E9C] hover:text-[#F0B90B]"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <a
+                        href={`https://etherscan.io/tx/${selectedTransaction.tx_hash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#848E9C] hover:text-[#F0B90B]"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {/* Description */}
+                {selectedTransaction.description && (
+                  <div>
+                    <div className="text-xs text-[#848E9C] mb-1">Description</div>
+                    <div className="text-sm text-[#EAECEF]">{selectedTransaction.description}</div>
+                  </div>
+                )}
+
+                {/* Metadata */}
+                {selectedTransaction.metadata && Object.keys(selectedTransaction.metadata).length > 0 && (
+                  <div className="bg-[#1E2329] rounded-lg p-3">
+                    <h4 className="text-sm font-medium text-[#EAECEF] mb-2">Additional Details</h4>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {selectedTransaction.metadata.direction && (
+                        <>
+                          <span className="text-[#848E9C]">Direction:</span>
+                          <span className={selectedTransaction.metadata.direction === 'up' ? 'text-green-400' : 'text-red-400'}>
+                            {selectedTransaction.metadata.direction.toUpperCase()}
+                          </span>
+                        </>
+                      )}
+                      {selectedTransaction.metadata.leverage && (
+                        <>
+                          <span className="text-[#848E9C]">Leverage:</span>
+                          <span className="text-[#F0B90B]">{selectedTransaction.metadata.leverage}x</span>
+                        </>
+                      )}
+                      {selectedTransaction.metadata.duration && (
+                        <>
+                          <span className="text-[#848E9C]">Duration:</span>
+                          <span className="text-[#EAECEF]">{selectedTransaction.metadata.duration}s</span>
+                        </>
+                      )}
+                      {selectedTransaction.metadata.payout && (
+                        <>
+                          <span className="text-[#848E9C]">Payout:</span>
+                          <span className="text-green-400">{formatCurrency(selectedTransaction.metadata.payout)}</span>
+                        </>
+                      )}
+                      {selectedTransaction.metadata.pnl && (
+                        <>
+                          <span className="text-[#848E9C]">P&L:</span>
+                          <span className={selectedTransaction.metadata.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
+                            {selectedTransaction.metadata.pnl >= 0 ? '+' : ''}{formatCurrency(selectedTransaction.metadata.pnl)}
+                          </span>
+                        </>
+                      )}
+                      {selectedTransaction.metadata.entry_price && (
+                        <>
+                          <span className="text-[#848E9C]">Entry Price:</span>
+                          <span className="text-[#EAECEF]">${selectedTransaction.metadata.entry_price.toFixed(2)}</span>
+                        </>
+                      )}
+                      {selectedTransaction.metadata.expiry_price && (
+                        <>
+                          <span className="text-[#848E9C]">Expiry Price:</span>
+                          <span className="text-[#EAECEF]">${selectedTransaction.metadata.expiry_price.toFixed(2)}</span>
+                        </>
+                      )}
+                      {selectedTransaction.metadata.stake && (
+                        <>
+                          <span className="text-[#848E9C]">Stake:</span>
+                          <span className="text-[#EAECEF]">{formatCurrency(selectedTransaction.metadata.stake)}</span>
+                        </>
+                      )}
+                      {selectedTransaction.metadata.should_win !== undefined && (
+                        <>
+                          <span className="text-[#848E9C]">Force Win:</span>
+                          <Badge className={selectedTransaction.metadata.should_win ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-500/20 text-gray-400'}>
+                            {selectedTransaction.metadata.should_win ? 'Enabled' : 'Disabled'}
+                          </Badge>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Metadata */}
-              {selectedTransaction.metadata && Object.keys(selectedTransaction.metadata).length > 0 && (
-                <div className="bg-[#1E2329] rounded-lg p-3">
-                  <h4 className="text-sm font-medium text-[#EAECEF] mb-2">Additional Details</h4>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    {selectedTransaction.metadata.direction && (
-                      <>
-                        <span className="text-[#848E9C]">Direction:</span>
-                        <span className={selectedTransaction.metadata.direction === 'up' ? 'text-green-400' : 'text-red-400'}>
-                          {selectedTransaction.metadata.direction.toUpperCase()}
-                        </span>
-                      </>
-                    )}
-                    {selectedTransaction.metadata.leverage && (
-                      <>
-                        <span className="text-[#848E9C]">Leverage:</span>
-                        <span className="text-[#F0B90B]">{selectedTransaction.metadata.leverage}x</span>
-                      </>
-                    )}
-                    {selectedTransaction.metadata.timeFrame && (
-                      <>
-                        <span className="text-[#848E9C]">Time Frame:</span>
-                        <span className="text-[#EAECEF]">{selectedTransaction.metadata.timeFrame}s</span>
-                      </>
-                    )}
-                    {selectedTransaction.metadata.payout && (
-                      <>
-                        <span className="text-[#848E9C]">Payout:</span>
-                        <span className="text-green-400">{formatCurrency(selectedTransaction.metadata.payout)}</span>
-                      </>
-                    )}
-                    {selectedTransaction.metadata.pnl && (
-                      <>
-                        <span className="text-[#848E9C]">P&L:</span>
-                        <span className={selectedTransaction.metadata.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
-                          {selectedTransaction.metadata.pnl >= 0 ? '+' : ''}{formatCurrency(selectedTransaction.metadata.pnl)}
-                        </span>
-                      </>
-                    )}
-                    {selectedTransaction.metadata.shouldWin !== undefined && (
-                      <>
-                        <span className="text-[#848E9C]">Force Win:</span>
-                        <Badge className={selectedTransaction.metadata.shouldWin ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-500/20 text-gray-400'}>
-                          {selectedTransaction.metadata.shouldWin ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="p-4 border-t border-[#2B3139] flex justify-end gap-2">
-              <Button
-                variant="outline"
-                className="border-[#2B3139] text-[#848E9C]"
-                onClick={() => setShowDetails(false)}
-              >
-                Close
-              </Button>
-              <Button
-                className="bg-[#F0B90B] text-[#181A20] hover:bg-yellow-400"
-                onClick={() => {
-                  copyToClipboard(selectedTransaction.id, 'Transaction ID');
-                }}
-              >
-                Copy ID
-              </Button>
-            </div>
+              <div className="p-4 border-t border-[#2B3139] flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  className="border-[#2B3139] text-[#848E9C]"
+                  onClick={() => setShowDetails(false)}
+                >
+                  Close
+                </Button>
+                <Button
+                  className="bg-[#F0B90B] text-[#181A20] hover:bg-yellow-400"
+                  onClick={() => {
+                    copyToClipboard(selectedTransaction.id, 'Transaction ID');
+                  }}
+                >
+                  Copy ID
+                </Button>
+              </div>
+            </motion.div>
           </motion.div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }

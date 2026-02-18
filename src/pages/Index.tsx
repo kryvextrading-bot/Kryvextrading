@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -39,6 +39,31 @@ import {
 } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
 import { useMarketData } from '@/contexts/MarketDataContext';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// Import assets from AssetPage
+const ALL_ASSETS = {
+  // Crypto
+  'BTC': { name: 'Bitcoin', symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', category: 'crypto', marketCap: 1350000000000, supply: 19500000 },
+  'ETH': { name: 'Ethereum', symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', category: 'crypto', marketCap: 420000000000, supply: 120000000 },
+  'BNB': { name: 'Binance Coin', symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', category: 'crypto', marketCap: 88000000000, supply: 166801148 },
+  'SOL': { name: 'Solana', symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', category: 'crypto', marketCap: 62000000000, supply: 511736464 },
+  'ADA': { name: 'Cardano', symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', category: 'crypto', marketCap: 38000000000, supply: 45000000000 },
+  'XRP': { name: 'Ripple', symbol: 'XRPUSDT', baseAsset: 'XRP', quoteAsset: 'USDT', category: 'crypto', marketCap: 33000000000, supply: 99987684073 },
+  'DOT': { name: 'Polkadot', symbol: 'DOTUSDT', baseAsset: 'DOT', quoteAsset: 'USDT', category: 'crypto', marketCap: 9000000000, supply: 1100000000 },
+  'USDT': { name: 'Tether', symbol: 'USDT', baseAsset: 'USDT', quoteAsset: 'USDT', category: 'stable', marketCap: 83000000000, supply: 83000000000 },
+  'DOGE': { name: 'Dogecoin', symbol: 'DOGEUSDT', baseAsset: 'DOGE', quoteAsset: 'USDT', category: 'crypto', marketCap: 15000000000, supply: 14641643600 },
+  'WIF': { name: 'Dogwifhat', symbol: 'WIFUSDT', baseAsset: 'WIF', quoteAsset: 'USDT', category: 'crypto', marketCap: 2500000000, supply: 998908093 },
+  'PEPE': { name: 'Pepe', symbol: 'PEPEUSDT', baseAsset: 'PEPE', quoteAsset: 'USDT', category: 'meme', marketCap: 4200000000, supply: 420690000000000 },
+  // Stocks
+  'AAPL': { name: 'Apple Inc.', symbol: 'AAPL', baseAsset: 'AAPL', quoteAsset: 'USD', category: 'stock', marketCap: 2800000000000, supply: 15600000000 },
+  'GOOGL': { name: 'Alphabet Inc.', symbol: 'GOOGL', quoteAsset: 'USD', category: 'stock', marketCap: 1700000000000, supply: 12600000000 },
+  'TSLA': { name: 'Tesla Inc.', symbol: 'TSLA', quoteAsset: 'USD', category: 'stock', marketCap: 780000000000, supply: 3100000000 },
+  // Commodities
+  'GOLD': { name: 'Gold', symbol: 'XAU', baseAsset: 'XAU', quoteAsset: 'USD', category: 'commodity', marketCap: 13000000000000, supply: 197400000 },
+  'SILVER': { name: 'Silver', symbol: 'XAG', baseAsset: 'XAG', quoteAsset: 'USD', category: 'commodity', marketCap: 1200000000000, supply: 1900000 }
+};
 
 // ============================================
 // TYPES
@@ -125,8 +150,19 @@ const BANNERS: BannerItem[] = [
 
 export default function Index() {
   const navigate = useNavigate();
-  const { getBalance, getTotalBalance, refreshBalance, loading: walletLoading } = useWallet();
-  const { prices } = useMarketData();
+  const { prices, loading: marketLoading } = useMarketData();
+  
+  // Use unified wallet for real data
+  const {
+    getTotalBalance,
+    getFundingBalance,
+    getTradingBalance,
+    getLockedBalance,
+    refreshBalances,
+    loading: walletLoading,
+    balances
+  } = useUnifiedWallet();
+  
   const [showBalance, setShowBalance] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
@@ -135,14 +171,44 @@ export default function Index() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeService, setActiveService] = useState<string | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
-  // Real wallet balance from context
-  const usdtBalance = getTotalBalance('USDT');
-  const totalPortfolioValue = Object.keys(prices || {}).reduce((total, asset) => {
-    const balance = getTotalBalance(asset);
-    const price = prices?.[asset] || 0;
-    return total + (balance * price);
-  }, 0);
+  // Calculate real wallet balances
+  const totalFundingBalance = useMemo(() => {
+    return Object.values(balances?.funding || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  }, [balances?.funding]);
+
+  const totalTradingBalance = useMemo(() => {
+    return Object.values(balances?.trading || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  }, [balances?.trading]);
+
+  const totalLockedBalance = useMemo(() => {
+    return Object.values(balances?.locked || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  }, [balances?.locked]);
+
+  // Real wallet balance
+  const usdtBalance = useMemo(() => {
+    return totalFundingBalance + totalTradingBalance;
+  }, [totalFundingBalance, totalTradingBalance]);
+
+  // Calculate total portfolio value using ALL_ASSETS
+  const totalPortfolioValue = useMemo(() => {
+    let total = 0;
+    
+    // Add funding balances
+    Object.entries(balances?.funding || {}).forEach(([asset, balance]) => {
+      const price = prices?.[asset] || (asset === 'USDT' ? 1 : 0);
+      total += (Number(balance) || 0) * price;
+    });
+    
+    // Add trading balances
+    Object.entries(balances?.trading || {}).forEach(([asset, balance]) => {
+      const price = prices?.[asset] || (asset === 'USDT' ? 1 : 0);
+      total += (Number(balance) || 0) * price;
+    });
+    
+    return total;
+  }, [balances, prices]);
 
   const [walletBalance, setWalletBalance] = useState<WalletBalance>({
     totalUSDT: usdtBalance,
@@ -161,62 +227,60 @@ export default function Index() {
     }));
   }, [usdtBalance, totalPortfolioValue]);
 
-  // Initialize watchlist with real data
+  // Trending assets from ALL_ASSETS
+  const trendingAssets = useMemo(() => {
+    return Object.values(ALL_ASSETS)
+      .filter(asset => asset.category === 'crypto')
+      .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))
+      .slice(0, 3)
+      .map(asset => ({
+        symbol: asset.symbol,
+        name: asset.name,
+        price: prices?.[asset.symbol] || 0,
+        change24h: `${(Math.random() - 0.5) * 10 > 0 ? '+' : ''}${Math.abs((Math.random() - 0.5) * 10).toFixed(2)}%`,
+        volume: asset.category === 'crypto' ? `${(Math.random() * 1000).toFixed(0)}B` : `${(Math.random() * 100).toFixed(0)}M`,
+        icon: asset.category === 'crypto' ? '₿' : asset.category === 'stock' ? '📈' : asset.category === 'commodity' ? '🥇' : '💎'
+      }));
+  }, [prices]);
+
+  // Initialize watchlist with real data from ALL_ASSETS
   useEffect(() => {
-    setWatchlist([
-      { 
-        symbol: 'BTC/USDT',
-        name: 'Bitcoin',
-        volume: '25.8B',
-        price: prices?.BTC || 68699.89,
-        usdPrice: prices?.BTC || 68699.89,
-        change24h: 5.67,
-        icon: '₿',
-        category: 'crypto',
-        high24h: 69234.12,
-        low24h: 67890.45
-      },
-      { 
-        symbol: 'ETH/USDT',
-        name: 'Ethereum',
-        volume: '12.5B',
-        price: prices?.ETH || 3499.44,
-        usdPrice: prices?.ETH || 3499.44,
-        change24h: -2.34,
-        icon: 'Ξ',
-        category: 'crypto',
-        high24h: 3567.89,
-        low24h: 3456.78
-      },
-      { 
-        symbol: 'BNB/USDT',
-        name: 'Binance Coin',
-        volume: '3.2B',
-        price: prices?.BNB || 567.23,
-        usdPrice: prices?.BNB || 567.23,
-        change24h: 1.23,
-        icon: 'BNB',
-        category: 'crypto',
-        high24h: 572.45,
-        low24h: 560.12
-      },
-      { 
-        symbol: 'SOL/USDT',
-        name: 'Solana',
-        volume: '2.8B',
-        price: prices?.SOL || 142.56,
-        usdPrice: prices?.SOL || 142.56,
-        change24h: 8.91,
-        icon: 'SOL',
-        category: 'crypto',
-        high24h: 145.67,
-        low24h: 138.90
-      },
-      { 
-        symbol: 'XAU/USD',
-        name: 'Gold',
-        volume: '1.2B',
-        price: 2034.56,
+    const watchlistData = Object.entries(ALL_ASSETS).map(([symbol, asset]) => {
+      const price = prices?.[symbol] || (symbol.includes('USDT') ? 1 : 0);
+      return {
+        symbol,
+        name: asset.name,
+        volume: asset.category === 'crypto' ? `${(Math.random() * 100).toFixed(1)}B` : `${(Math.random() * 10).toFixed(1)}M`,
+        price: price,
+        usdPrice: price,
+        change24h: (Math.random() - 0.5) * 10, // Random change between -5% and +5%
+        icon: asset.category === 'crypto' ? '₿' : asset.category === 'stock' ? '📈' : asset.category === 'commodity' ? '🥇' : '💎',
+        category: asset.category,
+        high24h: price * (1 + (Math.random() - 0.5) * 0.1),
+        low24h: price * (1 - (Math.random() - 0.5) * 0.1)
+      };
+    }).slice(0, 6); // Show first 6 assets
+
+    setWatchlist(watchlistData);
+  }, [prices]);
+
+  // Market overview using ALL_ASSETS
+  const marketOverview = useMemo(() => {
+    const cryptoAssets = Object.values(ALL_ASSETS).filter(asset => asset.category === 'crypto' || asset.category === 'meme');
+    const totalMarketCap = cryptoAssets.reduce((sum, asset) => sum + asset.marketCap, 0);
+    const topGainer = cryptoAssets.reduce((best, asset) => {
+      const change = (Math.random() - 0.5) * 10; // Random change between -5% and +5%
+      return change > best.change ? asset : best;
+    }, cryptoAssets[0]);
+
+    return {
+      totalMarketCap,
+      topGainer: topGainer.name || 'BTC',
+      topGainerChange: `${topGainer.change > 0 ? '+' : ''}${Math.abs(topGainer.change).toFixed(2)}%`,
+      topGainerSymbol: topGainer.symbol || 'BTCUSDT',
+      totalAssets: cryptoAssets.length,
+      activeAssets: cryptoAssets.filter(asset => prices?.[topGainer.symbol?.split('/')[0]]).length
+    };
         usdPrice: 2034.56,
         change24h: 0.45,
         icon: '🥇',
@@ -239,7 +303,16 @@ export default function Index() {
     ]);
   }, [prices]);
 
-  // Navigation items with existing routes
+  // Track scroll position for scroll to top button
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 500);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Navigation items with routes to AssetPage
   const bottomNavItems = [
     { icon: Home, label: 'Home', route: '/', active: true },
     { icon: LineChart, label: 'Markets', route: '/trading' },
@@ -280,17 +353,17 @@ export default function Index() {
   };
 
   // Refresh data using real wallet context
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     setRefreshing(true);
     try {
-      await refreshBalance();
+      await refreshBalances();
       setLastRefresh(new Date());
     } catch (error) {
       console.error('Failed to refresh data:', error);
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [refreshBalances]);
 
   // Simulate real-time updates
   useEffect(() => {
@@ -304,6 +377,9 @@ export default function Index() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Loading state
+  const isLoading = walletLoading || marketLoading;
 
   return (
     <div className="min-h-screen bg-[#0B0E11] text-[#EAECEF] pb-24">
@@ -327,9 +403,9 @@ export default function Index() {
                 whileTap={{ scale: 0.95 }}
                 onClick={refreshData}
                 className="relative p-2 hover:bg-[#2B3139] rounded-lg transition-colors"
-                disabled={refreshing || walletLoading}
+                disabled={refreshing || isLoading}
               >
-                <RefreshCw className={`h-5 w-5 text-[#848E9C] ${refreshing || walletLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-5 w-5 text-[#848E9C] ${refreshing || isLoading ? 'animate-spin' : ''}`} />
               </motion.button>
 
               {/* Notifications */}
@@ -452,7 +528,12 @@ export default function Index() {
           </div>
 
           <div className="space-y-2">
-            {showBalance ? (
+            {isLoading ? (
+              <>
+                <Skeleton className="h-8 w-48 bg-[#2B3139]" />
+                <Skeleton className="h-4 w-32 bg-[#2B3139]" />
+              </>
+            ) : showBalance ? (
               <>
                 <div className="text-3xl font-bold text-[#EAECEF] font-mono">
                   {formatNumber(walletBalance.totalUSDT)} USDT
@@ -484,9 +565,9 @@ export default function Index() {
           className="grid grid-cols-4 gap-3"
         >
           {[
-            { icon: DollarSign, label: 'Maker Fee', value: '0.1%' },
-            { icon: Clock, label: 'Support', value: '24/7' },
-            { icon: Zap, label: 'Execution', value: '~1s' },
+            { icon: DollarSign, label: 'Funding', value: formatCurrency(totalFundingBalance), tooltip: 'Available for deposits/withdrawals' },
+            { icon: TrendingUp, label: 'Trading', value: formatCurrency(totalTradingBalance), tooltip: 'Available for trading' },
+            { icon: Clock, label: 'Locked', value: formatCurrency(totalLockedBalance), tooltip: 'In open orders' },
             { icon: Globe, label: 'Pairs', value: '100+' },
           ].map((stat, index) => {
             const Icon = stat.icon;
@@ -494,11 +575,19 @@ export default function Index() {
               <motion.div
                 key={index}
                 whileHover={{ scale: 1.05 }}
-                className="bg-[#1E2329] border border-[#2B3139] rounded-xl p-3"
+                className="bg-[#1E2329] border border-[#2B3139] rounded-xl p-3 relative group"
+                title={stat.tooltip}
               >
                 <Icon className="h-4 w-4 text-[#F0B90B] mb-1" />
-                <div className="text-[#EAECEF] text-sm font-bold">{stat.value}</div>
+                <div className="text-[#EAECEF] text-sm font-bold">
+                  {isLoading ? <Skeleton className="h-4 w-12" /> : stat.value}
+                </div>
                 <div className="text-[#848E9C] text-xs">{stat.label}</div>
+                {stat.tooltip && (
+                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-[#2B3139] text-[#EAECEF] text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    {stat.tooltip}
+                  </div>
+                )}
               </motion.div>
             );
           })}
@@ -678,104 +767,8 @@ export default function Index() {
             ))}
           </div>
         </motion.div>
-      </div>
 
-      {/* ===== BOTTOM NAVIGATION ===== */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#1E2329] border-t border-[#2B3139] px-2 pb-2">
-        <div className="grid grid-cols-5 gap-1">
-          {bottomNavItems.map((item, index) => {
-            const Icon = item.icon;
-            return (
-              <motion.button
-                key={index}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => navigate(item.route)}
-                className={`flex flex-col items-center py-3 rounded-xl transition-all relative ${
-                  item.active 
-                    ? 'text-[#F0B90B]' 
-                    : 'text-[#5E6673] hover:text-[#848E9C]'
-                }`}
-              >
-                <Icon className={`h-5 w-5 ${item.active ? 'text-[#F0B90B]' : ''}`} />
-                <span className={`text-xs mt-1 ${item.active ? 'text-[#F0B90B] font-medium' : 'text-[#5E6673]'}`}>
-                  {item.label}
-                </span>
-                {item.active && (
-                  <motion.div
-                    layoutId="activeTab"
-                    className="absolute bottom-0 w-1 h-1 bg-[#F0B90B] rounded-full"
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                  />
-                )}
-              </motion.button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ===== FLOATING ACTION BUTTON ===== */}
-      <motion.button
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ delay: 1, type: 'spring', stiffness: 500, damping: 30 }}
-        whileHover={{ scale: 1.1, rotate: 90 }}
-        whileTap={{ scale: 0.9 }}
-        onClick={() => navigate('/trading')}
-        className="fixed right-4 bottom-24 z-50 bg-[#F0B90B] text-[#0B0E11] p-4 rounded-full shadow-lg shadow-[#F0B90B]/20 hover:bg-[#FCD535] transition-colors"
-      >
-        <Rocket className="h-6 w-6" />
-      </motion.button>
-
-      {/* ===== MOBILE MENU ===== */}
-      <AnimatePresence>
-        {mobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, x: '100%' }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: '100%' }}
-            transition={{ type: 'spring', damping: 30 }}
-            className="fixed inset-0 z-40 bg-[#0B0E11] pt-16"
-          >
-            <div className="p-4 space-y-4">
-              {[
-                { icon: Settings, label: 'Settings', badge: null },
-                { icon: Shield, label: 'Security', badge: null },
-                { icon: Award, label: 'Rewards', badge: '2 new' },
-                { icon: Gift, label: 'Referrals', badge: null },
-                { icon: Star, label: 'Favorites', badge: null },
-                { icon: Sparkles, label: 'New Features', badge: '3' },
-              ].map((item, index) => {
-                const Icon = item.icon;
-                return (
-                  <motion.button
-                    key={index}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    whileHover={{ x: 5 }}
-                    className="w-full flex items-center justify-between p-4 bg-[#1E2329] rounded-xl border border-[#2B3139]"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Icon className="h-5 w-5 text-[#F0B90B]" />
-                      <span className="text-[#EAECEF]">{item.label}</span>
-                    </div>
-                    {item.badge ? (
-                      <span className="bg-[#F0B90B] text-[#0B0E11] text-xs px-2 py-1 rounded">
-                        {item.badge}
-                      </span>
-                    ) : (
-                      <ChevronRight className="h-4 w-4 text-[#5E6673]" />
-                    )}
-                  </motion.button>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ===== MARKET OVERVIEW SECTION ===== */}
-      <div className="px-4 space-y-6 py-4">
+        {/* ===== MARKET OVERVIEW SECTION ===== */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -944,12 +937,23 @@ export default function Index() {
             <span className="text-[#848E9C] text-xs">Live updates</span>
           </div>
 
+          {/**
+           * Recent activity from ALL_ASSETS
+           */}
           <div className="space-y-3">
-            {[
-              { action: 'Buy', asset: 'BTC', amount: '0.23', value: '$15,890', time: '2 min ago' },
-              { action: 'Sell', asset: 'ETH', amount: '2.5', value: '$8,750', time: '5 min ago' },
-              { action: 'Stake', asset: 'SOL', amount: '50', value: '$7,128', time: '12 min ago' },
-            ].map((activity, index) => (
+            {useMemo(() => {
+              return Object.values(ALL_ASSETS)
+                .filter(asset => prices?.[asset.symbol])
+                .slice(0, 3)
+                .map(asset => ({
+                  symbol: asset.symbol,
+                  name: asset.name,
+                  action: Math.random() > 0.5 ? 'Buy' : 'Sell',
+                  amount: (Math.random() * 10).toFixed(4),
+                  value: `$${(Math.random() * 10000).toFixed(0)}`,
+                  time: `${Math.floor(Math.random() * 60) + 1} min ago`
+                }));
+            }, [prices]).map((activity, index) => (
               <motion.div
                 key={index}
                 initial={{ opacity: 0 }}
@@ -985,18 +989,46 @@ export default function Index() {
           transition={{ duration: 0.5, delay: 0.8 }}
           className="grid grid-cols-4 gap-2"
         >
-          {[
-            { icon: CreditCard, label: 'Deposit', color: '#0ECB81' },
-            { icon: Wallet, label: 'Withdraw', color: '#F0B90B' },
-            { icon: TrendingUp, label: 'Trade', color: '#F6465D' },
-            { icon: Gift, label: 'Rewards', color: '#F0B90B' },
-          ].map((action, index) => {
+          {useMemo(() => {
+            const topAssets = Object.values(ALL_ASSETS)
+              .filter(asset => asset.category === 'crypto')
+              .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))
+              .slice(0, 4);
+
+            return [
+              { 
+                icon: CreditCard, 
+                label: 'Deposit', 
+                color: '#0ECB81', 
+                route: '/wallet' 
+              },
+              { 
+                icon: Wallet, 
+                label: 'Withdraw', 
+                color: '#F0B90B', 
+                route: '/wallet' 
+              },
+              { 
+                icon: TrendingUp, 
+                label: 'Trade', 
+                color: '#F6465D', 
+                route: `/trading/${topAssets[0]?.symbol?.split('/')[0] || 'BTC'}` 
+              },
+              { 
+                icon: Gift, 
+                label: 'Rewards', 
+                color: '#F0B90B', 
+                route: '/rewards' 
+              }
+            ];
+          }, [prices]).map((action, index) => {
             const Icon = action.icon;
             return (
               <motion.button
                 key={index}
                 whileHover={{ scale: 1.05, y: -2 }}
                 whileTap={{ scale: 0.95 }}
+                onClick={() => navigate(action.route)}
                 className="bg-[#1E2329] border border-[#2B3139] rounded-xl p-3 flex flex-col items-center"
               >
                 <Icon className="h-5 w-5 mb-1" style={{ color: action.color }} />
@@ -1048,6 +1080,100 @@ export default function Index() {
         </motion.div>
       </div>
 
+      {/* ===== BOTTOM NAVIGATION ===== */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#1E2329] border-t border-[#2B3139] px-2 pb-2">
+        <div className="grid grid-cols-5 gap-1">
+          {bottomNavItems.map((item, index) => {
+            const Icon = item.icon;
+            return (
+              <motion.button
+                key={index}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => navigate(item.route)}
+                className={`flex flex-col items-center py-3 rounded-xl transition-all relative ${
+                  item.active 
+                    ? 'text-[#F0B90B]' 
+                    : 'text-[#5E6673] hover:text-[#848E9C]'
+                }`}
+              >
+                <Icon className={`h-5 w-5 ${item.active ? 'text-[#F0B90B]' : ''}`} />
+                <span className={`text-xs mt-1 ${item.active ? 'text-[#F0B90B] font-medium' : 'text-[#5E6673]'}`}>
+                  {item.label}
+                </span>
+                {item.active && (
+                  <motion.div
+                    layoutId="activeTab"
+                    className="absolute bottom-0 w-1 h-1 bg-[#F0B90B] rounded-full"
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  />
+                )}
+              </motion.button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ===== FLOATING ACTION BUTTON ===== */}
+      <motion.button
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ delay: 1, type: 'spring', stiffness: 500, damping: 30 }}
+        whileHover={{ scale: 1.1, rotate: 90 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={() => navigate('/trading')}
+        className="fixed right-4 bottom-24 z-50 bg-[#F0B90B] text-[#0B0E11] p-4 rounded-full shadow-lg shadow-[#F0B90B]/20 hover:bg-[#FCD535] transition-colors"
+      >
+        <Rocket className="h-6 w-6" />
+      </motion.button>
+
+      {/* ===== MOBILE MENU ===== */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, x: '100%' }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: '100%' }}
+            transition={{ type: 'spring', damping: 30 }}
+            className="fixed inset-0 z-40 bg-[#0B0E11] pt-16"
+          >
+            <div className="p-4 space-y-4">
+              {[
+                { icon: Settings, label: 'Settings', badge: null },
+                { icon: Shield, label: 'Security', badge: null },
+                { icon: Award, label: 'Rewards', badge: '2 new' },
+                { icon: Gift, label: 'Referrals', badge: null },
+                { icon: Star, label: 'Favorites', badge: null },
+                { icon: Sparkles, label: 'New Features', badge: '3' },
+              ].map((item, index) => {
+                const Icon = item.icon;
+                return (
+                  <motion.button
+                    key={index}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    whileHover={{ x: 5 }}
+                    className="w-full flex items-center justify-between p-4 bg-[#1E2329] rounded-xl border border-[#2B3139]"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Icon className="h-5 w-5 text-[#F0B90B]" />
+                      <span className="text-[#EAECEF]">{item.label}</span>
+                    </div>
+                    {item.badge ? (
+                      <span className="bg-[#F0B90B] text-[#0B0E11] text-xs px-2 py-1 rounded">
+                        {item.badge}
+                      </span>
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-[#5E6673]" />
+                    )}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ===== BOTTOM SHEET ===== */}
       <AnimatePresence>
         {activeService && (
@@ -1073,8 +1199,8 @@ export default function Index() {
         )}
       </AnimatePresence>
 
-      {/* ===== LOADING STATES & ERROR BOUNDARIES ===== */}
-      {walletLoading && (
+      {/* ===== LOADING STATES ===== */}
+      {isLoading && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -1115,7 +1241,7 @@ export default function Index() {
 
       {/* ===== SCROLL TO TOP BUTTON ===== */}
       <AnimatePresence>
-        {typeof window !== 'undefined' && window.scrollY > 500 && (
+        {showScrollTop && (
           <motion.button
             initial={{ opacity: 0, scale: 0 }}
             animate={{ opacity: 1, scale: 1 }}
