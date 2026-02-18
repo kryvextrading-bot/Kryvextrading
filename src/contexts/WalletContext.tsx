@@ -1254,21 +1254,6 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setPortfolio(assets);
   }, [user?.id, fundingBalances, tradingBalances, prices, getUnifiedLockedBalance]);
 
-  // Helper function to get asset name
-  const getAssetName = (symbol: string): string => {
-    const names: Record<string, string> = {
-      'USDT': 'Tether',
-      'BTC': 'Bitcoin',
-      'ETH': 'Ethereum',
-      'BNB': 'Binance Coin',
-      'SOL': 'Solana',
-      'ADA': 'Cardano',
-      'XRP': 'Ripple',
-      'DOT': 'Polkadot'
-    };
-    return names[symbol] || symbol;
-  };
-
   // Recalculate total value and update history
   useEffect(() => {
     const value = portfolio.reduce((sum, a) => {
