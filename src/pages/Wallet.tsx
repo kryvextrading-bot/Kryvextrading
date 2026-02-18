@@ -745,6 +745,20 @@ export default function WalletPage() {
     });
   }, [refreshBalance, refreshUnifiedData, toast]);
 
+  useEffect(() => {
+    refreshUnifiedData();
+  }, [refreshUnifiedData]);
+
+  useEffect(() => {
+    console.log('💰 Wallet Hook Debug:', {
+      userId: user?.id,
+      fundingBalances: Object.keys(fundingBalances).length,
+      tradingBalances: Object.keys(tradingBalances).length,
+      totalBalance: getTotalBalance(),
+      loading: walletLoading
+    });
+  }, [user?.id, fundingBalances, tradingBalances, getTotalBalance, walletLoading]);
+
   // Transfer handlers
   const handleTransferToTrading = async (asset: string, amount: number) => {
     try {
@@ -1331,6 +1345,20 @@ export default function WalletPage() {
   const displayBalance = currency === 'BTC' && prices?.BTC 
     ? (getUnifiedBalance('USDT') + getLockedBalance('USDT')) / prices.BTC 
     : getUnifiedBalance('USDT') + getLockedBalance('USDT');
+  
+  // Debug logging
+  console.log('💰 Wallet Debug:', {
+    userId: user?.id,
+    currency,
+    displayBalance,
+    fundingBalance: getFundingBalance('USDT'),
+    tradingBalance: getTradingBalance('USDT'),
+    lockedBalance: getLockedBalance('USDT'),
+    totalBalance: getTotalBalance(),
+    portfolioLength: portfolio.length,
+    walletLoading,
+    hasData: Object.keys(fundingBalances).length > 0 || Object.keys(tradingBalances).length > 0
+  });
 
   // Filter and sort portfolio
   const filteredPortfolio = portfolio
