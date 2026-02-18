@@ -15,7 +15,7 @@ import {
   CheckCircle,
   RefreshCw
 } from 'lucide-react';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet as useUnifiedWalletV2 } from '@/hooks/useUnifiedWallet-v2';
 import { useToast } from '@/hooks/use-toast';
 
 // Utility function
@@ -39,10 +39,9 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
     transferToTrading, 
     transferToFunding,
     loading,
-    refreshData,
-    tradingBalances,
-    fundingBalances
-  } = useUnifiedWallet();
+    refreshBalances,
+    balances
+  } = useUnifiedWalletV2();
   const { toast } = useToast();
   
   const [amount, setAmount] = useState('');
@@ -54,20 +53,25 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
   // Refresh data when component mounts
   useEffect(() => {
     console.log('🔄 [WalletTransfer] Component mounted, refreshing data...');
-    refreshData();
-  }, [refreshData]);
+    refreshBalances();
+  }, [refreshBalances]);
 
   const fundingBalance = getFundingBalance(selectedAsset);
   const tradingBalance = getTradingBalance(selectedAsset);
   const transferAmount = Number(amount) || 0;
+
+  // Calculate total funding balance across all assets (like main Wallet page)
+  const totalFundingBalance = Object.values(balances?.funding || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  const totalTradingBalance = Object.values(balances?.trading || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
 
   // Debug logs
   console.log('💰 [WalletTransfer] Balance debug:', {
     selectedAsset,
     fundingBalance,
     tradingBalance,
-    tradingBalances,
-    fundingBalances,
+    totalFundingBalance,
+    totalTradingBalance,
+    balances,
     loading
   });
 
@@ -103,8 +107,8 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
     
     try {
       const result = transferType === 'to-trading' 
-        ? await transferToTrading(selectedAsset, transferAmount)
-        : await transferToFunding(selectedAsset, transferAmount);
+        ? await transferToTrading(selectedAsset, transferAmount, `transfer_${Date.now()}`)
+        : await transferToFunding(selectedAsset, transferAmount, `transfer_${Date.now()}`);
 
       if (result.success) {
         setShowSuccess(true);
@@ -162,7 +166,7 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => refreshData()}
+              onClick={() => refreshBalances()}
               disabled={loading}
               className="text-[#848E9C] hover:text-[#EAECEF]"
             >
@@ -242,7 +246,7 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
                     <span className="text-sm text-[#848E9C]">Funding Wallet</span>
                   </div>
                   <div className="text-xl font-bold text-[#EAECEF]">
-                    {formatCurrency(fundingBalance)}
+                    {formatCurrency(totalFundingBalance)}
                   </div>
                   <div className="text-xs text-[#848E9C] mt-1">
                     Available for withdrawal
@@ -255,7 +259,7 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
                     <span className="text-sm text-[#848E9C]">Trading Wallet</span>
                   </div>
                   <div className="text-xl font-bold text-[#EAECEF]">
-                    {formatCurrency(tradingBalance)}
+                    {formatCurrency(totalTradingBalance)}
                   </div>
                   <div className="text-xs text-[#848E9C] mt-1">
                     Used for trading only

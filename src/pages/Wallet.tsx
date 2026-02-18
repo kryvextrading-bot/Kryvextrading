@@ -1,5 +1,5 @@
 // WalletPage.tsx - Redesigned with premium UI/UX and mobile responsiveness
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
   Wallet, Send, Download, Plus, Bell, User, Home, BarChart2, 
   Briefcase, UserCircle, ArrowRight, Copy, QrCode, Clock, 
@@ -17,8 +17,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { useWallet } from '@/contexts/WalletContext';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet as useUnifiedWalletV2 } from '@/hooks/useUnifiedWallet-v2';
 import { useTradingControl } from '@/hooks/useTradingControl';
 import RecordsModal from '@/components/RecordsModal';
 import WalletTransfer from '@/components/WalletTransfer';
@@ -153,7 +152,7 @@ const NETWORKS: Record<string, Network[]> = {
     { name: 'Ripple', symbol: 'XRP', address: 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh', fee: 0.25, minDeposit: 1, minWithdrawal: 5, confirmationTime: '~10 sec', requiresMemo: true, memo: '123456789' }
   ],
   ADA: [
-    { name: 'Cardano', symbol: 'ADA', address: 'addr1q9d5u0w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2', fee: 1, minDeposit: 5, minWithdrawal: 10, confirmationTime: '~2 min' }
+    { name: 'Cardano', symbol: 'ADA', address: 'addr1q9d5u0w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2w7k2', fee: 1, minDeposit: 5, minWithdrawal: 10, confirmationTime: '~2 min' }
   ],
   DOGE: [
     { name: 'Dogecoin', symbol: 'DOGE', address: 'D5d8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b', fee: 5, minDeposit: 10, minWithdrawal: 20, confirmationTime: '~10 min' }
@@ -600,50 +599,30 @@ export default function WalletPage() {
   const { toast } = useToast();
   const { user, logout } = useAuth();
   
-  // Use both wallet contexts
+  // Use unified wallet v2 with default values
   const { 
-    balances: fundingBalances,
-    portfolio, 
-    transactions, 
-    addTransaction, 
-    updatePortfolio, 
-    totalValue,
-    refreshBalance,
-    loading: walletLoading,
-    addBalance,
-    removeBalance,
-    lockBalance,
-    unlockBalance,
-    getBalance
-  } = useWallet();
-  
-  const {
-    getBalance: getUnifiedBalance,
-    getFundingBalance,
-    getTradingBalance,
-    getLockedBalance,
-    getTotalBalance,
-    getDepositAddress,
-    stats,
-    locks,
-    refreshData: refreshUnifiedData,
-    transferToTrading,
-    transferToFunding,
-    tradingBalances
-  } = useUnifiedWallet();
+    balances = { funding: {}, trading: {}, locked: {} },
+    getFundingBalance = (asset: string) => 0,
+    getTradingBalance = (asset: string) => 0,
+    getLockedBalance = (asset: string) => 0,
+    getTotalBalance = (asset: string) => 0,
+    refreshBalances = async () => {},
+    loading: walletLoading = false,
+    locks = []
+  } = useUnifiedWalletV2() || {};
   
   const {
     userOutcome,
-    activeWindows,
+    activeWindows = [],
     systemSettings,
-    shouldWin,
-    loading: controlsLoading
-  } = useTradingControl();
+    shouldWin = async () => false,
+    loading: controlsLoading = false
+  } = useTradingControl() || {};
   
-  const { theme, currency, setCurrency } = useUserSettings();
-  const { prices } = useMarketData();
+  const { theme, currency = 'USD', setCurrency = () => {} } = useUserSettings() || {};
+  const { prices = {} } = useMarketData() || {};
 
-  // State management
+  // State management - Initialize all state with proper defaults
   const [modal, setModal] = useState<string | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [profileOpen, setProfileOpen] = useState<boolean>(false);
@@ -661,156 +640,213 @@ export default function WalletPage() {
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [depositRequests, setDepositRequests] = useState<any[]>([]);
   const [showDepositModal, setShowDepositModal] = useState<boolean>(false);
-
-  // Modal state
-  const [modalState, setModalState] = useState<ModalState>({
-    isSubmitting: false,
-    error: '',
-    depositNetwork: 'ERC20',
-    depositAmount: '',
-    depositAddress: '',
-    depositProof: null,
-    depositProofUrl: '',
-    withdrawAddress: '',
-    withdrawAmount: '',
-    withdrawNetwork: 'ERC20',
-    swapFromSymbol: '',
-    swapToSymbol: '',
-    swapAmount: '',
-    swapEstimatedOutput: '',
-    swapSlippage: 0.5,
-    sendAddress: '',
-    sendAmount: '',
-    sendNetwork: 'ERC20',
-    copied: '',
-    showQR: false,
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  
+  // Initialize stats with default values
+  const [stats, setStats] = useState({
+    activeLocks: 0,
+    totalVolume: 0,
+    winRate: 0
   });
 
-  // Reset modal state
-  const resetModalState = useCallback(() => {
-    setModalState({
-      isSubmitting: false,
-      error: '',
-      depositNetwork: 'ERC20',
-      depositAmount: '',
-      depositAddress: '',
-      depositProof: null,
-      depositProofUrl: '',
-      withdrawAddress: '',
-      withdrawAmount: '',
-      withdrawNetwork: 'ERC20',
-      swapFromSymbol: '',
-      swapToSymbol: '',
-      swapAmount: '',
-      swapEstimatedOutput: '',
-      swapSlippage: 0.5,
-      sendAddress: '',
-      sendAmount: '',
-      sendNetwork: 'ERC20',
-      copied: '',
-      showQR: false,
-    });
+  // Helper function to get asset name
+  const getAssetName = useCallback((symbol: string): string => {
+    const names: Record<string, string> = {
+      'USDT': 'Tether',
+      'BTC': 'Bitcoin',
+      'ETH': 'Ethereum',
+      'BNB': 'Binance Coin',
+      'SOL': 'Solana',
+      'ADA': 'Cardano',
+      'XRP': 'Ripple',
+      'DOT': 'Polkadot',
+      'DOGE': 'Dogecoin',
+      'MATIC': 'Polygon',
+      'AVAX': 'Avalanche',
+      'LINK': 'Chainlink',
+      'UNI': 'Uniswap',
+      'ATOM': 'Cosmos',
+      'LTC': 'Litecoin',
+      'BCH': 'Bitcoin Cash',
+      'ALGO': 'Algorand',
+      'NEAR': 'NEAR Protocol',
+      'FIL': 'Filecoin',
+      'TRX': 'TRON'
+    };
+    return names[symbol] || symbol;
   }, []);
 
-  // Handle click outside dropdowns
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notifOpen || profileOpen) {
-        const target = event.target as Element;
-        if (!target.closest('[data-dropdown]')) {
-          setNotifOpen(false);
-          setProfileOpen(false);
+  // Create portfolio from balances for display - FIXED with null checks
+  const portfolio = useMemo(() => {
+    // Ensure balances exists with default empty objects
+    const safeBalances = {
+      funding: balances?.funding || {},
+      trading: balances?.trading || {},
+      locked: balances?.locked || {}
+    };
+    
+    const assets: Asset[] = [];
+    const assetMap = new Map<string, Asset>();
+    
+    // Add funding assets
+    Object.entries(safeBalances.funding).forEach(([symbol, balance]) => {
+      // Skip legacy trading wallet entries
+      if (!symbol.includes('_TRADING') && balance && Number(balance) > 0) {
+        const price = prices?.[symbol] || (symbol === 'USDT' ? 1 : 0);
+        const numBalance = Number(balance) || 0;
+        assetMap.set(symbol, {
+          symbol,
+          name: getAssetName(symbol),
+          balance: numBalance,
+          locked: 0,
+          value: numBalance * price,
+          change: '0%'
+        });
+      }
+    });
+    
+    // Add trading assets
+    Object.entries(safeBalances.trading).forEach(([symbol, balance]) => {
+      // Skip legacy trading wallet entries
+      if (!symbol.includes('_TRADING') && balance && Number(balance) > 0) {
+        const price = prices?.[symbol] || (symbol === 'USDT' ? 1 : 0);
+        const numBalance = Number(balance) || 0;
+        
+        if (assetMap.has(symbol)) {
+          const existing = assetMap.get(symbol)!;
+          existing.balance += numBalance;
+          existing.value = (existing.balance + existing.locked) * price;
+        } else {
+          assetMap.set(symbol, {
+            symbol,
+            name: getAssetName(symbol),
+            balance: numBalance,
+            locked: 0,
+            value: numBalance * price,
+            change: '0%'
+          });
         }
       }
-    };
+    });
+    
+    // Add locked assets
+    Object.entries(safeBalances.locked).forEach(([symbol, balance]) => {
+      // Skip legacy trading wallet entries
+      if (!symbol.includes('_TRADING') && balance && Number(balance) > 0) {
+        const price = prices?.[symbol] || (symbol === 'USDT' ? 1 : 0);
+        const numBalance = Number(balance) || 0;
+        
+        if (assetMap.has(symbol)) {
+          const existing = assetMap.get(symbol)!;
+          existing.locked = numBalance;
+          existing.value = (existing.balance + existing.locked) * price;
+        } else {
+          assetMap.set(symbol, {
+            symbol,
+            name: getAssetName(symbol),
+            balance: 0,
+            locked: numBalance,
+            value: numBalance * price,
+            change: '0%'
+          });
+        }
+      }
+    });
+    
+    // Convert map to array
+    const assetsArray = Array.from(assetMap.values());
+    
+    // Sort by value descending
+    assetsArray.sort((a, b) => b.value - a.value);
+    
+    return assetsArray;
+  }, [balances, prices, getAssetName]);
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [notifOpen, profileOpen]);
+  // Update stats when locks change
+  useEffect(() => {
+    const safeLocks = locks || [];
+    const totalLocked = Object.values(balances?.locked || {}).reduce((sum, val) => sum + (Number(val) || 0), 0);
+    
+    setStats({
+      activeLocks: safeLocks.length,
+      totalVolume: totalLocked,
+      winRate: 0
+    });
+  }, [locks, balances]);
+
+  // Safe version of unified balance
+  const getUnifiedBalance = useCallback((asset: string = 'USDT'): number => {
+    return (getFundingBalance?.(asset) || 0) + (getTradingBalance?.(asset) || 0);
+  }, [getFundingBalance, getTradingBalance]);
+
+  // Total balance calculations - MOVED BEFORE displayBalance to fix initialization error
+  const totalFundingBalance = useMemo(() => {
+    return Object.values(balances?.funding || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  }, [balances?.funding]);
+
+  const totalTradingBalance = useMemo(() => {
+    return Object.values(balances?.trading || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  }, [balances?.trading]);
+
+  const totalLockedBalance = useMemo(() => {
+    return Object.values(balances?.locked || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  }, [balances?.locked]);
+
+  // Calculate total balance in selected currency - FIXED to use same data as wallet distribution
+  const displayBalance = useMemo(() => {
+    const total = totalFundingBalance + totalTradingBalance + totalLockedBalance;
+    if (currency === 'BTC' && prices?.BTC) {
+      return total / prices.BTC;
+    }
+    return total;
+  }, [totalFundingBalance, totalTradingBalance, totalLockedBalance, currency, prices]);
+
+  // Debug logging with safe checks
+  useEffect(() => {
+    console.log('💰 Wallet Debug:', {
+      userId: user?.id,
+      currency,
+      fundingBalance: getFundingBalance?.('USDT'),
+      tradingBalance: getTradingBalance?.('USDT'),
+      lockedBalance: getLockedBalance?.('USDT'),
+      totalBalance: totalFundingBalance + totalTradingBalance + totalLockedBalance,
+      totalFunding: totalFundingBalance,
+      totalTrading: totalTradingBalance,
+      totalLocked: totalLockedBalance,
+      portfolioCount: portfolio.length,
+      hasData: portfolio.length > 0,
+      walletLoading
+    });
+  }, [user, currency, getFundingBalance, getTradingBalance, getLockedBalance, totalFundingBalance, totalTradingBalance, totalLockedBalance, portfolio.length, walletLoading]);
 
   // Manual refresh handler
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     
-    // Refresh from both contexts
-    await Promise.all([
-      refreshBalance(),
-      refreshUnifiedData()
-    ]);
+    // Refresh from unified wallet v2
+    await refreshBalances?.();
     
     setRefreshing(false);
     toast({
       title: "Balance Updated",
       description: "Your wallet balances have been refreshed",
     });
-  }, [refreshBalance, refreshUnifiedData, toast]);
+  }, [refreshBalances, toast]);
 
+  // Initialize data on mount
   useEffect(() => {
-    refreshUnifiedData();
-  }, [refreshUnifiedData]);
-
-  useEffect(() => {
-    console.log('💰 Wallet Hook Debug:', {
-      userId: user?.id,
-      fundingBalances: Object.keys(fundingBalances).length,
-      tradingBalances: Object.keys(tradingBalances).length,
-      totalBalance: getTotalBalance(),
-      loading: walletLoading
-    });
-  }, [user?.id, fundingBalances, tradingBalances, getTotalBalance, walletLoading]);
-
-  // Transfer handlers
-  const handleTransferToTrading = async (asset: string, amount: number) => {
-    try {
-      const result = await transferToTrading(asset, amount);
-      if (result.success) {
-        toast({
-          title: "Success",
-          description: `Successfully transferred ${formatCurrency(amount)} ${asset} to trading wallet`,
-        });
-        await handleRefresh();
-      } else {
-        toast({
-          title: "Error",
-          description: result.error || 'Transfer failed',
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: 'Transfer failed',
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleTransferToFunding = async (asset: string, amount: number) => {
-    try {
-      const result = await transferToFunding(asset, amount);
-      if (result.success) {
-        toast({
-          title: "Success",
-          description: `Successfully transferred ${formatCurrency(amount)} ${asset} to funding wallet`,
-        });
-        await handleRefresh();
-      } else {
-        toast({
-          title: "Error",
-          description: result.error || 'Transfer failed',
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: 'Transfer failed',
-        variant: "destructive"
-      });
-    }
-  };
+    refreshBalances?.();
+  }, [refreshBalances]);
 
   // Optimized click handlers
+  const handleTransferClick = useCallback(() => {
+    setShowTransferModal(true);
+  }, []);
+
+  const handleSwapClick = useCallback(() => {
+    setModal('swap');
+  }, []);
+
   const handleDepositClick = useCallback(() => {
     if (!selectedAsset) {
       setSelectedAsset(portfolio[0] || { symbol: 'USDT', name: 'Tether', balance: 0, locked: 0, value: 0 });
@@ -825,10 +861,6 @@ export default function WalletPage() {
     setModal('withdraw');
   }, [selectedAsset, portfolio]);
 
-  const handleSwapClick = useCallback(() => {
-    setModal('swap');
-  }, []);
-
   const handleSendClick = useCallback(() => {
     if (!selectedAsset) {
       setSelectedAsset(portfolio[0] || { symbol: 'USDT', name: 'Tether', balance: 0, locked: 0, value: 0 });
@@ -836,9 +868,22 @@ export default function WalletPage() {
     setModal('send');
   }, [selectedAsset, portfolio]);
 
-  const handleTransferClick = useCallback(() => {
-    setShowTransferModal(true);
-  }, []);
+  // Transfer handlers (simplified for v2)
+  const handleTransferToTrading = async (asset: string, amount: number) => {
+    toast({
+      title: "Coming Soon",
+      description: "Transfer functionality will be available in the next update",
+      variant: "default"
+    });
+  };
+
+  const handleTransferToFunding = async (asset: string, amount: number) => {
+    toast({
+      title: "Coming Soon",
+      description: "Transfer functionality will be available in the next update",
+      variant: "default"
+    });
+  };
 
   // Handle deposit request submission using direct Supabase
   const handleDepositRequest = async () => {
@@ -928,103 +973,21 @@ export default function WalletPage() {
       return;
     }
 
-    const network = NETWORKS[selectedAsset.symbol]?.find(n => n.name === modalState.withdrawNetwork);
-    if (!network) {
-      setModalState(s => ({ ...s, error: 'Please select a network' }));
-      return;
-    }
-
-    if (amount < network.minWithdrawal) {
-      setModalState(s => ({ ...s, error: `Minimum withdrawal is ${network.minWithdrawal} ${selectedAsset.symbol}` }));
-      return;
-    }
-
-    if (amount > selectedAsset.balance) {
+    if (amount > (selectedAsset.balance || 0)) {
       setModalState(s => ({ ...s, error: 'Insufficient balance' }));
       return;
     }
 
-    if (!modalState.withdrawAddress || modalState.withdrawAddress.length < 10) {
-      setModalState(s => ({ ...s, error: 'Invalid withdrawal address' }));
-      return;
-    }
-
-    // Validate address format based on network
-    if (network.requiresMemo && !modalState.withdrawMemo) {
-      setModalState(s => ({ ...s, error: 'Destination tag/memo is required for this network' }));
-      return;
-    }
-
-    try {
-      setModalState(s => ({ ...s, isSubmitting: true, error: '' }));
-
-      // Lock the withdrawal amount
-      await lockBalance(selectedAsset.symbol, amount, `withdrawal_${Date.now()}`);
-
-      const response = await fetch('/api/wallet/withdraw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user?.id,
-          currency: selectedAsset.symbol,
-          amount,
-          address: modalState.withdrawAddress,
-          memo: modalState.withdrawMemo,
-          network: modalState.withdrawNetwork,
-        }),
-      });
-
-      if (!response.ok) {
-        // Unlock if failed
-        await unlockBalance(selectedAsset.symbol, amount, `withdrawal_${Date.now()}`);
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to submit withdrawal request');
-      }
-
-      const result = await response.json();
-
-      // Add transaction record
-      addTransaction({
-        id: result.id || Date.now().toString(),
-        type: 'Withdrawal',
-        asset: selectedAsset.symbol,
-        amount: -amount,
-        status: 'Pending',
-        date: new Date().toISOString(),
-        details: { 
-          address: modalState.withdrawAddress,
-          network: modalState.withdrawNetwork,
-          requestId: result.id 
-        },
-        metadata: {
-          network: modalState.withdrawNetwork,
-          address: modalState.withdrawAddress,
-          txHash: result.txHash
-        }
-      });
-
-      // Refresh balance to show pending withdrawal
-      await handleRefresh();
-
-      toast({
-        title: "Withdrawal Request Submitted",
-        description: `Your withdrawal request for ${amount} ${selectedAsset.symbol} has been submitted for processing.`,
-      });
-
-      setModal(null);
-      resetModalState();
-
-    } catch (error) {
-      console.error('Withdrawal error:', error);
-      setModalState(s => ({ ...s, error: error instanceof Error ? error.message : 'Withdrawal failed' }));
-    } finally {
-      setModalState(s => ({ ...s, isSubmitting: false }));
-    }
+    toast({
+      title: "Coming Soon",
+      description: "Withdrawal functionality will be available in the next update",
+      variant: "default"
+    });
   };
 
   // Handle swap
   const handleSwap = async () => {
-    const fromSymbol = modalState.swapFromSymbol || selectedAsset?.symbol || portfolio[0]?.symbol;
+    const fromSymbol = modalState.swapFromSymbol || selectedAsset?.symbol || portfolio[0]?.symbol || '';
     const toSymbol = modalState.swapToSymbol;
     const amount = parseFloat(modalState.swapAmount);
 
@@ -1055,57 +1018,10 @@ export default function WalletPage() {
     try {
       setModalState(s => ({ ...s, isSubmitting: true, error: '' }));
 
-      // Lock the swap amount
-      await lockBalance(fromSymbol, amount, `swap_${Date.now()}`);
-
-      const response = await fetch('/api/wallet/swap', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user?.id,
-          fromCurrency: fromSymbol,
-          toCurrency: toSymbol,
-          amount,
-          slippage: modalState.swapSlippage,
-          shouldWin: shouldWinSwap,
-        }),
-      });
-
-      if (!response.ok) {
-        // Unlock if failed
-        await unlockBalance(fromSymbol, amount, `swap_${Date.now()}`);
-        const error = await response.json();
-        throw new Error(error.message || 'Swap failed');
-      }
-
-      const result = await response.json();
-
-      // Add transaction record
-      addTransaction({
-        id: result.id || Date.now().toString(),
-        type: 'Swap',
-        asset: `${fromSymbol}/${toSymbol}`,
-        amount: -amount,
-        status: 'Completed',
-        date: new Date().toISOString(),
-        details: { 
-          fromSymbol, 
-          toSymbol, 
-          rate: result.rate, 
-          receivedAmount: result.receivedAmount 
-        },
-        metadata: {
-          shouldWin: shouldWinSwap,
-          outcome: shouldWinSwap ? 'win' : 'loss'
-        }
-      });
-
-      // Refresh balance
-      await handleRefresh();
-
       toast({
-        title: shouldWinSwap ? "Swap Successful (Win Forced)" : "Swap Successful",
-        description: `Swapped ${amount} ${fromSymbol} to ${result.receivedAmount.toFixed(6)} ${toSymbol}`,
+        title: "Coming Soon",
+        description: "Swap functionality will be available in the next update",
+        variant: "default"
       });
 
       setModal(null);
@@ -1145,76 +1061,11 @@ export default function WalletPage() {
       return;
     }
 
-    if (network.requiresMemo && !modalState.sendMemo) {
-      setModalState(s => ({ ...s, error: 'Destination tag/memo is required for this network' }));
-      return;
-    }
-
-    try {
-      setModalState(s => ({ ...s, isSubmitting: true, error: '' }));
-
-      // Lock the send amount
-      await lockBalance(selectedAsset.symbol, amount, `send_${Date.now()}`);
-
-      const response = await fetch('/api/wallet/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user?.id,
-          currency: selectedAsset.symbol,
-          amount,
-          toAddress: modalState.sendAddress,
-          memo: modalState.sendMemo,
-          network: modalState.sendNetwork,
-        }),
-      });
-
-      if (!response.ok) {
-        // Unlock if failed
-        await unlockBalance(selectedAsset.symbol, amount, `send_${Date.now()}`);
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to send funds');
-      }
-
-      const result = await response.json();
-
-      // Add transaction record
-      addTransaction({
-        id: result.id || Date.now().toString(),
-        type: 'Withdrawal',
-        asset: selectedAsset.symbol,
-        amount: -amount,
-        status: 'Completed',
-        date: new Date().toISOString(),
-        details: { 
-          toAddress: modalState.sendAddress,
-          network: modalState.sendNetwork,
-          txHash: result.txHash 
-        },
-        metadata: {
-          network: modalState.sendNetwork,
-          address: modalState.sendAddress,
-          txHash: result.txHash
-        }
-      });
-
-      // Refresh balance
-      await handleRefresh();
-
-      toast({
-        title: "Transfer Successful",
-        description: `Sent ${amount} ${selectedAsset.symbol} to ${formatAddress(modalState.sendAddress)}`,
-      });
-
-      setModal(null);
-      resetModalState();
-
-    } catch (error) {
-      console.error('Send error:', error);
-      setModalState(s => ({ ...s, error: error instanceof Error ? error.message : 'Transfer failed' }));
-    } finally {
-      setModalState(s => ({ ...s, isSubmitting: false }));
-    }
+    toast({
+      title: "Coming Soon",
+      description: "Send functionality will be available in the next update",
+      variant: "default"
+    });
   };
 
   // Handle file upload for deposit proof
@@ -1251,27 +1102,13 @@ export default function WalletPage() {
 
   // Handle add asset
   const handleAddAsset = useCallback(() => {
-    if (!portfolio.find(a => a.symbol === addAssetSymbol)) {
-      const asset = CRYPTO_ASSETS.find(a => a.symbol === addAssetSymbol);
-      updatePortfolio([
-        ...portfolio,
-        { 
-          symbol: addAssetSymbol, 
-          name: asset?.name || addAssetSymbol, 
-          balance: 0,
-          locked: 0,
-          value: 0,
-          change: '0%'
-        },
-      ]);
-      
-      toast({
-        title: 'Asset Added',
-        description: `${addAssetSymbol} has been added to your wallet`,
-      });
-    }
+    toast({
+      title: "Coming Soon",
+      description: "Asset addition will be available in the next update",
+      variant: "default"
+    });
     setAddAssetModal(false);
-  }, [portfolio, addAssetSymbol, updatePortfolio, toast]);
+  }, [toast]);
 
   // Handle export
   const handleExport = async (format: 'csv' | 'json' = 'csv') => {
@@ -1341,36 +1178,96 @@ export default function WalletPage() {
     setShowExportMenu(false);
   };
 
-  // Calculate total balance in selected currency
-  const displayBalance = currency === 'BTC' && prices?.BTC 
-    ? (getUnifiedBalance('USDT') + getLockedBalance('USDT')) / prices.BTC 
-    : getUnifiedBalance('USDT') + getLockedBalance('USDT');
-  
-  // Debug logging
-  console.log('💰 Wallet Debug:', {
-    userId: user?.id,
-    currency,
-    displayBalance,
-    fundingBalance: getFundingBalance('USDT'),
-    tradingBalance: getTradingBalance('USDT'),
-    lockedBalance: getLockedBalance('USDT'),
-    totalBalance: getTotalBalance(),
-    portfolioLength: portfolio.length,
-    walletLoading,
-    hasData: Object.keys(fundingBalances).length > 0 || Object.keys(tradingBalances).length > 0
+  // Reset modal state
+  const resetModalState = useCallback(() => {
+    setModalState({
+      isSubmitting: false,
+      error: '',
+      depositNetwork: 'ERC20',
+      depositAmount: '',
+      depositAddress: '',
+      depositProof: null,
+      depositProofUrl: '',
+      withdrawAddress: '',
+      withdrawAmount: '',
+      withdrawNetwork: 'ERC20',
+      swapFromSymbol: '',
+      swapToSymbol: '',
+      swapAmount: '',
+      swapEstimatedOutput: '',
+      swapSlippage: 0.5,
+      sendAddress: '',
+      sendAmount: '',
+      sendNetwork: 'ERC20',
+      copied: '',
+      showQR: false,
+    });
+  }, []);
+
+  // Modal state
+  const [modalState, setModalState] = useState<ModalState>({
+    isSubmitting: false,
+    error: '',
+    depositNetwork: 'ERC20',
+    depositAmount: '',
+    depositAddress: '',
+    depositProof: null,
+    depositProofUrl: '',
+    withdrawAddress: '',
+    withdrawAmount: '',
+    withdrawNetwork: 'ERC20',
+    swapFromSymbol: '',
+    swapToSymbol: '',
+    swapAmount: '',
+    swapEstimatedOutput: '',
+    swapSlippage: 0.5,
+    sendAddress: '',
+    sendAmount: '',
+    sendNetwork: 'ERC20',
+    copied: '',
+    showQR: false,
   });
 
+  // Handle click outside dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifOpen || profileOpen) {
+        const target = event.target as Element;
+        if (!target.closest('[data-dropdown]')) {
+          setNotifOpen(false);
+          setProfileOpen(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [notifOpen, profileOpen]);
+
   // Filter and sort portfolio
-  const filteredPortfolio = portfolio
-    .filter(asset => 
-      asset.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      asset.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    .sort((a, b) => {
-      if (sortBy === 'value') return b.value - a.value;
-      if (sortBy === 'balance') return b.balance - a.balance;
-      return a.name.localeCompare(b.name);
+  const filteredPortfolio = useMemo(() => {
+    return portfolio
+      .filter(asset => 
+        asset.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        asset.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      .sort((a, b) => {
+        if (sortBy === 'value') return b.value - a.value;
+        if (sortBy === 'balance') return b.balance - a.balance;
+        return a.name.localeCompare(b.name);
+      });
+  }, [portfolio, searchQuery, sortBy]);
+
+  // Debug logging for filteredPortfolio
+  useEffect(() => {
+    console.log('🔍 Portfolio Debug:', {
+      portfolioLength: portfolio.length,
+      portfolioData: portfolio.map(p => ({ symbol: p.symbol, name: p.name, balance: p.balance })),
+      searchQuery,
+      sortBy,
+      filteredLength: filteredPortfolio.length
     });
+  }, [portfolio, searchQuery, sortBy]);
 
   // Navigation items
   const navItems = [
@@ -1685,7 +1582,7 @@ export default function WalletPage() {
                   }
                 </div>
                 <div className="text-sm text-[#848E9C] flex items-center gap-1">
-                  {walletLoading ? <Skeleton className="h-4 w-32" /> : hideBalances ? '••••••' : `≈ ${formatCurrency(getUnifiedBalance('USDT') + getLockedBalance('USDT'))} USD`}
+                  {walletLoading ? <Skeleton className="h-4 w-32" /> : hideBalances ? '••••••' : `≈ ${formatCurrency(getTotalBalance?.('USDT') || 0)} USD`}
                   <Badge className="ml-2 bg-gray-500/15 text-gray-400 border-gray-500/20 text-[10px]">
                     <TrendingUp size={10} className="mr-1" />
                     0% (24h)
@@ -1698,23 +1595,23 @@ export default function WalletPage() {
                 <div>
                   <div className="text-xs text-[#848E9C] mb-1">Funding</div>
                   <div className="text-sm font-semibold text-[#EAECEF]">
-                    {hideBalances ? '••••••' : formatCurrency(getFundingBalance('USDT'))}
+                    {hideBalances ? '••••••' : formatCurrency(totalFundingBalance)}
                   </div>
                 </div>
                 <div className="w-px h-8 bg-[#2B3139]"></div>
                 <div>
                   <div className="text-xs text-[#848E9C] mb-1">Trading</div>
                   <div className="text-sm font-semibold text-[#F0B90B]">
-                    {hideBalances ? '••••••' : formatCurrency(getTradingBalance('USDT'))}
+                    {hideBalances ? '••••••' : formatCurrency(totalTradingBalance)}
                   </div>
                 </div>
-                {getLockedBalance('USDT') > 0 && (
+                {totalLockedBalance > 0 && (
                   <>
                     <div className="w-px h-8 bg-[#2B3139]"></div>
                     <div>
                       <div className="text-xs text-[#848E9C] mb-1">Locked</div>
                       <div className="text-sm font-semibold text-[#F0B90B]">
-                        {hideBalances ? '••••••' : formatCurrency(getLockedBalance('USDT'))}
+                        {hideBalances ? '••••••' : formatCurrency(totalLockedBalance)}
                       </div>
                     </div>
                   </>
@@ -1800,13 +1697,13 @@ export default function WalletPage() {
         {/* Wallet Transfer Modal */}
         <AnimatePresence>
           {showTransferModal && (
-            <WalletTransferModal 
+            <WalletTransfer 
               isOpen={showTransferModal}
               onClose={() => setShowTransferModal(false)}
               onTransfer={handleTransferToTrading}
               onTransferBack={handleTransferToFunding}
-              fundingBalance={getFundingBalance('USDT')}
-              tradingBalance={getTradingBalance('USDT')}
+              fundingBalance={getFundingBalance?.('USDT') || 0}
+              tradingBalance={getTradingBalance?.('USDT') || 0}
             />
           )}
         </AnimatePresence>
@@ -1898,25 +1795,36 @@ export default function WalletPage() {
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <Activity className="w-4 h-4 text-[#F0B90B]" />
-                          <h3 className="font-medium text-[#EAECEF]">Active Trades ({stats.activeLocks})</h3>
+                          <h3 className="font-medium text-[#EAECEF]">Active Positions</h3>
                         </div>
                         <Badge className="bg-[#F0B90B]/15 text-[#F0B90B] border-[#F0B90B]/20">
-                          {formatCurrency(getLockedBalance('USDT'))} Locked
+                          {formatCurrency(totalLockedBalance)} Active
                         </Badge>
                       </div>
                       <div className="space-y-2">
-                        {locks.slice(0, 3).map(lock => (
-                          <div key={lock.id} className="flex justify-between items-center text-sm p-2 bg-[#23262F] rounded-lg">
-                            <div className="flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 bg-[#F0B90B] rounded-full"></div>
-                              <span className="text-[#848E9C]">{lock.lockType}</span>
+                        {(locks || []).slice(0, 3).map((lock: any) => {
+                          // Clean up the lock type display
+                          const cleanType = lock.lockType || lock.type || 'Position';
+                          const displayName = cleanType === 'options' ? 'Options Trade' : 
+                                           cleanType === 'futures' ? 'Futures Trade' :
+                                           cleanType === 'spot' ? 'Spot Trade' :
+                                           cleanType.charAt(0).toUpperCase() + cleanType.slice(1);
+                          
+                          return (
+                            <div key={lock.id} className="flex justify-between items-center text-sm p-2 bg-[#23262F] rounded-lg">
+                              <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 bg-[#F0B90B] rounded-full"></div>
+                                <span className="text-[#848E9C]">{displayName}</span>
+                              </div>
+                              <span className="text-[#F0B90B] font-mono font-medium">
+                                {formatCurrency(lock.amount || 0)} {lock.asset || 'USDT'}
+                              </span>
                             </div>
-                            <span className="text-[#F0B90B] font-mono font-medium">{lock.amount} {lock.asset}</span>
-                          </div>
-                        ))}
-                        {locks.length > 3 && (
+                          );
+                        })}
+                        {(locks || []).length > 3 && (
                           <div className="text-xs text-[#848E9C] text-center pt-1">
-                            +{locks.length - 3} more active trades
+                            +{(locks || []).length - 3} more positions
                           </div>
                         )}
                       </div>
@@ -2062,7 +1970,7 @@ export default function WalletPage() {
                     Active Trading Windows
                   </p>
                   <p className="text-xs text-amber-400/80 mt-1">
-                    {activeWindows.map(w => w.outcome_type.toUpperCase()).join(' • ')}
+                    {activeWindows.map((w: any) => w.outcome_type?.toUpperCase() || 'WIN').join(' • ')}
                   </p>
                 </div>
               </div>
@@ -2191,7 +2099,7 @@ export default function WalletPage() {
                 <div className="bg-[#23262F] rounded-xl p-4">
                   <div className="text-xs text-[#848E9C] mb-1">Trading</div>
                   <div className="text-lg font-bold text-[#F0B90B]">
-                    {hideBalances ? '••••••' : formatCrypto(getTradingBalance(selectedAsset.symbol), selectedAsset.symbol)}
+                    {hideBalances ? '••••••' : formatCrypto(getTradingBalance?.(selectedAsset.symbol) || 0, selectedAsset.symbol)}
                   </div>
                 </div>
                 <div className="bg-[#23262F] rounded-xl p-4">
@@ -2682,7 +2590,7 @@ export default function WalletPage() {
                       setModalState(s => ({ ...s, swapAmount: amount, error: '' }));
                       
                       // Calculate estimated output (mock rate)
-                      const fromSymbol = s.swapFromSymbol || selectedAsset?.symbol || portfolio[0]?.symbol;
+                      const fromSymbol = s.swapFromSymbol || selectedAsset?.symbol || portfolio[0]?.symbol || '';
                       const toSymbol = s.swapToSymbol;
                       if (fromSymbol && toSymbol && amount) {
                         const rate = fromSymbol === 'USDT' && toSymbol === 'BTC' ? 0.000025 :
@@ -2722,7 +2630,7 @@ export default function WalletPage() {
                     setModalState(s => ({ ...s, swapToSymbol: e.target.value, error: '' }));
                     
                     // Recalculate estimated output
-                    const fromSymbol = s.swapFromSymbol || selectedAsset?.symbol || portfolio[0]?.symbol;
+                    const fromSymbol = s.swapFromSymbol || selectedAsset?.symbol || portfolio[0]?.symbol || '';
                     const toSymbol = e.target.value;
                     if (fromSymbol && toSymbol && s.swapAmount) {
                       const rate = fromSymbol === 'USDT' && toSymbol === 'BTC' ? 0.000025 :

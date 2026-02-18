@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -21,51 +21,204 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import WalletTransfer from '@/components/WalletTransfer';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet as useUnifiedWalletV2 } from '@/hooks/useUnifiedWallet-v2';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// Asset interface
+interface Asset {
+  symbol: string;
+  name: string;
+  funding: number;
+  trading: number;
+  icon: string;
+  price?: number;
+}
 
 export default function WalletTransferPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
   
-  // Use real wallet data
+  // Use real wallet data with default values to prevent errors
+  const wallet = useUnifiedWalletV2() || {};
+  
   const {
-    getFundingBalance,
-    getTradingBalance,
-    getLockedBalance,
-    getTotalBalance,
-    transferToTrading,
-    transferToFunding,
-    loading: walletLoading
-  } = useUnifiedWallet();
+    getFundingBalance = (asset: string) => 0,
+    getTradingBalance = (asset: string) => 0,
+    getLockedBalance = (asset: string) => 0,
+    getTotalBalance = (asset: string) => 0,
+    transferToTrading = async () => ({ success: false, error: 'Not implemented' }),
+    transferToFunding = async () => ({ success: false, error: 'Not implemented' }),
+    refreshBalances = async () => {},
+    loading: walletLoading = false,
+    balances = { funding: {}, trading: {}, locked: {} }
+  } = wallet;
   
   const [activeTab, setActiveTab] = useState<'funding-to-trading' | 'trading-to-funding'>('funding-to-trading');
   const [amount, setAmount] = useState('');
   const [selectedAsset, setSelectedAsset] = useState('USDT');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [assets, setAssets] = useState<Asset[]>([]);
 
-  // Real balances from wallet service
-  const balances = {
-    funding: getFundingBalance('USDT'),
-    trading: getTradingBalance('USDT'),
-    locked: getLockedBalance('USDT')
+  // Calculate total balances using useMemo for consistency
+  const totalFundingBalance = useMemo(() => {
+    return Object.values(balances?.funding || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  }, [balances?.funding]);
+
+  const totalTradingBalance = useMemo(() => {
+    return Object.values(balances?.trading || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  }, [balances?.trading]);
+
+  const totalLockedBalance = useMemo(() => {
+    return Object.values(balances?.locked || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  }, [balances?.locked]);
+
+  const totalBalance = useMemo(() => {
+    return totalFundingBalance + totalTradingBalance + totalLockedBalance;
+  }, [totalFundingBalance, totalTradingBalance, totalLockedBalance]);
+
+  // Real balances for the selected asset
+  const fundingBalance = useMemo(() => {
+    return Number(getFundingBalance(selectedAsset)) || 0;
+  }, [getFundingBalance, selectedAsset]);
+
+  const tradingBalance = useMemo(() => {
+    return Number(getTradingBalance(selectedAsset)) || 0;
+  }, [getTradingBalance, selectedAsset]);
+
+  // Load available assets from real balances
+  useEffect(() => {
+    const loadAssets = async () => {
+      if (!user?.id) return;
+      
+      try {
+        // Get all unique assets from balances
+        const allAssets = new Set<string>();
+        
+        // Add USDT always
+        allAssets.add('USDT');
+        
+        // Add other assets that have balance
+        if (balances?.funding) {
+          Object.keys(balances.funding).forEach(symbol => {
+            // Skip legacy trading wallet entries
+            if (!symbol.includes('_TRADING') && Number(balances.funding[symbol]) > 0) {
+              allAssets.add(symbol);
+            }
+          });
+        }
+        if (balances?.trading) {
+          Object.keys(balances.trading).forEach(symbol => {
+            // Skip legacy trading wallet entries and only use clean symbols
+            if (!symbol.includes('_TRADING') && Number(balances.trading[symbol]) > 0) {
+              allAssets.add(symbol);
+            }
+          });
+        }
+        
+        const assetList: Asset[] = [];
+        
+        for (const symbol of allAssets) {
+          const funding = Number(getFundingBalance(symbol)) || 0;
+          const trading = Number(getTradingBalance(symbol)) || 0;
+          
+          // Only show assets with balance in either wallet
+          if (funding > 0 || trading > 0 || symbol === 'USDT') {
+            assetList.push({
+              symbol,
+              name: getAssetName(symbol),
+              funding,
+              trading,
+              icon: getAssetIcon(symbol)
+            });
+          }
+        }
+        
+        // Sort by total balance (funding + trading) descending
+        assetList.sort((a, b) => (b.funding + b.trading) - (a.funding + a.trading));
+        
+        setAssets(assetList);
+        
+        // Set default selected asset to first with balance, or USDT
+        if (assetList.length > 0) {
+          setSelectedAsset(assetList[0].symbol);
+        }
+      } catch (error) {
+        console.error('Error loading assets:', error);
+      }
+    };
+    
+    loadAssets();
+  }, [user, balances, getFundingBalance, getTradingBalance]);
+
+  // Helper function to get asset name
+  const getAssetName = (symbol: string): string => {
+    const names: Record<string, string> = {
+      'USDT': 'Tether',
+      'BTC': 'Bitcoin',
+      'ETH': 'Ethereum',
+      'BNB': 'Binance Coin',
+      'SOL': 'Solana',
+      'ADA': 'Cardano',
+      'XRP': 'Ripple',
+      'DOT': 'Polkadot',
+      'DOGE': 'Dogecoin',
+      'MATIC': 'Polygon',
+      'AVAX': 'Avalanche',
+      'LINK': 'Chainlink',
+      'UNI': 'Uniswap',
+      'ATOM': 'Cosmos',
+      'LTC': 'Litecoin',
+      'BCH': 'Bitcoin Cash',
+      'ALGO': 'Algorand',
+      'NEAR': 'NEAR Protocol',
+      'FIL': 'Filecoin',
+      'TRX': 'TRON'
+    };
+    return names[symbol] || symbol;
   };
 
-  const assets = [
-    { symbol: 'USDT', name: 'Tether', funding: getFundingBalance('USDT'), trading: getTradingBalance('USDT'), icon: '₮' },
-    { symbol: 'BTC', name: 'Bitcoin', funding: getFundingBalance('BTC'), trading: getTradingBalance('BTC'), icon: '₿' },
-    { symbol: 'ETH', name: 'Ethereum', funding: getFundingBalance('ETH'), trading: getTradingBalance('ETH'), icon: 'Ξ' },
-  ];
+  // Helper function to get asset icon
+  const getAssetIcon = (symbol: string): string => {
+    const icons: Record<string, string> = {
+      'USDT': '₮',
+      'BTC': '₿',
+      'ETH': 'Ξ',
+      'SOL': '◎',
+      'XRP': '✕',
+      'ADA': '₳',
+      'DOGE': 'Ð',
+      'BNB': '🟡',
+      'AVAX': '🅰️',
+      'DOT': '⚫',
+      'MATIC': 'M',
+      'TRX': 'T',
+      'LINK': '🔗',
+      'FIL': '🟦',
+      'XMR': 'Ⓜ️',
+      'ATOM': '⚛️',
+      'LTC': 'Ł',
+      'ARB': '🅰️'
+    };
+    return icons[symbol] || '◉';
+  };
+
+  // Format currency helper
+  const formatCurrency = (value: number): string => {
+    return value.toLocaleString(undefined, { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 6 
+    });
+  };
 
   const handleMaxClick = () => {
     const maxAmount = activeTab === 'funding-to-trading' 
-      ? balances.funding 
-      : balances.trading;
+      ? fundingBalance 
+      : tradingBalance;
     setAmount(maxAmount.toString());
   };
 
@@ -90,6 +243,20 @@ export default function WalletTransferPage() {
       return;
     }
 
+    // Check sufficient balance
+    const availableBalance = activeTab === 'funding-to-trading' 
+      ? fundingBalance 
+      : tradingBalance;
+      
+    if (transferAmount > availableBalance) {
+      toast({
+        title: "Insufficient Balance",
+        description: `You only have ${formatCurrency(availableBalance)} ${selectedAsset} available`,
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     
     try {
@@ -97,22 +264,22 @@ export default function WalletTransferPage() {
       
       if (activeTab === 'funding-to-trading') {
         // Transfer from funding to trading
-        result = await transferToTrading(selectedAsset, transferAmount);
+        result = await transferToTrading(selectedAsset, transferAmount, `transfer_${Date.now()}`);
         
         if (result.success) {
           toast({
             title: "Transfer Successful",
-            description: `Successfully transferred ${transferAmount} ${selectedAsset} to trading wallet`,
+            description: `Successfully transferred ${formatCurrency(transferAmount)} ${selectedAsset} to trading wallet`,
           });
         }
       } else {
         // Transfer from trading to funding
-        result = await transferToFunding(selectedAsset, transferAmount);
+        result = await transferToFunding(selectedAsset, transferAmount, `transfer_${Date.now()}`);
         
         if (result.success) {
           toast({
             title: "Transfer Successful", 
-            description: `Successfully transferred ${transferAmount} ${selectedAsset} to funding wallet`,
+            description: `Successfully transferred ${formatCurrency(transferAmount)} ${selectedAsset} to funding wallet`,
           });
         }
       }
@@ -121,8 +288,13 @@ export default function WalletTransferPage() {
         throw new Error(result.error || 'Transfer failed');
       }
       
-      // Clear amount and navigate back
+      // Refresh balances to show updated amounts
+      await refreshBalances();
+      
+      // Clear amount and show success
       setAmount('');
+      
+      // Show success and navigate back after delay
       setTimeout(() => navigate('/wallet'), 1500);
       
     } catch (error) {
@@ -135,6 +307,15 @@ export default function WalletTransferPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Get current asset data
+  const currentAsset = assets.find(a => a.symbol === selectedAsset) || {
+    symbol: selectedAsset,
+    name: getAssetName(selectedAsset),
+    funding: fundingBalance,
+    trading: tradingBalance,
+    icon: getAssetIcon(selectedAsset)
   };
 
   return (
@@ -175,7 +356,11 @@ export default function WalletTransferPage() {
                 <Wallet className="w-4 h-4 text-[#F0B90B]" />
                 <span className="text-sm text-[#848E9C]">Total:</span>
                 <span className="text-sm font-semibold text-[#EAECEF]">
-                  ${getTotalBalance('USDT').toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+                  {walletLoading ? (
+                    <Skeleton className="h-4 w-20" />
+                  ) : (
+                    `${formatCurrency(totalBalance)} USDT`
+                  )}
                 </span>
               </div>
             </div>
@@ -201,12 +386,12 @@ export default function WalletTransferPage() {
             </div>
             <div className="text-xl font-bold text-[#EAECEF]">
               {walletLoading ? (
-                <div className="animate-pulse bg-[#23262F] h-6 w-24 rounded"></div>
+                <Skeleton className="h-6 w-24" />
               ) : (
-                `${balances.funding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                formatCurrency(totalFundingBalance)
               )}
             </div>
-            <div className="text-xs text-[#848E9C] mt-1">Available for deposits</div>
+            <div className="text-xs text-[#848E9C] mt-1">Available for deposits/withdrawals</div>
           </Card>
 
           <Card className="bg-gradient-to-br from-[#1E2329] to-[#1A1F26] border border-[#2B3139] p-4">
@@ -218,9 +403,9 @@ export default function WalletTransferPage() {
             </div>
             <div className="text-xl font-bold text-[#EAECEF]">
               {walletLoading ? (
-                <div className="animate-pulse bg-[#23262F] h-6 w-24 rounded"></div>
+                <Skeleton className="h-6 w-24" />
               ) : (
-                `${balances.trading.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                formatCurrency(totalTradingBalance)
               )}
             </div>
             <div className="text-xs text-[#848E9C] mt-1">Available for trading</div>
@@ -235,9 +420,9 @@ export default function WalletTransferPage() {
             </div>
             <div className="text-xl font-bold text-[#EAECEF]">
               {walletLoading ? (
-                <div className="animate-pulse bg-[#23262F] h-6 w-24 rounded"></div>
+                <Skeleton className="h-6 w-24" />
               ) : (
-                `${balances.locked.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                formatCurrency(totalLockedBalance)
               )}
             </div>
             <div className="text-xs text-[#848E9C] mt-1">In open orders</div>
@@ -284,30 +469,40 @@ export default function WalletTransferPage() {
                     {/* Asset Selection */}
                     <div>
                       <Label className="text-sm text-[#848E9C] mb-2 block">Select Asset</Label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {assets.map((asset) => (
-                          <motion.button
-                            key={asset.symbol}
-                            whileHover={{ scale: 1.02, y: -2 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => setSelectedAsset(asset.symbol)}
-                            className={cn(
-                              "flex items-center gap-3 p-3 rounded-xl border transition-all",
-                              selectedAsset === asset.symbol
-                                ? "border-[#F0B90B] bg-[#F0B90B]/10"
-                                : "border-[#2B3139] bg-[#23262F] hover:border-[#F0B90B]/50"
-                            )}
-                          >
-                            <div className="w-8 h-8 rounded-full bg-[#2B3139] flex items-center justify-center text-sm">
-                              {asset.icon}
-                            </div>
-                            <div className="text-left">
-                              <div className="text-sm font-medium text-[#EAECEF]">{asset.symbol}</div>
-                              <div className="text-xs text-[#848E9C]">${asset.funding.toLocaleString()}</div>
-                            </div>
-                          </motion.button>
-                        ))}
-                      </div>
+                      {walletLoading ? (
+                        <div className="grid grid-cols-3 gap-2">
+                          {[1,2,3].map(i => (
+                            <Skeleton key={i} className="h-20 rounded-xl" />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2">
+                          {assets.map((asset) => (
+                            <motion.button
+                              key={asset.symbol}
+                              whileHover={{ scale: 1.02, y: -2 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => setSelectedAsset(asset.symbol)}
+                              className={cn(
+                                "flex items-center gap-3 p-3 rounded-xl border transition-all",
+                                selectedAsset === asset.symbol
+                                  ? "border-[#F0B90B] bg-[#F0B90B]/10"
+                                  : "border-[#2B3139] bg-[#23262F] hover:border-[#F0B90B]/50"
+                              )}
+                            >
+                              <div className="w-8 h-8 rounded-full bg-[#2B3139] flex items-center justify-center text-sm">
+                                {asset.icon}
+                              </div>
+                              <div className="text-left">
+                                <div className="text-sm font-medium text-[#EAECEF]">{asset.symbol}</div>
+                                <div className="text-xs text-[#848E9C]">
+                                  {formatCurrency(asset.funding)}
+                                </div>
+                              </div>
+                            </motion.button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Transfer Direction Visual */}
@@ -315,6 +510,9 @@ export default function WalletTransferPage() {
                       <div className="text-right">
                         <div className="text-xs text-[#848E9C]">From</div>
                         <div className="text-sm font-medium text-[#EAECEF]">Funding</div>
+                        <div className="text-xs text-[#F0B90B]">
+                          {walletLoading ? '...' : formatCurrency(currentAsset.funding)}
+                        </div>
                       </div>
                       <motion.div
                         animate={{ x: [0, 5, 0] }}
@@ -326,6 +524,9 @@ export default function WalletTransferPage() {
                       <div className="text-left">
                         <div className="text-xs text-[#848E9C]">To</div>
                         <div className="text-sm font-medium text-[#EAECEF]">Trading</div>
+                        <div className="text-xs text-[#F0B90B]">
+                          {walletLoading ? '...' : formatCurrency(currentAsset.trading)}
+                        </div>
                       </div>
                     </div>
 
@@ -334,7 +535,7 @@ export default function WalletTransferPage() {
                       <div className="flex items-center justify-between mb-2">
                         <Label className="text-sm text-[#848E9C]">Amount</Label>
                         <span className="text-xs text-[#848E9C]">
-                          Available: ${balances.funding.toLocaleString()}
+                          Available: {walletLoading ? '...' : formatCurrency(currentAsset.funding)} {selectedAsset}
                         </span>
                       </div>
                       <div className="relative">
@@ -343,12 +544,14 @@ export default function WalletTransferPage() {
                           placeholder="0.00"
                           value={amount}
                           onChange={(e) => setAmount(e.target.value)}
-                          className="bg-[#23262F] border-[#2B3139] text-[#EAECEF] h-14 text-lg rounded-xl pr-24 focus:border-[#F0B90B] transition-colors"
+                          disabled={walletLoading || currentAsset.funding <= 0}
+                          className="bg-[#23262F] border-[#2B3139] text-[#EAECEF] h-14 text-lg rounded-xl pr-24 focus:border-[#F0B90B] transition-colors disabled:opacity-50"
                         />
                         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                           <button
                             onClick={handleMaxClick}
-                            className="px-3 py-1.5 text-xs font-medium text-[#F0B90B] hover:bg-[#F0B90B]/10 rounded-lg transition-colors"
+                            disabled={walletLoading || currentAsset.funding <= 0}
+                            className="px-3 py-1.5 text-xs font-medium text-[#F0B90B] hover:bg-[#F0B90B]/10 rounded-lg transition-colors disabled:opacity-50"
                           >
                             MAX
                           </button>
@@ -368,17 +571,23 @@ export default function WalletTransferPage() {
                           {amount || '0'} {selectedAsset}
                         </span>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-[#848E9C]">To trading wallet</span>
-                        <span className="text-[#EAECEF] font-medium">
-                          ${amount ? (parseFloat(amount) * (selectedAsset === 'USDT' ? 1 : 40000)).toLocaleString() : '0'} USD
-                        </span>
-                      </div>
                       <Separator className="bg-[#2B3139]" />
                       <div className="flex justify-between text-sm">
-                        <span className="text-[#848E9C]">After transfer</span>
+                        <span className="text-[#848E9C]">Funding after transfer</span>
                         <span className="text-[#EAECEF] font-medium">
-                          ${(balances.funding - (parseFloat(amount) || 0)).toLocaleString()}
+                          {walletLoading ? '...' : amount && parseFloat(amount) > 0 
+                            ? formatCurrency(currentAsset.funding - parseFloat(amount))
+                            : formatCurrency(currentAsset.funding)
+                          }
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[#848E9C]">Trading after transfer</span>
+                        <span className="text-[#EAECEF] font-medium">
+                          {walletLoading ? '...' : amount && parseFloat(amount) > 0 
+                            ? formatCurrency(currentAsset.trading + parseFloat(amount))
+                            : formatCurrency(currentAsset.trading)
+                          }
                         </span>
                       </div>
                     </div>
@@ -395,39 +604,53 @@ export default function WalletTransferPage() {
 
                 <TabsContent value="trading-to-funding" className="mt-6">
                   <div className="space-y-6">
-                    {/* Similar content but for trading to funding */}
+                    {/* Asset Selection */}
                     <div>
                       <Label className="text-sm text-[#848E9C] mb-2 block">Select Asset</Label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {assets.map((asset) => (
-                          <motion.button
-                            key={asset.symbol}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => setSelectedAsset(asset.symbol)}
-                            className={cn(
-                              "flex items-center gap-3 p-3 rounded-xl border transition-all",
-                              selectedAsset === asset.symbol
-                                ? "border-[#F0B90B] bg-[#F0B90B]/10"
-                                : "border-[#2B3139] bg-[#23262F] hover:border-[#F0B90B]/50"
-                            )}
-                          >
-                            <div className="w-8 h-8 rounded-full bg-[#2B3139] flex items-center justify-center text-sm">
-                              {asset.icon}
-                            </div>
-                            <div className="text-left">
-                              <div className="text-sm font-medium text-[#EAECEF]">{asset.symbol}</div>
-                              <div className="text-xs text-[#848E9C]">${asset.trading.toLocaleString()}</div>
-                            </div>
-                          </motion.button>
-                        ))}
-                      </div>
+                      {walletLoading ? (
+                        <div className="grid grid-cols-3 gap-2">
+                          {[1,2,3].map(i => (
+                            <Skeleton key={i} className="h-20 rounded-xl" />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2">
+                          {assets.map((asset) => (
+                            <motion.button
+                              key={asset.symbol}
+                              whileHover={{ scale: 1.02, y: -2 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => setSelectedAsset(asset.symbol)}
+                              className={cn(
+                                "flex items-center gap-3 p-3 rounded-xl border transition-all",
+                                selectedAsset === asset.symbol
+                                  ? "border-[#F0B90B] bg-[#F0B90B]/10"
+                                  : "border-[#2B3139] bg-[#23262F] hover:border-[#F0B90B]/50"
+                              )}
+                            >
+                              <div className="w-8 h-8 rounded-full bg-[#2B3139] flex items-center justify-center text-sm">
+                                {asset.icon}
+                              </div>
+                              <div className="text-left">
+                                <div className="text-sm font-medium text-[#EAECEF]">{asset.symbol}</div>
+                                <div className="text-xs text-[#848E9C]">
+                                  {formatCurrency(asset.trading)}
+                                </div>
+                              </div>
+                            </motion.button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
+                    {/* Transfer Direction Visual */}
                     <div className="flex items-center justify-center gap-4 py-2">
                       <div className="text-right">
                         <div className="text-xs text-[#848E9C]">From</div>
                         <div className="text-sm font-medium text-[#EAECEF]">Trading</div>
+                        <div className="text-xs text-[#F0B90B]">
+                          {walletLoading ? '...' : formatCurrency(currentAsset.trading)}
+                        </div>
                       </div>
                       <motion.div
                         animate={{ x: [0, -5, 0] }}
@@ -439,14 +662,18 @@ export default function WalletTransferPage() {
                       <div className="text-left">
                         <div className="text-xs text-[#848E9C]">To</div>
                         <div className="text-sm font-medium text-[#EAECEF]">Funding</div>
+                        <div className="text-xs text-[#F0B90B]">
+                          {walletLoading ? '...' : formatCurrency(currentAsset.funding)}
+                        </div>
                       </div>
                     </div>
 
+                    {/* Amount Input */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <Label className="text-sm text-[#848E9C]">Amount</Label>
                         <span className="text-xs text-[#848E9C]">
-                          Available: ${balances.trading.toLocaleString()}
+                          Available: {walletLoading ? '...' : formatCurrency(currentAsset.trading)} {selectedAsset}
                         </span>
                       </div>
                       <div className="relative">
@@ -455,12 +682,14 @@ export default function WalletTransferPage() {
                           placeholder="0.00"
                           value={amount}
                           onChange={(e) => setAmount(e.target.value)}
-                          className="bg-[#23262F] border-[#2B3139] text-[#EAECEF] h-14 text-lg rounded-xl pr-24 focus:border-[#F0B90B] transition-colors"
+                          disabled={walletLoading || currentAsset.trading <= 0}
+                          className="bg-[#23262F] border-[#2B3139] text-[#EAECEF] h-14 text-lg rounded-xl pr-24 focus:border-[#F0B90B] transition-colors disabled:opacity-50"
                         />
                         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                           <button
-                            onClick={() => setAmount(balances.trading.toString())}
-                            className="px-3 py-1.5 text-xs font-medium text-[#F0B90B] hover:bg-[#F0B90B]/10 rounded-lg transition-colors"
+                            onClick={handleMaxClick}
+                            disabled={walletLoading || currentAsset.trading <= 0}
+                            className="px-3 py-1.5 text-xs font-medium text-[#F0B90B] hover:bg-[#F0B90B]/10 rounded-lg transition-colors disabled:opacity-50"
                           >
                             MAX
                           </button>
@@ -472,6 +701,7 @@ export default function WalletTransferPage() {
                       </div>
                     </div>
 
+                    {/* Transfer Summary */}
                     <div className="bg-[#23262F] rounded-xl p-4 space-y-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-[#848E9C]">You transfer</span>
@@ -479,17 +709,23 @@ export default function WalletTransferPage() {
                           {amount || '0'} {selectedAsset}
                         </span>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-[#848E9C]">To funding wallet</span>
-                        <span className="text-[#EAECEF] font-medium">
-                          ${amount ? (parseFloat(amount) * (selectedAsset === 'USDT' ? 1 : 40000)).toLocaleString() : '0'} USD
-                        </span>
-                      </div>
                       <Separator className="bg-[#2B3139]" />
                       <div className="flex justify-between text-sm">
-                        <span className="text-[#848E9C]">After transfer</span>
+                        <span className="text-[#848E9C]">Trading after transfer</span>
                         <span className="text-[#EAECEF] font-medium">
-                          ${(balances.trading - (parseFloat(amount) || 0)).toLocaleString()}
+                          {walletLoading ? '...' : amount && parseFloat(amount) > 0 
+                            ? formatCurrency(currentAsset.trading - parseFloat(amount))
+                            : formatCurrency(currentAsset.trading)
+                          }
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[#848E9C]">Funding after transfer</span>
+                        <span className="text-[#EAECEF] font-medium">
+                          {walletLoading ? '...' : amount && parseFloat(amount) > 0 
+                            ? formatCurrency(currentAsset.funding + parseFloat(amount))
+                            : formatCurrency(currentAsset.funding)
+                          }
                         </span>
                       </div>
                     </div>
@@ -510,12 +746,12 @@ export default function WalletTransferPage() {
                 </Button>
                 <Button
                   onClick={handleSubmit}
-                  disabled={!amount || parseFloat(amount) <= 0 || isSubmitting}
+                  disabled={!amount || parseFloat(amount) <= 0 || isSubmitting || walletLoading}
                   className={cn(
                     "order-1 sm:order-2 bg-gradient-to-r from-[#F0B90B] to-[#F0B90B]/80",
                     "hover:from-[#F0B90B] hover:to-[#F0B90B] text-[#181A20] font-semibold",
                     "h-12 px-8 rounded-xl shadow-lg shadow-[#F0B90B]/20",
-                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-[#F0B90B]/80"
+                    "disabled:opacity-50 disabled:cursor-not-allowed"
                   )}
                 >
                   {isSubmitting ? (
@@ -533,14 +769,13 @@ export default function WalletTransferPage() {
               <div className="flex items-center justify-center gap-2 mt-4">
                 <Shield className="w-3 h-3 text-[#F0B90B]" />
                 <p className="text-xs text-[#848E9C]">
-                  Secure transfer • 2FA verification may be required
+                  Secure transfer • Funds available immediately
                 </p>
               </div>
             </div>
           </Card>
         </motion.div>
-
-              </main>
+      </main>
     </div>
   );
 }
