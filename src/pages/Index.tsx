@@ -281,26 +281,37 @@ export default function Index() {
       totalAssets: cryptoAssets.length,
       activeAssets: cryptoAssets.filter(asset => prices?.[topGainer.symbol?.split('/')[0]]).length
     };
-        usdPrice: 2034.56,
-        change24h: 0.45,
-        icon: '🥇',
-        category: 'commodity',
-        high24h: 2045.67,
-        low24h: 2028.90
-      },
-      { 
-        symbol: 'AAPL',
-        name: 'Apple Inc.',
-        volume: '52.3M',
-        price: 189.84,
-        usdPrice: 189.84,
-        change24h: -0.78,
-        icon: '🍎',
-        category: 'stock',
-        high24h: 192.45,
-        low24h: 187.90
-      },
-    ]);
+  }, [prices]);
+
+  useEffect(() => {
+    const watchlistData = Object.entries(ALL_ASSETS).map(([symbol, asset]) => {
+      const price = prices?.[symbol] || (symbol.includes('USDT') ? 1 : 0);
+      return {
+        symbol,
+        name: asset.name,
+        volume: asset.category === 'crypto' ? `${(Math.random() * 100).toFixed(1)}B` : `${(Math.random() * 10).toFixed(1)}M`,
+        price: price,
+        usdPrice: price,
+        change24h: (Math.random() - 0.5) * 10, // Random change between -5% and +5%
+        icon: asset.category === 'crypto' ? '₿' : asset.category === 'stock' ? '📈' : asset.category === 'commodity' ? '🥇' : '💎',
+        category: asset.category,
+        high24h: price * (1 + (Math.random() - 0.5) * 0.1),
+        low24h: price * (1 - (Math.random() - 0.5) * 0.1)
+      };
+    }).slice(0, 6); // Show first 6 assets
+
+    setWatchlist(prev => [...prev, {
+      symbol: 'AAPL',
+      name: 'Apple Inc.',
+      volume: '52.3M',
+      price: 189.84,
+      usdPrice: 189.84,
+      change24h: -0.78,
+      icon: '🍎',
+      category: 'stock',
+      high24h: 192.45,
+      low24h: 187.90
+    }]);
   }, [prices]);
 
   // Track scroll position for scroll to top button
