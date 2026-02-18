@@ -28,7 +28,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 // Hooks and Context
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet as useUnifiedWalletV2 } from '@/hooks/useUnifiedWallet-v2';
 import { useTradingControl } from '@/hooks/useTradingControl';
 import { useUnifiedTrading } from '@/hooks/useUnifiedTrading';
 import { unifiedTradingService } from '@/services/unified-trading-service';
@@ -378,14 +378,11 @@ export default function ArbitragePage() {
   const { toast } = useToast();
   const { user, isAuthenticated, logout } = useAuth();
   const { 
-    balances, 
-    getBalance,
-    lockBalance,
-    unlockBalance,
-    addBalance,
-    refreshData,
+    balances,
+    getTradingBalance,
+    refreshBalances,
     loading: walletLoading 
-  } = useUnifiedWallet();
+  } = useUnifiedWalletV2();
   const { 
     userOutcome,
     activeWindows,
@@ -542,8 +539,8 @@ export default function ArbitragePage() {
       return;
     }
 
-    if (amount > getBalance('USDT')) {
-      toast.error(`Insufficient balance. You have ${formatCurrency(getBalance('USDT'))}`);
+    if (amount > getTradingBalance('USDT')) {
+      toast.error(`Insufficient trading balance. You have ${formatCurrency(getTradingBalance('USDT'))}`);
       return;
     }
 
@@ -573,7 +570,7 @@ export default function ArbitragePage() {
         await loadUserData();
         
         // Refresh wallet balance
-        refreshData();
+        refreshBalances();
       } else {
         throw new Error(result.error || 'Failed to start arbitrage');
       }
@@ -588,7 +585,7 @@ export default function ArbitragePage() {
     } finally {
       setExecuting(false);
     }
-  }, [isAuthenticated, selectedProduct, investmentAmount, executeTrade, loadUserData, refreshData, toast]);
+  }, [isAuthenticated, selectedProduct, investmentAmount, executeTrade, loadUserData, refreshBalances, toast]);
 
   // Handle staking start
   const handleStartStaking = useCallback(async () => {
@@ -603,8 +600,8 @@ export default function ArbitragePage() {
       return;
     }
 
-    if (amount > getBalance('USDT')) {
-      toast.error(`Insufficient balance. You have ${formatCurrency(getBalance('USDT'))}`);
+    if (amount > getTradingBalance('USDT')) {
+      toast.error(`Insufficient trading balance. You have ${formatCurrency(getTradingBalance('USDT'))}`);
       return;
     }
 
@@ -635,7 +632,7 @@ export default function ArbitragePage() {
         await loadUserData();
         
         // Refresh wallet balance
-        refreshData();
+        refreshBalances();
       } else {
         throw new Error(result.error || 'Failed to start staking');
       }
@@ -650,7 +647,7 @@ export default function ArbitragePage() {
     } finally {
       setExecuting(false);
     }
-  }, [isAuthenticated, stakingAmount, executeTrade, loadUserData, refreshData, toast]);
+  }, [isAuthenticated, stakingAmount, executeTrade, loadUserData, refreshBalances, toast]);
 
   return (
     <motion.div 
@@ -1161,21 +1158,21 @@ export default function ArbitragePage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-4 pt-4 border-t border-[#2B3139]">
                       <div className="flex items-center gap-2">
                         <Wallet className="w-4 h-4 text-[#848E9C]" />
-                        <span className="text-sm text-[#848E9C]">Available Balance</span>
+                        <span className="text-sm text-[#848E9C]">Trading Balance</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <motion.span 
-                          key={getBalance('USDT')}
+                          key={getTradingBalance('USDT')}
                           initial={{ scale: 1.2 }}
                           animate={{ scale: 1 }}
                           className="font-bold text-[#EAECEF]"
                         >
-                          {hideBalances ? '••••••' : formatCurrency(getBalance('USDT'))} USDT
+                          {hideBalances ? '••••••' : formatCurrency(getTradingBalance('USDT'))} USDT
                         </motion.span>
                         <motion.button 
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
-                          onClick={() => setInvestmentAmount(getBalance('USDT').toString())}
+                          onClick={() => setInvestmentAmount(getTradingBalance('USDT').toString())}
                           className="text-xs text-[#F0B90B] hover:text-[#F0B90B]/80 font-medium"
                         >
                           Max
