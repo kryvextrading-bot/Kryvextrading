@@ -251,7 +251,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     getBalance: getUnifiedBalance,
     getLockedBalance: getUnifiedLockedBalance,
     getTotalBalance: getUnifiedTotalBalance,
-    refreshData: refreshUnifiedData
+    refreshData: refreshUnifiedData,
+    fundingBalances,
+    tradingBalances
   } = useUnifiedWallet();
   
   // Refs
@@ -1204,6 +1206,68 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       initialLoadDone.current = true;
     }
   }, [user?.id, refreshBalance, getInitialBalances]);
+
+  // Update portfolio with real data from unified wallet
+  useEffect(() => {
+    if (!user?.id) {
+      setPortfolio([]);
+      return;
+    }
+
+    // Create portfolio from unified wallet balances
+    const assets: Asset[] = [];
+    
+    // Add funding wallet assets
+    Object.entries(fundingBalances).forEach(([symbol, balance]) => {
+      if (balance > 0) {
+        const price = prices?.[symbol] || (symbol === 'USDT' ? 1 : 0);
+        const locked = getUnifiedLockedBalance(symbol);
+        assets.push({
+          symbol,
+          name: getAssetName(symbol),
+          balance: balance,
+          locked: locked,
+          value: (balance + locked) * price,
+          price,
+          change24h: 0 // TODO: Get from market data
+        });
+      }
+    });
+    
+    // Add trading wallet assets
+    Object.entries(tradingBalances).forEach(([symbol, tradingBalance]) => {
+      if (tradingBalance.total > 0) {
+        const price = prices?.[symbol] || (symbol === 'USDT' ? 1 : 0);
+        assets.push({
+          symbol: symbol + '_TRADING',
+          name: getAssetName(symbol) + ' (Trading)',
+          balance: tradingBalance.available,
+          locked: tradingBalance.locked,
+          value: tradingBalance.total * price,
+          price,
+          change24h: 0 // TODO: Get from market data
+        });
+      }
+    });
+    
+    console.log('💰 Portfolio updated from unified wallet:', assets);
+    setPortfolio(assets);
+  }, [user?.id, fundingBalances, tradingBalances, prices, getUnifiedLockedBalance]);
+
+  // Helper function to get asset name
+  const getAssetName = (symbol: string): string => {
+    const names: Record<string, string> = {
+      'USDT': 'Tether',
+      'BTC': 'Bitcoin',
+      'ETH': 'Ethereum',
+      'BNB': 'Binance Coin',
+      'SOL': 'Solana',
+      'ADA': 'Cardano',
+      'XRP': 'Ripple',
+      'DOT': 'Polkadot'
+    };
+    return names[symbol] || symbol;
+  };
 
   // Recalculate total value and update history
   useEffect(() => {
