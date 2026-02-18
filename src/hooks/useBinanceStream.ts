@@ -27,30 +27,31 @@ export function useBinanceStream(symbol: string, type: 'trade' | 'depth' | 'klin
     }
     
     setIsLoading(true);
+    
+    // Fix: Ensure we have a valid stream type
     let stream = `${symbol.toLowerCase()}@${type}`;
-    if (type === 'kline') stream += `_${interval}`;
-    if (type === 'depth') stream += '5@100ms';
+    if (type === 'kline') {
+      stream += `_${interval}`;
+    } else if (type === 'depth') {
+      stream = `${symbol.toLowerCase()}@depth5@100ms`;
+    }
     
     try {
       // Only connect to WebSocket if we have a valid symbol
-      if (!symbol || symbol === 'undefined') {
+      if (!symbol || symbol === 'undefined' || symbol === null) {
         console.log('Invalid symbol for WebSocket connection:', symbol);
         setIsLoading(false);
-        return {
-          p: '67000.00',
-          priceChange: 0,
-          currentPrice: 67000,
-          priceChange24h: 0,
-          raw: null,
-          isLoading: false
-        };
+        return;
       }
       
-      const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${stream}`);
+      const wsUrl = `wss://stream.binance.com:9443/ws/${stream}`;
+      console.log(`🔌 Connecting to WebSocket: ${stream}`);
+      
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
       
       ws.onopen = () => {
-        console.log(`WebSocket connected to ${stream}`);
+        console.log(`✅ WebSocket connected to ${stream}`);
         setIsLoading(false);
       };
       
@@ -65,19 +66,18 @@ export function useBinanceStream(symbol: string, type: 'trade' | 'depth' | 'klin
       };
       
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error(`❌ WebSocket error for ${symbol}:`, error);
         setData(null);
         setIsLoading(false);
       };
       
       ws.onclose = (event) => {
-        console.log(`WebSocket closed: ${event.code} - ${event.reason}`);
+        console.log(`🔌 WebSocket disconnected for ${symbol}, code: ${event.code}`);
         setIsLoading(false);
         if (event.code !== 1000) {
           // Attempt to reconnect after 3 seconds if not a normal closure
           setTimeout(() => {
             console.log('Attempting to reconnect...');
-            // Reconnect by re-running the effect
           }, 3000);
         }
       };

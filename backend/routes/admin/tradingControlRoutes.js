@@ -3,12 +3,11 @@
  * API endpoints for managing trade outcomes and user settings
  */
 
-const express = require('express');
-const router = express.Router();
-const TradingControlService = require('../../services/tradingControlService');
-const { authenticateAdmin } = require('../../middleware/auth');
-const { auditLog } = require('../../middleware/audit');
+import express from 'express';
+import TradingControlService from '../../services/tradingControlService.js';
+import { authenticateAdmin } from '../../middleware/auth.js';
 
+const router = express.Router();
 const tradingControl = new TradingControlService();
 
 // Middleware to extract client info
@@ -482,4 +481,4 @@ router.get('/users/:userId/status', authenticateAdmin, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

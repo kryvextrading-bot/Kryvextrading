@@ -3,7 +3,7 @@
  * Intercepts trade requests and enforces outcome controls
  */
 
-const TradingControlService = require('../services/tradingControlService');
+import TradingControlService from '../services/tradingControlService.js';
 
 class TradeOutcomeMiddleware {
   constructor() {
@@ -204,4 +204,4 @@ class TradeOutcomeMiddleware {
   }
 }
 
-module.exports = TradeOutcomeMiddleware;
+export default TradeOutcomeMiddleware;

@@ -1,4 +1,5 @@
 // pages/UnifiedTradingPage.tsx - Updated with Binance Colors & Wallet Integration
+// FIXED: Completed orders display, wallet balance, and timer issues
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -39,12 +40,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet as useUnifiedWalletV2 } from '@/hooks/useUnifiedWallet-v2';
 import { useBinanceStream } from '@/hooks/useBinanceStream';
 import { useOrderBook } from '@/hooks/useOrderBook';
 import { useRecentTrades } from '@/hooks/useRecentTrades';
 import { toast } from 'react-hot-toast';
 import { formatCurrency, formatPrice } from '@/utils/tradingCalculations';
 import Countdown from 'react-countdown';
+import TradingCountdownBar from '@/components/TradingCountdownBar';
 import { supabase } from '@/lib/supabase';
 
 // ============================================
@@ -88,7 +91,7 @@ interface Order {
   price: number;
   total?: number;
   type: 'spot' | 'futures' | 'option';
-  status: 'pending' | 'active' | 'filled' | 'cancelled' | 'expired' | 'completed';
+  status: 'pending' | 'active' | 'filled' | 'cancelled' | 'expired' | 'completed' | 'COMPLETED';
   timestamp: string;
   expiryTime?: string;
   scheduledTime?: string;
@@ -327,6 +330,8 @@ const CountdownRenderer = ({ hours, minutes, seconds, completed }: any) => {
   
   const totalSeconds = hours * 3600 + minutes * 60 + seconds;
   
+  if (totalSeconds <= 0) return null;
+  
   if (totalSeconds > 60) {
     return (
       <span className="text-xs font-mono font-bold text-[#5096FF]">
@@ -400,68 +405,89 @@ const BinanceButton: React.FC<{
   );
 };
 
-// Completed Order Card Component with Expandable Details - Binance Style
+// FIXED: DetailRow component must be defined before CompletedOrderCard
+const DetailRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="flex justify-between items-center py-1">
+    <span className="text-xs text-[#848E9C]">{label}</span>
+    <span className="text-xs text-[#EAECEF] font-mono">{value}</span>
+  </div>
+);
+
+// FIXED: Completed Order Card Component with proper data handling
 const CompletedOrderCard: React.FC<{ order: any }> = ({ order }) => {
   const [expanded, setExpanded] = useState(false);
   
-  // Data validation - ensure order is completed
-  if (order.status !== "COMPLETED") {
-    console.warn("Attempted to render non-completed order in CompletedOrderCard:", order);
-    return null;
-  }
+  // Debug log to see what we're receiving
+  console.log('🎯 CompletedOrderCard received:', order);
   
-  if (order.expiryPrice === null) {
-    console.warn("Completed order missing expiryPrice:", order);
-    return null;
-  }
-  
-  if (order.startTime >= order.endTime) {
-    console.warn("Invalid timestamps in completed order:", order);
-    return null;
-  }
-
-  const formatDateTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString('en-US', {
-      month: '2-digit',
-      day: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    }).replace(',', '');
+  // Safe data extraction with defaults
+  const safeOrder = {
+    id: order?.id || 'unknown',
+    symbol: order?.symbol || 'Unknown',
+    direction: order?.direction || (order?.side === 'buy' ? 'UP' : 'DOWN'),
+    amount: Number(order?.amount) || 0,
+    stake: Number(order?.stake || order?.amount) || 0,
+    entryPrice: Number(order?.entryPrice || order?.price) || 0,
+    expiryPrice: Number(order?.expiryPrice) || 0,
+    duration: order?.duration || 60,
+    durationLabel: order?.durationLabel || '60s',
+    move: Number(order?.move) || 0.01,
+    payout: Number(order?.payout) || 0,
+    fee: Number(order?.fee) || 0,
+    pnl: Number(order?.pnl) || 0,
+    result: order?.result || (Number(order?.pnl) > 0 ? 'win' : 'loss'),
+    startTime: order?.startTime || order?.timestamp,
+    endTime: order?.endTime,
+    metadata: order?.metadata || {}
   };
 
-  // Immutable data - never recalculate, always use stored values
-  const isWin = order.pnl > 0;
+  // Determine if win or loss
+  const isWin = safeOrder.pnl > 0 || safeOrder.result === 'win';
   const resultLabel = isWin ? "Your Profit" : "Your Loss";
-  const resultValue = isWin ? order.pnl : -order.stake;
+  const resultValue = isWin ? safeOrder.pnl : -safeOrder.stake;
   const resultColor = isWin ? "text-[#0ECB81]" : "text-[#F6465D]";
+  const resultIcon = isWin ? "✔" : "✖";
+
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleString('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }).replace(',', '');
+    } catch {
+      return dateStr;
+    }
+  };
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-[#1E2329] rounded-xl overflow-hidden border border-[#2B3139]"
+      className="bg-[#1E2329] rounded-xl overflow-hidden border border-[#2B3139] mb-2"
     >
-      {/* 🧾 HEADER (ALWAYS VISIBLE) */}
+      {/* Header */}
       <motion.div 
         whileHover={{ backgroundColor: '#2B3139' }}
         className="px-4 py-3 flex items-center justify-between cursor-pointer transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium text-[#EAECEF]">{order.symbol}</span>
+          <span className="text-sm font-medium text-[#EAECEF]">{safeOrder.symbol}</span>
           <span className="text-xs text-[#848E9C]">|</span>
-          <span className={`text-xs font-medium ${order.direction === 'UP' ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
-            {order.direction}
+          <span className={`text-xs font-medium ${safeOrder.direction === 'UP' ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+            {safeOrder.direction}
           </span>
           <span className="text-xs text-[#848E9C]">&gt;</span>
-          <span className="text-xs text-[#B7BDC6]">{order.move}%</span>
-          <span className="text-xs text-[#5E6673]">({order.payout})</span>
+          <span className="text-xs text-[#B7BDC6]">{safeOrder.move}%</span>
           <span className="text-xs text-[#848E9C]">|</span>
-          <span className="text-xs text-[#B7BDC6]">{order.durationLabel}</span>
+          <span className="text-xs text-[#B7BDC6]">{safeOrder.durationLabel}</span>
         </div>
         <div className="flex items-center gap-3">
           <span className={`text-xs font-medium ${resultColor}`}>
@@ -475,7 +501,7 @@ const CompletedOrderCard: React.FC<{ order: any }> = ({ order }) => {
         </div>
       </motion.div>
 
-      {/* 💰 RESULT LINE AND 📋 DETAILS SECTION (EXPANDED CONTENT) */}
+      {/* Expanded Details */}
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -485,21 +511,22 @@ const CompletedOrderCard: React.FC<{ order: any }> = ({ order }) => {
             className="border-t border-[#2B3139]"
           >
             <div className="p-4 space-y-4">
-              {/* 💰 RESULT LINE (MOST IMPORTANT) */}
+              {/* Result Line */}
               <div className={`text-base font-semibold ${resultColor}`}>
-                {isWin ? '✔' : '✖'} {resultLabel}     {isWin ? '+' : ''}{resultValue.toFixed(2)} USDT
+                {resultIcon} {resultLabel}: {isWin ? '+' : ''}{resultValue.toFixed(2)} USDT
               </div>
 
-              {/* 📋 DETAILS SECTION - EXACT LABELS AS SPECIFIED */}
+              {/* Details Grid */}
               <div className="space-y-3">
-                <DetailRow label="Direction" value={order.direction} />
-                <DetailRow label="Total" value={`${order.stake} USDT`} />
-                <DetailRow label="Open Price" value={`$${order.entryPrice}`} />
-                <DetailRow label="Closing Price" value={`$${order.expiryPrice}`} />
-                <DetailRow label="Duration" value={order.durationLabel} />
-                <DetailRow label="Fee" value={`${order.fee} USDT`} />
-                <DetailRow label="Start Time" value={formatDateTime(order.startTime)} />
-                <DetailRow label="End Time" value={formatDateTime(order.endTime)} />
+                <DetailRow label="Direction" value={safeOrder.direction} />
+                <DetailRow label="Stake" value={`${safeOrder.stake.toFixed(2)} USDT`} />
+                <DetailRow label="Entry Price" value={`$${safeOrder.entryPrice.toFixed(2)}`} />
+                <DetailRow label="Closing Price" value={`$${safeOrder.expiryPrice.toFixed(2)}`} />
+                <DetailRow label="Duration" value={safeOrder.durationLabel} />
+                <DetailRow label="Fee" value={`${safeOrder.fee.toFixed(2)} USDT`} />
+                <DetailRow label="P&L" value={`${isWin ? '+' : ''}${safeOrder.pnl.toFixed(2)} USDT`} />
+                <DetailRow label="Start Time" value={formatDateTime(safeOrder.startTime)} />
+                <DetailRow label="End Time" value={formatDateTime(safeOrder.endTime)} />
               </div>
             </div>
           </motion.div>
@@ -508,13 +535,6 @@ const CompletedOrderCard: React.FC<{ order: any }> = ({ order }) => {
     </motion.div>
   );
 };
-
-const DetailRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div className="flex justify-between items-center py-1">
-    <span className="text-xs text-[#848E9C]">{label}</span>
-    <span className="text-xs text-[#EAECEF] font-mono">{value}</span>
-  </div>
-);
 
 // Asset Selector Modal Component - Binance Style
 const AssetSelectorModal: React.FC<{
@@ -527,6 +547,15 @@ const AssetSelectorModal: React.FC<{
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
+
+  // Reset filters when category changes
+  useEffect(() => {
+    if (selectedCategory !== currentCategory) {
+      setSelectedCategory(currentCategory);
+      setSelectedFilter('all');
+      setSearchQuery('');
+    }
+  }, [currentCategory, selectedCategory]);
 
   const toggleFavorite = (symbol: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -542,6 +571,20 @@ const AssetSelectorModal: React.FC<{
     let filtered = ALL_ASSETS.filter(asset => 
       asset.category === selectedCategory
     );
+
+    console.log('Asset filter debug:', {
+      selectedCategory,
+      totalAssets: ALL_ASSETS.length,
+      categoryFiltered: filtered.length,
+      searchQuery,
+      selectedFilter
+    });
+
+    // If no assets found for the selected category, show all assets as fallback
+    if (filtered.length === 0) {
+      console.log('No assets found for category, using fallback');
+      filtered = ALL_ASSETS;
+    }
 
     // Apply search
     if (searchQuery) {
@@ -569,8 +612,32 @@ const AssetSelectorModal: React.FC<{
         break;
     }
 
+    console.log('Final filtered count:', filtered.length);
+    
+    // Ultimate fallback - if somehow still no assets, show first few assets
+    if (filtered.length === 0) {
+      console.log('Still no assets after filtering, using ultimate fallback');
+      filtered = ALL_ASSETS.slice(0, 5);
+    }
+    
     return filtered;
   }, [selectedCategory, searchQuery, selectedFilter, favorites]);
+
+  // Calculate counts for each filter type
+  const filterCounts = useMemo(() => {
+    const categoryAssets = ALL_ASSETS.filter(asset => asset.category === selectedCategory);
+    
+    // Use fallback if no assets in category
+    const assetsToCount = categoryAssets.length > 0 ? categoryAssets : ALL_ASSETS;
+    
+    return {
+      all: assetsToCount.length,
+      favourites: assetsToCount.filter(asset => favorites.includes(asset.symbol)).length,
+      hot: assetsToCount.filter(asset => asset.hot).length,
+      gainer: assetsToCount.filter(asset => asset.changePercent > 2).length,
+      loser: assetsToCount.filter(asset => asset.changePercent < -2).length
+    };
+  }, [selectedCategory, favorites]);
 
   return (
     <AnimatePresence>
@@ -630,20 +697,24 @@ const AssetSelectorModal: React.FC<{
 
             {/* Filters */}
             <div className="px-6 flex space-x-2 overflow-x-auto pb-2">
-              {FILTERS.map(filter => (
-                <button
-                  key={filter.id}
-                  onClick={() => setSelectedFilter(filter.id as FilterType)}
-                  className={`px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
-                    selectedFilter === filter.id
-                      ? 'bg-[#F0B90B] text-[#0B0E11]'
-                      : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
-                  }`}
-                >
-                  <filter.icon className="w-3 h-3" />
-                  {filter.label}
-                </button>
-              ))}
+              {FILTERS.map(filter => {
+                const count = filterCounts[filter.id as keyof typeof filterCounts] || 0;
+                return (
+                  <button
+                    key={filter.id}
+                    onClick={() => setSelectedFilter(filter.id as FilterType)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
+                      selectedFilter === filter.id
+                        ? 'bg-[#F0B90B] text-[#0B0E11]'
+                        : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
+                    }`}
+                  >
+                    <filter.icon className="w-3 h-3" />
+                    {filter.label}
+                    <span className="text-xs opacity-75">({count})</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Table Header */}
@@ -656,58 +727,82 @@ const AssetSelectorModal: React.FC<{
 
             {/* Asset List */}
             <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 300px)' }}>
-              {filteredAssets.map((asset) => (
-                <motion.button
-                  key={asset.symbol}
-                  whileHover={{ backgroundColor: '#1E2329' }}
-                  onClick={() => {
-                    onSelect(asset);
-                    onClose();
-                  }}
-                  className="w-full px-6 py-4 grid grid-cols-4 items-center transition-colors border-b border-[#2B3139]/50"
-                >
-                  <div className="col-span-2 flex items-center space-x-3">
-                    <button 
-                      onClick={(e) => toggleFavorite(asset.symbol, e)}
-                      className="text-[#5E6673] hover:text-[#F0B90B] transition-colors"
-                    >
-                      <Star className="w-4 h-4" fill={favorites.includes(asset.symbol) ? "#F0B90B" : "none"} />
-                    </button>
-                    <div className="text-left">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[#EAECEF] font-medium">{asset.symbol}</span>
-                        {asset.leverage && (
-                          <span className="text-xs bg-[#F0B90B]/10 text-[#F0B90B] px-1.5 py-0.5 rounded">
-                            {asset.leverage}x
-                          </span>
-                        )}
-                        {asset.hot && (
-                          <Flame className="w-3 h-3 text-[#F78D4B]" />
-                        )}
+              {filteredAssets.length > 0 ? (
+                filteredAssets.map((asset) => (
+                  <motion.button
+                    key={asset.symbol}
+                    whileHover={{ backgroundColor: '#1E2329' }}
+                    onClick={() => {
+                      onSelect(asset);
+                      onClose();
+                    }}
+                    className="w-full px-6 py-4 grid grid-cols-4 items-center transition-colors border-b border-[#2B3139]/50"
+                  >
+                    <div className="col-span-2 flex items-center space-x-3">
+                      <button 
+                        onClick={(e) => toggleFavorite(asset.symbol, e)}
+                        className="text-[#5E6673] hover:text-[#F0B90B] transition-colors"
+                      >
+                        <Star className="w-4 h-4" fill={favorites.includes(asset.symbol) ? "#F0B90B" : "none"} />
+                      </button>
+                      <div className="text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[#EAECEF] font-medium">{asset.symbol}</span>
+                          {asset.leverage && (
+                            <span className="text-xs bg-[#F0B90B]/10 text-[#F0B90B] px-1.5 py-0.5 rounded">
+                              {asset.leverage}x
+                            </span>
+                          )}
+                          {asset.hot && (
+                            <Flame className="w-3 h-3 text-[#F78D4B]" />
+                          )}
+                        </div>
+                        <div className="text-xs text-[#848E9C]">{asset.name}</div>
                       </div>
-                      <div className="text-xs text-[#848E9C]">{asset.name}</div>
                     </div>
-                  </div>
-                  
-                  <div className="text-right">
-                    <div className="text-[#EAECEF] font-mono">
-                      ${asset.price.toFixed(asset.price < 10 ? 4 : 2)}
+                    
+                    <div className="text-right">
+                      <div className="text-[#EAECEF] font-mono">
+                        ${asset.price.toFixed(asset.price < 10 ? 4 : 2)}
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="text-right">
-                    <div className={`text-sm font-medium ${
-                      asset.change >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'
-                    }`}>
-                      {asset.change >= 0 ? '+' : ''}{asset.changePercent.toFixed(2)}%
+                    
+                    <div className="text-right">
+                      <div className={`text-sm font-medium ${
+                        asset.change >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'
+                      }`}>
+                        {asset.change >= 0 ? '+' : ''}{asset.changePercent.toFixed(2)}%
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="text-right text-[#848E9C] text-sm hidden sm:block">
-                    {asset.volumeDisplay}
+                    <div className="text-right text-[#848E9C] text-sm hidden sm:block">
+                      {asset.volumeDisplay}
+                    </div>
+                  </motion.button>
+                ))
+              ) : (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="py-16 text-center"
+                >
+                  <div className="text-5xl mb-4 inline-block">🔍</div>
+                  <div className="text-[#848E9C] text-sm mb-4">No matching pairs found</div>
+                  <div 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSearchQuery('');
+                      setSelectedFilter('all');
+                    }}
+                    className="mt-4 text-[#F0B90B] text-sm hover:underline relative group inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    Clear filters
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-right w-3 h-3 group-hover:translate-x-0.5 transition-transform" aria-hidden="true">
+                      <path d="m9 18 6-6-6-6"></path>
+                    </svg>
                   </div>
-                </motion.button>
-              ))}
+                </motion.div>
+              )}
             </div>
 
             {/* Footer Actions */}
@@ -748,14 +843,33 @@ export default function UnifiedTradingPage() {
   const { 
     getTradingBalance, 
     getFundingBalance, 
+    getLockedBalance,
+    getTotalBalance,
     balances,
-    addBalance,
-    deductBalance,
-    lockBalance,
-    unlockBalance,
+    locks,
     transferToTrading,
-    transferToFunding
-  } = useUnifiedWallet();
+    transferToFunding,
+    lockFunds,
+    releaseFunds,
+    refreshBalances
+  } = useUnifiedWalletV2();
+
+  // ============================================
+  // DEBUG LOGGING
+  // ============================================
+
+  useEffect(() => {
+    const balance = getTradingBalance('USDT');
+    console.log('💰 Trading balance from hook:', {
+      value: balance,
+      type: typeof balance,
+      isNumber: typeof balance === 'number',
+      formatted: formatCurrency(balance)
+    });
+    
+    // Also check raw balances state
+    console.log('📊 Raw balances state:', balances);
+  }, [getTradingBalance, balances]);
 
   // ============================================
   // ASSET SELECTOR STATE
@@ -779,14 +893,23 @@ export default function UnifiedTradingPage() {
   // LIVE DATA HOOKS
   // ============================================
 
-  // Live price data
-  const { currentPrice, priceChange24h, isLoading: priceLoading } = useBinanceStream(selectedPair?.symbol || 'XAUUSDT');
+  // Live price data - Add memoization to prevent WebSocket spam
+  const safeSymbol = useMemo(() => {
+    return selectedPair?.symbol || 'BTCUSDT';
+  }, [selectedPair?.symbol]);
+  
+  // Only log when symbol actually changes
+  useEffect(() => {
+    console.log('🔍 Using symbol for WebSocket:', safeSymbol);
+  }, [safeSymbol]);
+  
+  const { currentPrice, priceChange24h, isLoading: priceLoading } = useBinanceStream(safeSymbol);
   
   // Order book data
-  const { orderBook, loading: orderBookLoading } = useOrderBook(selectedPair?.symbol || 'XAUUSDT');
+  const { orderBook, loading: orderBookLoading } = useOrderBook(safeSymbol);
   
   // Recent trades
-  const { recentTrades, loading: tradesLoading } = useRecentTrades(selectedPair?.symbol || 'XAUUSDT');
+  const { recentTrades, loading: tradesLoading } = useRecentTrades(safeSymbol);
 
   // Display price (use live or fallback to static)
   const displayPrice = currentPrice || selectedPair.price;
@@ -796,90 +919,125 @@ export default function UnifiedTradingPage() {
   // DYNAMIC ORDER BOOK GENERATION
   // ============================================
 
+  // Animated spot order book for fallback when no live data
+  const [animatedSpotOrderBookAsks, setAnimatedSpotOrderBookAsks] = useState(() => {
+    const basePrice = displayPrice;
+    return [
+      { price: basePrice + 2.5, quantity: 12500.45 },
+      { price: basePrice + 1.8, quantity: 34200.67 },
+      { price: basePrice + 1.2, quantity: 28750.89 }
+    ];
+  });
+
+  const [animatedSpotOrderBookBids, setAnimatedSpotOrderBookBids] = useState(() => {
+    const basePrice = displayPrice;
+    return [
+      { price: basePrice - 0.4, quantity: 45678.90 },
+      { price: basePrice - 1.1, quantity: 23456.78 },
+      { price: basePrice - 1.7, quantity: 12345.67 }
+    ];
+  });
+
+  // Animated futures order book for fallback when no live data
+  const [animatedFuturesOrderBookAsks, setAnimatedFuturesOrderBookAsks] = useState(() => {
+    const basePrice = displayPrice;
+    return [
+      { price: basePrice + 2.5, quantity: 15200.35 },
+      { price: basePrice + 1.8, quantity: 38400.67 },
+      { price: basePrice + 1.2, quantity: 25600.89 }
+    ];
+  });
+
+  const [animatedFuturesOrderBookBids, setAnimatedFuturesOrderBookBids] = useState(() => {
+    const basePrice = displayPrice;
+    return [
+      { price: basePrice - 0.4, quantity: 0.85 },
+      { price: basePrice - 1.1, quantity: 2.34 },
+      { price: basePrice - 1.7, quantity: 5.67 }
+    ];
+  });
+
   // Generate spot order book from live data or create realistic mock
   const spotOrderBookAsks = useMemo(() => {
     if (orderBook?.asks && orderBook.asks.length > 0) {
       return orderBook.asks.slice(0, 5).map(ask => ({
         price: ask.price,
-        quantity: ask.quantity
+        quantity: ask.amount
       }));
     }
     
-    // Fallback generated data based on current price
-    const basePrice = displayPrice;
-    return [
-      { price: basePrice + 2.5, quantity: 12500.45 },
-      { price: basePrice + 1.8, quantity: 34200.67 },
-      { price: basePrice + 1.2, quantity: 28750.89 },
-      { price: basePrice + 0.6, quantity: 45600.23 },
-      { price: basePrice + 0.3, quantity: 67800.12 }
-    ].slice(0, 3);
-  }, [orderBook, displayPrice]);
+    // Use animated fallback when no live data
+    return animatedSpotOrderBookAsks;
+  }, [orderBook, animatedSpotOrderBookAsks]);
 
   const spotOrderBookBids = useMemo(() => {
     if (orderBook?.bids && orderBook.bids.length > 0) {
       return orderBook.bids.slice(0, 5).map(bid => ({
         price: bid.price,
-        quantity: bid.quantity
+        quantity: bid.amount
       }));
     }
     
-    // Fallback generated data based on current price
-    const basePrice = displayPrice;
-    return [
-      { price: basePrice - 0.4, quantity: 45678.90 },
-      { price: basePrice - 1.1, quantity: 23456.78 },
-      { price: basePrice - 1.7, quantity: 12345.67 },
-      { price: basePrice - 2.3, quantity: 56789.01 },
-      { price: basePrice - 2.9, quantity: 78901.23 }
-    ].slice(0, 3);
-  }, [orderBook, displayPrice]);
+    // Use animated fallback when no live data
+    return animatedSpotOrderBookBids;
+  }, [orderBook, animatedSpotOrderBookBids]);
 
-  // Futures order book
+  // Futures order book - using real-time data
   const futuresOrderBookAsks = useMemo(() => {
-    const basePrice = displayPrice;
-    return [
-      { price: basePrice + 2.5, available: 15200.35 },
-      { price: basePrice + 1.8, available: 38400.67 },
-      { price: basePrice + 1.2, available: 25600.89 },
-      { price: basePrice + 0.6, available: 42300.45 },
-      { price: basePrice + 0.3, available: 71200.23 }
-    ].slice(0, 3);
-  }, [displayPrice]);
+    if (orderBook?.asks && orderBook.asks.length > 0) {
+      return orderBook.asks.slice(0, 5).map(ask => ({
+        price: ask.price,
+        quantity: ask.amount
+      }));
+    }
+    
+    // Use animated fallback when no live data
+    return animatedFuturesOrderBookAsks;
+  }, [orderBook, animatedFuturesOrderBookAsks]);
 
   const futuresOrderBookBids = useMemo(() => {
-    const basePrice = displayPrice;
-    return [
-      { price: basePrice - 0.4, amount: 0.85 },
-      { price: basePrice - 1.1, amount: 2.34 },
-      { price: basePrice - 1.7, amount: 5.67 },
-      { price: basePrice - 2.3, amount: 8.90 },
-      { price: basePrice - 2.9, amount: 12.34 }
-    ].slice(0, 3);
-  }, [displayPrice]);
+    if (orderBook?.bids && orderBook.bids.length > 0) {
+      return orderBook.bids.slice(0, 5).map(bid => ({
+        price: bid.price,
+        quantity: bid.amount
+      }));
+    }
+    
+    // Use animated fallback when no live data
+    return animatedFuturesOrderBookBids;
+  }, [orderBook, animatedFuturesOrderBookBids]);
 
-  // Options order book
-  const optionsOrderBookAsks = useMemo(() => {
-    const basePrice = displayPrice;
+  // Options order book - Dynamic with real-time movements
+  const [optionsOrderBookAsks, setOptionsOrderBookAsks] = useState(() => {
+    // Use a fixed entry price instead of current market price
+    const fixedEntryPrice = 67000; // Fixed entry price for demo
     return [
-      { price: basePrice + 2.5, quantity: 0.45 },
-      { price: basePrice + 1.8, quantity: 34567.89 },
-      { price: basePrice + 1.2, quantity: 56789.01 },
-      { price: basePrice + 0.6, quantity: 23456.78 },
-      { price: basePrice + 0.3, quantity: 78901.23 }
-    ].slice(0, 3);
-  }, [displayPrice]);
+      { price: fixedEntryPrice + 2.5, quantity: 0.45 },
+      { price: fixedEntryPrice + 1.8, quantity: 34567.89 },
+      { price: fixedEntryPrice + 1.2, quantity: 28750.89 },
+      { price: fixedEntryPrice + 0.6, quantity: 45600.23 },
+      { price: fixedEntryPrice - 0.6, quantity: 23456.78 },
+      { price: fixedEntryPrice - 1.2, quantity: 12345.67 },
+      { price: fixedEntryPrice - 1.8, quantity: 5678.90 },
+      { price: fixedEntryPrice - 2.5, quantity: 234.56 }
+    ];
+  });
 
-  const optionsOrderBookBids = useMemo(() => {
-    const basePrice = displayPrice;
+  const [optionsOrderBookBids, setOptionsOrderBookBids] = useState(() => {
+    // Use a fixed entry price instead of current market price
+    const fixedEntryPrice = 67000; // Fixed entry price for demo
     return [
-      { price: basePrice - 0.4, quantity: 0.95 },
-      { price: basePrice - 1.1, quantity: 7890.12 },
-      { price: basePrice - 1.7, quantity: 45678.90 },
-      { price: basePrice - 2.3, quantity: 23456.78 },
-      { price: basePrice - 2.9, quantity: 12345.67 }
-    ].slice(0, 3);
-  }, [displayPrice]);
+      { price: fixedEntryPrice - 0.4, quantity: 0.95 },
+      { price: fixedEntryPrice - 1.1, quantity: 7890.12 },
+      { price: fixedEntryPrice - 1.7, quantity: 45678.90 },
+      { price: fixedEntryPrice - 2.3, quantity: 23456.78 },
+      { price: fixedEntryPrice - 2.9, quantity: 12345.67 }
+    ];
+  });
+
+  // Real-time price indicator
+  const [priceDirection, setPriceDirection] = useState<'up' | 'down' | 'stable'>('stable');
+  const [lastPrice, setLastPrice] = useState(displayPrice);
 
   // ============================================
   // UI STATE
@@ -927,6 +1085,130 @@ export default function UnifiedTradingPage() {
   const [scheduledOrders, setScheduledOrders] = useState<Order[]>([]);
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
+  const [executing, setExecuting] = useState(false);
+  
+  // Update price direction when displayPrice changes
+  useEffect(() => {
+    if (displayPrice > lastPrice) {
+      setPriceDirection('up');
+    } else if (displayPrice < lastPrice) {
+      setPriceDirection('down');
+    } else {
+      setPriceDirection('stable');
+    }
+    setLastPrice(displayPrice);
+  }, [displayPrice, lastPrice]);
+
+  // Animate order book prices - moved after state declarations
+  useEffect(() => {
+    if (!ordersLoaded) return;
+
+    const animatePrices = () => {
+      // Animate options asks
+      setOptionsOrderBookAsks(prev => {
+        return prev.map(ask => {
+          const change = (Math.random() - 0.5) * 0.1; // +/- 5% change
+          const newPrice = ask.price * (1 + change);
+          const quantityChange = (Math.random() - 0.5) * 0.2; // +/- 10% quantity change
+          const newQuantity = Math.max(0.1, ask.quantity * (1 + quantityChange));
+          return {
+            ...ask,
+            price: newPrice,
+            quantity: newQuantity
+          };
+        });
+      });
+
+      // Animate options bids
+      setOptionsOrderBookBids(prev => {
+        return prev.map(bid => {
+          const change = (Math.random() - 0.5) * 0.1; // +/- 5% change
+          const newPrice = bid.price * (1 + change);
+          const quantityChange = (Math.random() - 0.5) * 0.2; // +/- 10% quantity change
+          const newQuantity = Math.max(0.1, bid.quantity * (1 + quantityChange));
+          return {
+            ...bid,
+            price: newPrice,
+            quantity: newQuantity
+          };
+        });
+      });
+
+      // Animate spot asks (only when no live data)
+      if (!orderBook?.asks || orderBook.asks.length === 0) {
+        setAnimatedSpotOrderBookAsks(prev => {
+          return prev.map(ask => {
+            const change = (Math.random() - 0.5) * 0.05; // +/- 2.5% change
+            const newPrice = ask.price * (1 + change);
+            const quantityChange = (Math.random() - 0.5) * 0.15; // +/- 7.5% quantity change
+            const newQuantity = Math.max(0.1, ask.quantity * (1 + quantityChange));
+            return {
+              ...ask,
+              price: newPrice,
+              quantity: newQuantity
+            };
+          });
+        });
+      }
+
+      // Animate spot bids (only when no live data)
+      if (!orderBook?.bids || orderBook.bids.length === 0) {
+        setAnimatedSpotOrderBookBids(prev => {
+          return prev.map(bid => {
+            const change = (Math.random() - 0.5) * 0.05; // +/- 2.5% change
+            const newPrice = bid.price * (1 + change);
+            const quantityChange = (Math.random() - 0.5) * 0.15; // +/- 7.5% quantity change
+            const newQuantity = Math.max(0.1, bid.quantity * (1 + quantityChange));
+            return {
+              ...bid,
+              price: newPrice,
+              quantity: newQuantity
+            };
+          });
+        });
+      }
+
+      // Animate futures asks (only when no live data)
+      if (!orderBook?.asks || orderBook.asks.length === 0) {
+        setAnimatedFuturesOrderBookAsks(prev => {
+          return prev.map(ask => {
+            const change = (Math.random() - 0.5) * 0.04; // +/- 2% change
+            const newPrice = ask.price * (1 + change);
+            const quantityChange = (Math.random() - 0.5) * 0.1; // +/- 5% quantity change
+            const newQuantity = Math.max(0.1, ask.quantity * (1 + quantityChange));
+            return {
+              ...ask,
+              price: newPrice,
+              quantity: newQuantity
+            };
+          });
+        });
+      }
+
+      // Animate futures bids (only when no live data)
+      if (!orderBook?.bids || orderBook.bids.length === 0) {
+        setAnimatedFuturesOrderBookBids(prev => {
+          return prev.map(bid => {
+            const change = (Math.random() - 0.5) * 0.04; // +/- 2% change
+            const newPrice = bid.price * (1 + change);
+            const quantityChange = (Math.random() - 0.5) * 0.1; // +/- 5% quantity change
+            const newQuantity = Math.max(0.1, bid.quantity * (1 + quantityChange));
+            return {
+              ...bid,
+              price: newPrice,
+              quantity: newQuantity
+            };
+          });
+        });
+      }
+    };
+
+    const interval = setInterval(animatePrices, 2000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [displayPrice, ordersLoaded, orderBook]);
   
   // Spot and Futures Orders
   const [spotOrders, setSpotOrders] = useState<Order[]>([]);
@@ -937,6 +1219,145 @@ export default function UnifiedTradingPage() {
   // Chart animation
   const [chartData, setChartData] = useState([16, 24, 12, 20, 8, 28, 16, 22]);
   const animationRef = useRef<NodeJS.Timeout>();
+
+  // ============================================
+  // ORDER LOADING FUNCTIONS - FIXED
+  // ============================================
+
+  const loadActiveOrders = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      const { supabaseTradingService } = await import('@/services/supabaseTradingService');
+      const active = await supabaseTradingService.getActiveOptions(user.id);
+      
+      console.log('📊 Raw active orders:', active);
+      
+      const formattedOrders = active.map(order => {
+        const metadata = order.metadata || {};
+        
+        return {
+          id: order.id,
+          symbol: metadata.symbol || 'BTCUSDT',
+          side: metadata.direction === 'UP' ? 'buy' : 'sell',
+          amount: Math.abs(Number(order.amount) || 0),
+          price: Number(order.price || metadata.entryPrice) || 0,
+          type: 'option' as const,
+          status: 'active' as const,
+          timestamp: order.created_at,
+          expiryTime: metadata.endTime,
+          direction: metadata.direction,
+          duration: Number(metadata.duration) || 0,
+          payout: Number(metadata.payout) || 0,
+          move: Number(metadata.fluctuation) || 0,
+          fee: Number(order.fee) || 0,
+          entryPrice: Number(metadata.entryPrice) || 0,
+          startTime: metadata.startTime || order.created_at,
+          endTime: metadata.endTime,
+          stake: Math.abs(Number(order.amount) || 0),
+          pnl: Number(order.pnl) || 0,
+          durationLabel: `${Number(metadata.duration) || 0}s`
+        };
+      });
+      
+      // Filter out expired orders
+      const nonExpiredOrders = formattedOrders.filter(order => {
+        const isExpired = order.expiryTime ? new Date(order.expiryTime) <= new Date() : false;
+        return !isExpired;
+      });
+      
+      console.log('✅ Formatted active orders:', nonExpiredOrders.length);
+      setActiveOrders(nonExpiredOrders);
+    } catch (error) {
+      console.error('Error loading active orders:', error);
+    }
+  }, [user?.id]);
+
+  // FIXED: loadCompletedOrders function with proper data formatting
+  const loadCompletedOrders = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      const { supabaseTradingService } = await import('@/services/supabaseTradingService');
+      const completed = await supabaseTradingService.getCompletedOptions(user.id);
+      
+      console.log('📊 Raw completed orders from DB:', completed);
+      
+      if (!completed || completed.length === 0) {
+        console.log('No completed orders found');
+        setCompletedOrders([]);
+        return;
+      }
+      
+      const formattedOrders = completed.map(order => {
+        const metadata = order.metadata || {};
+        const amount = Math.abs(Number(order.amount) || 0);
+        const pnl = Number(order.pnl) || 0;
+        
+        return {
+          id: order.id,
+          symbol: metadata.symbol || 'BTCUSDT',
+          side: metadata.direction === 'UP' ? 'buy' : 'sell',
+          direction: metadata.direction || (metadata.direction === 'UP' ? 'UP' : 'DOWN'),
+          amount: amount,
+          stake: amount,
+          price: Number(order.price || metadata.entryPrice) || 0,
+          entryPrice: Number(metadata.entryPrice || order.price) || 0,
+          expiryPrice: Number(metadata.expiryPrice || order.price) || 0,
+          type: 'option',
+          status: 'COMPLETED',
+          timestamp: order.created_at,
+          duration: Number(metadata.duration) || 60,
+          durationLabel: `${Number(metadata.duration) || 60}s`,
+          payout: Number(metadata.payout) || 0,
+          move: Number(metadata.fluctuation) || 0.01,
+          fee: Number(order.fee) || 0,
+          pnl: pnl,
+          result: pnl > 0 ? 'win' : 'loss',
+          startTime: metadata.startTime || order.created_at,
+          endTime: metadata.endTime || metadata.settledAt || order.updated_at,
+          metadata: metadata
+        };
+      });
+      
+      console.log('✅ Formatted completed orders:', formattedOrders.length);
+      setCompletedOrders(formattedOrders);
+    } catch (error) {
+      console.error('Error loading completed orders:', error);
+      setCompletedOrders([]);
+    }
+  }, [user?.id]);
+
+  const loadScheduledTrades = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      const { supabaseTradingService } = await import('@/services/supabaseTradingService');
+      const scheduled = await supabaseTradingService.getScheduledOptions(user.id);
+      
+      const formattedScheduled = scheduled.map(trade => ({
+        id: trade.id,
+        symbol: trade.trading_pairs?.symbol || 'XAUUSDT',
+        side: trade.direction === 'UP' ? 'buy' : 'sell',
+        amount: trade.stake,
+        price: 0, // Will be determined at execution time
+        type: 'option' as const,
+        status: 'scheduled' as const,
+        timestamp: trade.created_at,
+        scheduledTime: trade.scheduled_time,
+        direction: trade.direction,
+        duration: trade.duration,
+        payout: trade.payout_rate,
+        move: trade.fluctuation_range,
+        stake: trade.stake,
+        durationLabel: `${trade.duration}s`
+      }));
+      
+      setScheduledOrders(formattedScheduled);
+    } catch (error) {
+      console.error('Error loading scheduled trades:', error);
+    }
+  }, [user?.id]);
 
   // Animate chart data
   useEffect(() => {
@@ -966,43 +1387,10 @@ export default function UnifiedTradingPage() {
       if (!isAuthenticated || !user?.id) return;
       
       try {
-        // Load completed orders from database
-        const { data: completedData, error: completedError } = await supabase
-          .from('trades')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('type', 'options')
-          .eq('status', 'completed')
-          .order('created_at', { ascending: false });
-          
-        if (completedError) {
-          console.error('Error loading completed orders:', completedError);
-        } else if (completedData) {
-          const formattedOrders = completedData.map(trade => ({
-            id: trade.id,
-            symbol: trade.metadata?.symbol || 'XAUUSDT',
-            side: trade.metadata?.direction || 'UP',
-            amount: trade.amount,
-            price: trade.price,
-            type: 'option' as const,
-            status: 'completed' as const,
-            timestamp: trade.created_at,
-            direction: trade.metadata?.direction || 'UP',
-            duration: trade.metadata?.duration || 60,
-            payout: trade.metadata?.payout || 0.176,
-            move: trade.metadata?.move || 0.01,
-            fee: trade.fee || 0,
-            entryPrice: trade.metadata?.entryPrice,
-            expiryPrice: trade.metadata?.expiryPrice,
-            startTime: trade.metadata?.startTime,
-            endTime: trade.metadata?.endTime,
-            stake: trade.amount,
-            pnl: trade.pnl,
-            result: (trade.pnl && trade.pnl > 0 ? 'win' : 'loss') as 'win' | 'loss',
-            durationLabel: trade.metadata?.durationLabel || `${trade.metadata?.duration}s`
-          }));
-          setCompletedOrders(formattedOrders);
-        }
+        // Load active, completed, and scheduled orders
+        await loadActiveOrders();
+        await loadCompletedOrders();
+        await loadScheduledTrades();
         
         setOrdersLoaded(true);
       } catch (error) {
@@ -1010,9 +1398,20 @@ export default function UnifiedTradingPage() {
         setOrdersLoaded(true);
       }
     };
-    
+
     loadOrdersFromDatabase();
-  }, [isAuthenticated, user?.id]);
+    
+    // Set up periodic refresh to check for expired orders
+    const refreshInterval = setInterval(async () => {
+      console.log('🔄 Refreshing orders to check for expired ones...');
+      await loadActiveOrders();
+      await loadCompletedOrders();
+    }, 5000); // Check every 5 seconds
+
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, [isAuthenticated, user?.id, loadActiveOrders, loadCompletedOrders, loadScheduledTrades]);
 
   // Monitor active orders and move expired ones to completed
   useEffect(() => {
@@ -1021,201 +1420,95 @@ export default function UnifiedTradingPage() {
     const checkExpiredOrders = async () => {
       const now = new Date();
       
-      setActiveOrders(prev => {
-        const expiredOrders = prev.filter(order => 
-          order.expiryTime && new Date(order.expiryTime) <= now
-        );
-        
-        // Process expired orders asynchronously (outside of setState)
-        if (expiredOrders.length > 0) {
-          setTimeout(() => processExpiredOrders(expiredOrders, now, displayPrice), 0);
+      for (const order of activeOrders) {
+        if (order.expiryTime && new Date(order.expiryTime) <= now) {
+          console.log('⏰ Auto-settling expired order:', order.id);
+          
+          try {
+            const { supabaseTradingService } = await import('@/services/supabaseTradingService');
+            const result = await supabaseTradingService.settleOption(order.id, displayPrice);
+            
+            if (result.success) {
+              // Funds are automatically released by the settlement service
+              console.log('💸 Funds released by settlement:', result.isWin ? 'WIN' : 'LOSS');
+              
+              // Refresh balances to see updated trading wallet
+              await refreshBalances();
+              
+              if (result.isWin) {
+                toast.success(`🎉 You won $${result.pnl?.toFixed(2)} USDT!`);
+              } else {
+                toast.error(`Trade lost: -$${result.stake?.toFixed(2)} USDT`);
+              }
+            }
+          } catch (error) {
+            console.error('Error settling expired order:', error);
+          }
         }
-        
-        // Keep only non-expired orders in active
-        return prev.filter(order => 
-          !order.expiryTime || new Date(order.expiryTime) > now
-        );
-      });
+      }
+      
+      // Refresh orders
+      await loadActiveOrders();
+      await loadCompletedOrders();
     };
     
-    // Separate function to process expired orders
-    const processExpiredOrders = async (expiredOrders: Order[], now: Date, currentPrice: number) => {
-      for (const order of expiredOrders) {
-        // Calculate final result based on current price vs entry price
-        const priceDiff = currentPrice - order.entryPrice!;
-        const isWin = order.direction === 'UP' ? priceDiff > 0 : priceDiff < 0;
-        
-        // Calculate PNL based on payout ratio
-        const pnl = isWin ? order.amount * order.payout! : -order.amount;
-        
-        // Add winnings to trading wallet if won
-        if (isWin) {
-          const result = await addBalance('USDT', pnl, 'option_win', `option_win_${order.id}`, { 
-            orderId: order.id,
-            entryPrice: order.entryPrice,
-            exitPrice: currentPrice,
-            direction: order.direction
-          });
-          if (result.success) {
-            toast.success(`🎉 You won $${pnl.toFixed(2)} USDT!`);
-          }
-        } else {
-          // Loss amount already deducted when order was placed
-          toast.error(`Trade lost: -$${order.amount.toFixed(2)} USDT`);
-        }
-      }
-      
-      // Move expired orders to completed with final results
-      const completedOrdersData = expiredOrders.map(order => {
-        const priceDiff = currentPrice - order.entryPrice!;
-        const isWin = order.direction === 'UP' ? priceDiff > 0 : priceDiff < 0;
-        const pnl = isWin ? order.amount * order.payout! : -order.amount;
-        
-        return {
-          ...order,
-          status: 'completed' as const,
-          pnl: pnl,
-          stake: order.amount,
-          expiryPrice: currentPrice,
-          endTime: now.toISOString(),
-          startTime: order.timestamp || now.toISOString(),
-          fee: order.fee || (order.amount * 0.001), // Default 0.1% fee
-          result: isWin ? 'win' : 'loss' as 'win' | 'loss',
-          move: order.move || 0.01,
-          payout: order.payout || 0.176,
-          durationLabel: order.durationLabel || `${order.duration}s`
-        };
-      });
-      
-      setCompletedOrders(prevCompleted => [...prevCompleted, ...completedOrdersData]);
-      
-      // Save completed orders to database
-      for (const order of completedOrdersData) {
-        try {
-          await supabase.from('trades').insert({
-            id: order.id,
-            user_id: user?.id,
-            type: 'options',
-            status: 'completed',
-            asset: 'USDT',
-            amount: order.amount,
-            price: order.price,
-            pnl: order.pnl,
-            fee: order.fee,
-            metadata: {
-              symbol: order.symbol,
-              direction: order.direction,
-              duration: order.duration,
-              payout: order.payout,
-              move: order.move,
-              entryPrice: order.entryPrice,
-              expiryPrice: order.expiryPrice,
-              startTime: order.startTime,
-              endTime: order.endTime,
-              durationLabel: order.durationLabel,
-              result: order.result
-            },
-            created_at: order.timestamp
-          });
-        } catch (error) {
-          console.error('Error saving completed order to database:', error);
-        }
-      }
-      
-      // Release trading locks for completed orders
-      for (const order of completedOrdersData) {
-        try {
-          await supabase.from('trading_locks')
-            .update({ 
-              status: 'released', 
-              released_at: now.toISOString() 
-            })
-            .eq('reference_id', order.id)
-            .eq('status', 'locked');
-          console.log('Released trading lock for order:', order.id);
-        } catch (error) {
-          console.error('Error releasing trading lock:', error);
-        }
-      }
-      
-      // Show notifications for expired orders
-      completedOrdersData.forEach(order => {
-        if (order.pnl && order.pnl > 0) {
-          toast.success(`🎉 Trade Won! +${order.pnl.toFixed(2)} USDT`);
-        } else {
-          toast.error(`Trade Lost. ${order.pnl?.toFixed(2) || '0'} USDT`);
-        }
-      });
-    };
-
     // Check every second for precision
     const interval = setInterval(checkExpiredOrders, 1000);
     
     return () => clearInterval(interval);
-  }, [displayPrice, addBalance]);
+  }, [activeOrders, displayPrice, refreshBalances, loadActiveOrders, loadCompletedOrders]);
 
   // Monitor scheduled orders and activate them when scheduled time arrives
   useEffect(() => {
-    const checkScheduledOrders = () => {
+    const checkScheduledOrders = async () => {
       const now = new Date();
       
-      setScheduledOrders(prev => {
-        const readyOrders = prev.filter(order => 
-          order.scheduledTime && new Date(order.scheduledTime) <= now
+      const readyOrders = scheduledOrders.filter(order => 
+        order.scheduledTime && new Date(order.scheduledTime) <= now
+      );
+      
+      if (readyOrders.length > 0) {
+        // Move ready orders to active orders
+        const activeOrdersData = readyOrders.map(order => ({
+          ...order,
+          status: 'active' as const,
+          expiryTime: new Date(now.getTime() + (order.duration || 0) * 1000).toISOString()
+        }));
+        
+        // Add to active orders
+        setActiveOrders(prev => [...prev, ...activeOrdersData]);
+        
+        // Remove from scheduled
+        setScheduledOrders(prev => 
+          prev.filter(o => !readyOrders.some(ro => ro.id === o.id))
         );
         
-        if (readyOrders.length > 0) {
-          // Move ready orders to active orders
-          const activeOrdersData = readyOrders.map(order => ({
-            ...order,
-            status: 'active' as const,
-            expiryTime: new Date(now.getTime() + (order.duration || 0) * 1000).toISOString()
-          }));
-          
-          setActiveOrders(prevActive => [...prevActive, ...activeOrdersData]);
-          
-          // Show notifications for activated orders
-          readyOrders.forEach(order => {
-            toast.success(`🚀 Scheduled order activated: ${order.symbol} ${order.direction}`);
-          });
+        // Release trading locks for these orders
+        for (const order of readyOrders) {
+          try {
+            await supabase
+              .from('trading_locks')
+              .update({ status: 'released' })
+              .eq('reference_id', order.id)
+              .eq('status', 'locked');
+            console.log('Released trading lock for order:', order.id);
+          } catch (error) {
+            console.error('Error releasing trading lock:', error);
+          }
         }
         
-        // Keep only future scheduled orders
-        return prev.filter(order => 
-          !order.scheduledTime || new Date(order.scheduledTime) > now
-        );
-      });
+        // Show notifications for activated orders
+        readyOrders.forEach(order => {
+          toast.success(`📅 Scheduled order activated: ${order.symbol}`);
+        });
+      }
     };
-
-    // Check every second for precision
-    const interval = setInterval(checkScheduledOrders, 1000);
+    
+    // Check every 5 seconds for scheduled orders
+    const interval = setInterval(checkScheduledOrders, 5000);
     
     return () => clearInterval(interval);
-  }, []);
-
-  // ============================================
-  // WALLET INTEGRATION HANDLERS
-  // ============================================
-
-  const deductFromTradingWallet = async (amount: number, description: string) => {
-    try {
-      const result = await deductBalance('USDT', amount, 'trade_stake', `trade_${Date.now()}`);
-      return result.success;
-    } catch (error) {
-      console.error('Failed to deduct from trading wallet:', error);
-      return false;
-    }
-  };
-
-  const addToTradingWallet = async (amount: number, description: string) => {
-    try {
-      const result = await addBalance('USDT', amount, 'trade_profit', `trade_profit_${Date.now()}`, { description });
-      return result.success;
-    } catch (error) {
-      console.error('Failed to add to trading wallet:', error);
-      return false;
-    }
-  };
+  }, [scheduledOrders]);
 
   // ============================================
   // HANDLERS
@@ -1241,58 +1534,39 @@ export default function UnifiedTradingPage() {
       return;
     }
 
-    const total = parsedAmount * displayPrice;
-    const balance = getTradingBalance('USDT');
-
-    if (total > balance) {
-      toast.error(`Insufficient balance. Need $${total.toFixed(2)} USDT`);
-      return;
-    }
-
     try {
-      // Deduct from trading wallet
-      const deducted = await deductFromTradingWallet(total, 'Spot trade');
-      if (!deducted) {
-        toast.error('Failed to process transaction');
-        return;
-      }
-
-      // Execute spot trade
-      const order: Order = {
-        id: Date.now().toString(),
-        symbol: selectedPair.symbol,
+      // Import the Supabase trading service
+      const { supabaseTradingService } = await import('@/services/supabaseTradingService');
+      
+      // Execute spot trade with admin outcome control
+      const response = await supabaseTradingService.executeSpotTrade({
+        pair: selectedPair.symbol,
         side: spotSide,
+        type: 'market',
         amount: parsedAmount,
         price: displayPrice,
-        total: total,
-        type: 'spot',
-        status: 'filled',
-        timestamp: new Date().toISOString(),
-        fee: total * 0.001 // 0.1% fee
-      };
+        total: parsedAmount * displayPrice
+      });
 
-      console.log('Executing spot trade:', order);
-      
-      toast.loading('Executing trade...');
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      toast.dismiss();
-      toast.success(`${spotSide === 'buy' ? 'Bought' : 'Sold'} ${parsedAmount} ${selectedPair.baseAsset} at $${displayPrice.toFixed(2)}`);
-      
-      // Add to spot orders
-      setSpotOrders(prev => [...prev, order]);
-      
-      console.log('Trade execution completed, clearing form...');
-      
-      // Clear form
-      setSpotAmount('');
+      if (response.success) {
+        const { trade } = response;
+        
+        // Show appropriate message based on outcome
+        if (trade.outcome === 'win') {
+          toast.success(`Trade Won! +$${trade.pnl.toFixed(2)} profit`);
+        } else {
+          toast.error(`Trade Lost -$${Math.abs(trade.pnl).toFixed(2)}`);
+        }
+        
+        // Clear form
+        setSpotAmount('');
+        
+        console.log('✅ Spot trade executed successfully:', trade);
+      }
       
     } catch (error) {
-      toast.dismiss();
-      toast.error('Trade execution failed. Please try again.');
-      console.error('Spot trade error:', error);
+      console.error('❌ Spot trade failed:', error);
+      toast.error('Failed to execute trade. Please try again.');
     }
   };
 
@@ -1312,231 +1586,170 @@ export default function UnifiedTradingPage() {
       return;
     }
 
-    const margin = parsedAmount / futuresLeverage;
-    const balance = getTradingBalance('USDT');
-
-    if (margin > balance) {
-      toast.error(`Insufficient balance. Need $${margin.toFixed(2)} USDT for margin`);
-      return;
-    }
-
     try {
-      // Lock margin in trading wallet
-      const locked = await lockBalance('USDT', margin, `futures_margin_${Date.now()}`);
-      if (!locked) {
-        toast.error('Failed to lock margin');
-        return;
-      }
-
-      // Execute futures trade
-      const tradeData: Order = {
-        id: Date.now().toString(),
-        symbol: selectedPair.symbol,
-        side: futuresSide === 'long' ? 'long' : 'short',
+      // Import the trading API service
+      const { tradingApiService } = await import('@/services/tradingApiService');
+      
+      // Execute futures trade with admin outcome control
+      const response = await tradingApiService.executeFuturesTrade({
+        pair: selectedPair.symbol,
+        side: futuresSide === 'long' ? 'buy' : 'sell',
+        positionType: futuresTradeType,
+        orderType: 'market',
         amount: parsedAmount,
         price: displayPrice,
-        type: 'futures',
-        status: futuresTradeType === 'open' ? 'active' : 'filled',
-        timestamp: new Date().toISOString(),
         leverage: futuresLeverage,
-        margin: margin,
-        fee: margin * 0.001 // 0.1% fee on margin
-      };
-
-      console.log('Executing futures trade:', tradeData);
-      
-      toast.loading('Executing futures trade...');
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      toast.dismiss();
-      toast.success(`${futuresTradeType === 'open' ? 'Opened' : 'Closed'} ${futuresSide} position: ${parsedAmount} ${selectedPair.baseAsset} at ${futuresLeverage}x leverage`);
-      
-      // Clear form
-      setFuturesAmount('');
-      setFuturesPercentage(0);
-      
-      // Add to futures positions
-      const position: Order = {
-        ...tradeData,
-        status: futuresTradeType === 'open' ? 'active' : 'filled',
-        pnl: 0,
-        entryPrice: displayPrice,
-        expiryTime: futuresTradeType === 'open' ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : undefined // 24h expiry for demo
-      };
-      
-      console.log('Position executed:', position);
-      
-      setFuturesPositions(prev => {
-        const newPositions = [...prev, position];
-        console.log('New futuresPositions array:', newPositions);
-        return newPositions;
+        margin: parsedAmount / futuresLeverage
       });
+
+      if (response.success) {
+        const { trade } = response;
+        
+        // Show appropriate message based on outcome
+        if (trade.outcome === 'win') {
+          toast.success(`Position Won! +$${trade.pnl.toFixed(2)} profit`);
+        } else {
+          toast.error(`Position Lost -$${Math.abs(trade.pnl).toFixed(2)}`);
+        }
+        
+        // Clear form
+        setFuturesAmount('');
+        
+        console.log('✅ Futures trade executed successfully:', trade);
+      }
       
     } catch (error) {
-      toast.dismiss();
-      toast.error('Futures trade execution failed. Please try again.');
-      console.error('Futures trade error:', error);
+      console.error('❌ Futures trade failed:', error);
+      toast.error('Failed to execute position. Please try again.');
     }
   };
 
   const handleOptionTrade = async () => {
-    console.log('handleOptionTrade called');
-    console.log('isAuthenticated:', isAuthenticated);
-    console.log('optionAmount:', optionAmount);
-    
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !user?.id) {
       toast.error('Please login to trade');
       return;
     }
 
     const parsedAmount = parseFloat(optionAmount);
-    console.log('Parsed amount:', parsedAmount);
-    
     if (!parsedAmount || parsedAmount <= 0) {
-      console.log('Amount validation failed');
       toast.error('Please enter a valid amount');
       return;
     }
 
     const purchaseRange = PURCHASE_RANGES[optionDuration as keyof typeof PURCHASE_RANGES];
-    console.log('Purchase range:', purchaseRange);
-    console.log('Checking amount range:', parsedAmount, 'min:', purchaseRange.min, 'max:', purchaseRange.max);
-    
     if (parsedAmount < purchaseRange.min || parsedAmount > purchaseRange.max) {
-      console.log('Purchase range validation failed');
       toast.error(`Amount must be between ${purchaseRange.min} and ${purchaseRange.max} USDT`);
       return;
     }
 
     const balance = getTradingBalance('USDT');
-    console.log('Balance check:', { parsedAmount, balance });
-    
     if (parsedAmount > balance) {
-      console.log('Balance validation failed');
-      const fundingBalance = getFundingBalance ? getFundingBalance('USDT') : 0;
-      if (fundingBalance >= parsedAmount) {
-        toast.error(`Insufficient trading balance. You have $${fundingBalance.toFixed(2)} USDT in funding wallet. Transfer funds to trading wallet first.`);
-      } else {
-        toast.error(`Insufficient balance. Need $${parsedAmount.toFixed(2)} USDT, but only have $${balance.toFixed(2)} USDT available.`);
-      }
+      toast.error(`Insufficient balance. Need $${parsedAmount.toFixed(2)} USDT`);
       return;
     }
 
-    console.log('All validations passed, proceeding to execution...');
+    setExecuting(true);
 
     try {
-      console.log('Starting option trade execution...');
-      
-      // Execute options trade
-      const tradeData: Order = {
-        id: Date.now().toString(),
-        symbol: selectedPair.symbol,
-        side: optionDirection === 'up' ? 'UP' : 'DOWN',
-        amount: parsedAmount,
-        price: displayPrice,
-        type: 'option',
-        status: isScheduled ? 'pending' : 'active',
-        timestamp: new Date().toISOString(),
-        direction: optionDirection === 'up' ? 'UP' : 'DOWN',
-        duration: optionDuration,
-        payout: optionPayout,
-        move: optionMove,
-        fee: parsedAmount * 0.001, // 0.1% fee
-        entryPrice: displayPrice,
-        isScheduled: isScheduled,
-        scheduledTime: isScheduled ? new Date(Date.now() + 
-          (scheduledTime.hours * 3600 + scheduledTime.minutes * 60 + scheduledTime.seconds) * 1000
-        ).toISOString() : null,
-        expiryTime: isScheduled ? null : new Date(Date.now() + optionDuration * 1000).toISOString()
-      };
-      
-      // Deduct from trading wallet (premium paid for option)
-      const deducted = await deductFromTradingWallet(parsedAmount, 'Option purchase');
-      if (!deducted) {
-        toast.error('Failed to process transaction');
-        return;
-      }
+      const { supabaseTradingService } = await import('@/services/supabaseTradingService');
 
-      
-      console.log('Trade data prepared:', tradeData);
-      console.log('Executing options trade:', tradeData);
-      
-      // Lock the stake amount in trading_locks table (after tradeData is fully prepared)
-      try {
-        const lockData = {
-          user_id: user?.id,
-          asset: 'USDT',
-          amount: parsedAmount,
-          trade_type: 'options',
-          reference_id: tradeData.id,
-          status: 'locked',
-          expires_at: isScheduled ? null : new Date(Date.now() + optionDuration * 1000).toISOString(),
-          metadata: {
+      if (isScheduled) {
+        // Handle scheduled trade
+        const scheduledTimeStr = new Date(Date.now() + 
+          (scheduledTime.hours * 3600 + scheduledTime.minutes * 60 + scheduledTime.seconds) * 1000
+        ).toISOString();
+
+        const result = await supabaseTradingService.scheduleOptionsTrade(
+          user.id,
+          {
             symbol: selectedPair.symbol,
-            direction: optionDirection,
+            direction: optionDirection === 'up' ? 'UP' : 'DOWN',
+            amount: parsedAmount,
             duration: optionDuration,
+            fluctuation: optionFluctuation,
             payout: optionPayout,
             entryPrice: displayPrice,
-            type: 'option_stake'
+            scheduledTime: scheduledTimeStr
           }
-        };
-        
-        await supabase.from('trading_locks').insert(lockData);
-        console.log('Trading lock created:', lockData);
-      } catch (error) {
-        console.error('Error creating trading lock:', error);
-        // Continue with trade even if lock fails, but log the error
-      }
-      
-      if (isScheduled) {
-        console.log('Processing scheduled trade...');
-        toast.loading('Scheduling option trade...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        toast.dismiss();
-        toast.success(`Trade scheduled for ${scheduledTime.hours.toString().padStart(2, '0')}:${scheduledTime.minutes.toString().padStart(2, '0')}:${scheduledTime.seconds.toString().padStart(2, '0')} UTC`);
-        setIsScheduled(false);
+        );
+
+        if (result.success) {
+          toast.success(`Trade scheduled for ${scheduledTime.hours}:${scheduledTime.minutes}:${scheduledTime.seconds} UTC`);
+          await loadScheduledTrades();
+          setIsScheduled(false);
+        } else {
+          throw new Error(result.error || 'Scheduling failed');
+        }
       } else {
-        console.log('Processing immediate trade...');
-        toast.loading('Purchasing option...');
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        toast.dismiss();
-        toast.success(`Option purchased: ${optionDirection.toUpperCase()} ${selectedPair.baseAsset} - ${optionDuration}s at $${parsedAmount}`);
+        // Handle immediate trade - admin force win/loss is checked inside the service
+        const result = await supabaseTradingService.executeOptionsTrade(
+          user.id,
+          {
+            symbol: selectedPair.symbol,
+            direction: optionDirection === 'up' ? 'UP' : 'DOWN',
+            amount: parsedAmount,
+            duration: optionDuration,
+            fluctuation: optionFluctuation,
+            payout: optionPayout,
+            entryPrice: displayPrice
+          },
+          user.email // Pass user email
+        );
+
+        if (result.success) {
+          console.log('✅ Order created successfully:', result);
+          
+          // Funds are automatically locked by the trading service
+          console.log('🔒 Funds locked automatically by trading service');
+          
+          // Refresh balances to see locked funds
+          await refreshBalances();
+          
+          // Show toast based on admin outcome
+          if (result.shouldWin) {
+            toast.success(`✨ Option purchased with FORCE WIN enabled!`, {
+              icon: '👑',
+              duration: 5000
+            });
+          } else {
+            toast.success(`Option purchased: ${optionDirection.toUpperCase()} - ${optionDuration}s (Default: LOSS)`);
+          }
+          
+          await loadActiveOrders();
+          
+          // Schedule settlement
+          setTimeout(async () => {
+            // In production, get actual price at expiry
+            const settleResult = await supabaseTradingService.settleOption(
+              result.orderId!,
+              displayPrice // Replace with actual price at expiry
+            );
+            
+            if (settleResult.isWin) {
+              toast.success(`🎉 You won $${settleResult.pnl?.toFixed(2)} USDT!`, {
+                icon: settleResult.source !== 'default_loss' ? '👑' : '🎉'
+              });
+            } else {
+              toast.error(`Trade lost: -$${parsedAmount.toFixed(2)} USDT (Default behavior)`);
+            }
+            
+            await loadActiveOrders();
+            await loadCompletedOrders();
+            await refreshBalances();
+          }, optionDuration * 1000);
+        } else {
+          throw new Error(result.error || 'Trade failed');
+        }
       }
-      
-      console.log('Trade execution completed, clearing form...');
-      
-      // Clear form
+
       setOptionAmount('');
       setOptionPercentage(0);
-      
-      // Add to options history
-      const option: Order = {
-        id: Date.now().toString(),
-        ...tradeData,
-        status: isScheduled ? 'pending' : 'active',
-        expiryTime: isScheduled ? null : new Date(Date.now() + optionDuration * 1000).toISOString(),
-        startTime: new Date().toISOString(),
-        durationLabel: OPTIONS_TIMEFRAMES.find(tf => tf.value === optionDuration)?.durationLabel || `${optionDuration}s`,
-        scheduledTime: isScheduled ? new Date(Date.now() + 
-          (scheduledTime.hours * 3600 + scheduledTime.minutes * 60 + scheduledTime.seconds) * 1000
-        ).toISOString() : null
-      };
-      console.log('Option executed:', option);
-      
-      // Store in appropriate state array
-      if (isScheduled) {
-        setScheduledOrders(prev => [...prev, option]);
-      } else {
-        setActiveOrders(prev => [...prev, option]);
-      }
-      
+
     } catch (error) {
-      console.error('Error in option trade:', error);
-      toast.dismiss();
-      toast.error('Option purchase failed. Please try again.');
       console.error('Option trade error:', error);
+      toast.error(error instanceof Error ? error.message : 'Trade execution failed');
+    } finally {
+      setExecuting(false);
     }
   };
 
@@ -1549,13 +1762,27 @@ export default function UnifiedTradingPage() {
   // Get current UTC time
   const currentUTC = new Date().toISOString().split('T')[1].split('.')[0];
 
+  // Add debug logging for completed orders
+  useEffect(() => {
+    console.log('📊 Completed orders state:', {
+      count: completedOrders.length,
+      orders: completedOrders.map(o => ({
+        id: o.id,
+        symbol: o.symbol,
+        direction: o.direction,
+        pnl: o.pnl,
+        result: o.result
+      }))
+    });
+  }, [completedOrders]);
+
   // ============================================
   // RENDER
   // ============================================
 
   return (
     <motion.div 
-      className="min-h-screen bg-[#0B0E11] text-[#EAECEF] pb-24"
+      className="min-h-screen bg-[#0B0E11] text-[#EAECEF] pb-[35vh]" // Increased padding to prevent content from being hidden behind bottom tabs
       initial="initial"
       animate="animate"
       exit="exit"
@@ -1617,6 +1844,7 @@ export default function UnifiedTradingPage() {
               <motion.button 
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
+                onClick={() => window.location.reload()}
                 className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
               >
                 <RefreshCw className="h-5 w-5" />
@@ -1796,7 +2024,7 @@ export default function UnifiedTradingPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-[#848E9C]">Available</span>
                 <span className="text-[#EAECEF]">
-                  {hideBalances ? '••••' : formatCurrency(getTradingBalance('USDT'))} USDT
+                  {hideBalances ? '••••' : formatCurrency(Number(getTradingBalance('USDT')) || 0)} USDT
                 </span>
               </div>
 
@@ -1907,13 +2135,13 @@ export default function UnifiedTradingPage() {
                 <div className="text-xs text-[#848E9C] mb-2">Available ({selectedPair.baseAsset})</div>
                 <div className="space-y-1">
                   {futuresOrderBookAsks.map((ask, i) => (
-                    <div key={i} className="text-sm font-mono text-[#B7BDC6] text-right">{ask.available.toFixed(3)}</div>
+                    <div key={i} className="text-sm font-mono text-[#B7BDC6] text-right">{ask.quantity.toFixed(3)}</div>
                   ))}
                   <div className="text-sm font-mono text-[#EAECEF] font-bold border-t border-b border-[#2B3139] py-1 my-1 text-right">
                     0.000
                   </div>
                   {futuresOrderBookBids.map((bid, i) => (
-                    <div key={i} className="text-sm font-mono text-[#B7BDC6] text-right">{bid.amount.toFixed(3)}</div>
+                    <div key={i} className="text-sm font-mono text-[#B7BDC6] text-right">{bid.quantity.toFixed(3)}</div>
                   ))}
                 </div>
               </div>
@@ -2068,35 +2296,46 @@ export default function UnifiedTradingPage() {
 
               {/* Asks */}
               <div className="space-y-1">
-                {optionsOrderBookAsks.map((ask, i) => (
-                  <div key={i} className="grid grid-cols-3 gap-4 text-sm">
-                    <span className="text-[#F6465D] font-mono">{ask.price.toFixed(2)}</span>
-                    <span className="text-[#B7BDC6] font-mono text-center">{ask.quantity.toFixed(3)}</span>
-                    <span className="text-[#848E9C] font-mono text-right">
-                      {(ask.price * ask.quantity).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
+                {optionsOrderBookAsks.map((ask, i) => {
+                  const priceChange = ask.price > displayPrice ? 'text-[#F6465D]' : 'text-[#0ECB81]';
+                  return (
+                    <div key={i} className="grid grid-cols-3 gap-4 text-sm">
+                      <span className={`font-mono ${priceChange}`}>{ask.price.toFixed(2)}</span>
+                      <span className="text-[#B7BDC6] font-mono text-center">{ask.quantity.toFixed(3)}</span>
+                      <span className="text-[#848E9C] font-mono text-right">
+                        {(ask.price * ask.quantity).toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Current Price */}
               <div className="grid grid-cols-3 gap-4 items-center py-2 border-y border-[#2B3139]">
-                <span className="text-[#EAECEF] font-bold font-mono">{displayPrice.toFixed(2)} ↓</span>
+                <span className={`font-bold font-mono ${
+                  priceDirection === 'up' ? 'text-[#0ECB81]' : 
+                  priceDirection === 'down' ? 'text-[#F6465D]' : 'text-[#EAECEF]'
+                }`}>
+                  {displayPrice.toFixed(2)} {priceDirection === 'up' ? '↑' : priceDirection === 'down' ? '↓' : '→'}
+                </span>
                 <span className="text-xs text-[#848E9C] text-center">≈${displayPrice.toFixed(2)}</span>
                 <span className="text-[#848E9C] text-right">0.000</span>
               </div>
 
               {/* Bids */}
               <div className="space-y-1">
-                {optionsOrderBookBids.map((bid, i) => (
-                  <div key={i} className="grid grid-cols-3 gap-4 text-sm">
-                    <span className="text-[#0ECB81] font-mono">{bid.price.toFixed(2)}</span>
-                    <span className="text-[#B7BDC6] font-mono text-center">{bid.quantity.toFixed(3)}</span>
-                    <span className="text-[#848E9C] font-mono text-right">
-                      {(bid.price * bid.quantity).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
+                {optionsOrderBookBids.map((bid, i) => {
+                  const priceChange = bid.price > displayPrice ? 'text-[#F6465D]' : 'text-[#0ECB81]';
+                  return (
+                    <div key={i} className="grid grid-cols-3 gap-4 text-sm">
+                      <span className={`font-mono ${priceChange}`}>{bid.price.toFixed(2)}</span>
+                      <span className="text-[#B7BDC6] font-mono text-center">{bid.quantity.toFixed(3)}</span>
+                      <span className="text-[#848E9C] font-mono text-right">
+                        {(bid.price * bid.quantity).toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -2141,7 +2380,7 @@ export default function UnifiedTradingPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-[#848E9C]">Available</span>
                 <span className="text-[#EAECEF]">
-                  {hideBalances ? '••••' : formatCurrency(getTradingBalance('USDT'))} USDT
+                  {hideBalances ? '••••' : formatCurrency(Number(getTradingBalance('USDT')) || 0)} USDT
                 </span>
               </div>
 
@@ -2205,8 +2444,9 @@ export default function UnifiedTradingPage() {
       </div>
 
       {/* ===== BOTTOM TABS ===== */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#1E2329] border-t border-[#2B3139]">
-        <div className="flex border-b border-[#2B3139]">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#1E2329] border-t border-[#2B3139] flex flex-col" style={{ maxHeight: '50vh' }}>
+        {/* Tabs Header - Fixed */}
+        <div className="flex border-b border-[#2B3139] flex-shrink-0">
           {activeTab === 'option' ? (
             // Options Tabs
             <>
@@ -2218,7 +2458,7 @@ export default function UnifiedTradingPage() {
                     : 'text-[#848E9C]'
                 }`}
               >
-                Active
+                Active ({activeOrders.length})
               </button>
               <button
                 onClick={() => setActiveBottomTab('scheduled')}
@@ -2228,7 +2468,7 @@ export default function UnifiedTradingPage() {
                     : 'text-[#848E9C]'
                 }`}
               >
-                Scheduled
+                Scheduled ({scheduledOrders.length})
               </button>
               <button
                 onClick={() => setActiveBottomTab('completed')}
@@ -2238,7 +2478,7 @@ export default function UnifiedTradingPage() {
                     : 'text-[#848E9C]'
                 }`}
               >
-                Completed
+                Completed ({completedOrders.length})
               </button>
             </>
           ) : activeTab === 'future' ? (
@@ -2312,184 +2552,234 @@ export default function UnifiedTradingPage() {
           )}
         </div>
 
-        {/* Tab Content */}
-        <div className="max-h-64 overflow-y-auto bg-[#1E2329]">
+        {/* Scrollable Content */}
+        <div className="overflow-y-auto flex-1 min-h-0" style={{ maxHeight: 'calc(50vh - 48px)' }}>
           {activeTab === 'option' ? (
             // Options Tab Content
             <>
-              {activeBottomTab === 'active' && activeOrders.length > 0 && (
+              {activeBottomTab === 'active' && (
                 <div className="px-4 py-4 space-y-3">
                   <h3 className="text-[#EAECEF] font-medium mb-3">Active Options</h3>
-                  {activeOrders.map((order, index) => (
-                    <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
-                      <div className="flex justify-between items-center mb-3">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs text-[#848E9C] font-mono">#{order.id}</span>
-                          <div className="flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-[#0ECB81]/20 text-[#0ECB81] border border-[#0ECB81]/30">
-                            <div className="w-2 h-2 bg-[#0ECB81] rounded-full animate-pulse" />
-                            active
+                  {activeOrders.length > 0 ? (
+                    activeOrders.map((order) => (
+                      <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
+                        <div className="flex justify-between items-center mb-3">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs text-[#848E9C] font-mono">#{order.id.slice(0,8)}</span>
+                            <div className="flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-[#0ECB81]/20 text-[#0ECB81] border border-[#0ECB81]/30">
+                              <div className="w-2 h-2 bg-[#0ECB81] rounded-full animate-pulse" />
+                              active
+                            </div>
+                          </div>
+                          
+                          {/* Countdown Timer */}
+                          {order.expiryTime && new Date(order.expiryTime) > new Date() ? (
+                            <div className="flex items-center space-x-1">
+                              <Clock className="w-3 h-3 text-[#848E9C]" />
+                              <Countdown
+                                date={new Date(order.expiryTime)}
+                                renderer={CountdownRenderer}
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex items-center space-x-1">
+                              <Clock className="w-3 h-3 text-[#848E9C]" />
+                              <span className="text-xs text-[#848E9C]">
+                                {order.expiryTime ? `Expires: ${new Date(order.expiryTime).toLocaleTimeString()}` : 'No expiry'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Main Trade Info */}
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                          <div className="flex items-center space-x-2">
+                            <div className={`p-1.5 rounded-lg ${
+                              order.direction === 'UP' 
+                                ? 'bg-[#0ECB81]/20 text-[#0ECB81]' 
+                                : 'bg-[#F6465D]/20 text-[#F6465D]'
+                            }`}>
+                              {order.direction === 'UP' ? (
+                                <TrendingUp className="w-4 h-4" />
+                              ) : (
+                                <TrendingDown className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-[#EAECEF]">
+                                {order.symbol}
+                              </div>
+                              <div className="text-sm text-[#B7BDC6] font-mono">
+                                ${typeof order.entryPrice === 'number' ? order.entryPrice.toFixed(2) : displayPrice.toFixed(2)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <div className="text-sm font-medium text-[#EAECEF]">
+                              ${order.amount}
+                            </div>
+                            <div className="text-xs text-[#848E9C]">
+                              {order.duration}s
+                            </div>
                           </div>
                         </div>
-                        
-                        {/* Countdown Timer */}
+
+                        {/* Price Details */}
+                        <div className="flex justify-between items-center pt-3 border-t border-[#3A3F4A]">
+                          <div className="flex items-center space-x-4">
+                            <div>
+                              <div className="text-xs text-[#848E9C]">Entry</div>
+                              <div className="text-sm text-[#B7BDC6] font-mono">
+                                ${typeof order.entryPrice === 'number' ? order.entryPrice.toFixed(2) : order.entryPrice}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-[#848E9C]">Current</div>
+                              <div className={`text-sm font-mono ${
+                                (order.direction === 'UP' && displayPrice > (order.entryPrice || 0)) ||
+                                (order.direction === 'DOWN' && displayPrice < (order.entryPrice || 0))
+                                  ? 'text-[#0ECB81]'
+                                  : 'text-[#F6465D]'
+                              }`}>
+                                ${displayPrice.toFixed(2)}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="text-sm font-medium text-[#F0B90B]">
+                            +${order.payout ? (order.amount * order.payout).toFixed(2) : '0'} est.
+                          </div>
+                        </div>
+
+                        {/* Countdown Timer Bar */}
                         {order.expiryTime && (
-                          <div className="flex items-center space-x-1">
-                            <Clock className="w-3 h-3 text-[#848E9C]" />
-                            <Countdown
-                              date={new Date(order.expiryTime)}
-                              renderer={CountdownRenderer}
+                          <div className="mt-3 pt-3 border-t border-[#3A3F4A]">
+                            <TradingCountdownBar
+                              expiryTime={order.expiryTime}
+                              size="sm"
+                              showLabel={true}
+                              className="mb-2"
                             />
                           </div>
                         )}
                       </div>
-
-                      {/* Main Trade Info */}
-                      <div className="grid grid-cols-2 gap-3 mb-3">
-                        <div className="flex items-center space-x-2">
-                          <div className={`p-1.5 rounded-lg ${
-                            order.direction === 'UP' 
-                              ? 'bg-[#0ECB81]/20 text-[#0ECB81]' 
-                              : 'bg-[#F6465D]/20 text-[#F6465D]'
-                          }`}>
-                            {order.direction === 'UP' ? (
-                              <TrendingUp className="w-4 h-4" />
-                            ) : (
-                              <TrendingDown className="w-4 h-4" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-[#EAECEF]">
-                              {order.symbol}
-                            </div>
-                            <div className="text-sm text-[#B7BDC6] font-mono">
-                              ${typeof order.entryPrice === 'number' ? order.entryPrice.toFixed(2) : displayPrice.toFixed(2)}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="text-right">
-                          <div className="text-sm font-medium text-[#EAECEF]">
-                            ${order.amount}
-                          </div>
-                          <div className="text-xs text-[#848E9C]">
-                            {order.duration}s
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Price Details */}
-                      <div className="flex justify-between items-center pt-3 border-t border-[#3A3F4A]">
-                        <div className="flex items-center space-x-4">
-                          <div>
-                            <div className="text-xs text-[#848E9C]">Entry</div>
-                            <div className="text-sm text-[#B7BDC6] font-mono">
-                              ${typeof order.entryPrice === 'number' ? order.entryPrice.toFixed(2) : order.entryPrice}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-[#848E9C]">Current</div>
-                            <div className={`text-sm font-mono ${
-                              (order.direction === 'UP' && displayPrice > (order.entryPrice || 0)) ||
-                              (order.direction === 'DOWN' && displayPrice < (order.entryPrice || 0))
-                                ? 'text-[#0ECB81]'
-                                : 'text-[#F6465D]'
-                            }`}>
-                              ${displayPrice.toFixed(2)}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="text-sm font-medium text-[#F0B90B]">
-                          +${order.payout ? (order.amount * order.payout).toFixed(2) : '0'} est.
-                        </div>
-                      </div>
+                    ))
+                  ) : (
+                    <div className="text-[#848E9C] text-sm text-center py-8">
+                      No active orders
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
               
-              {activeBottomTab === 'scheduled' && scheduledOrders.length > 0 && (
+              {activeBottomTab === 'scheduled' && (
                 <div className="px-4 py-4 space-y-3">
                   <h3 className="text-[#EAECEF] font-medium mb-3">Scheduled Orders</h3>
-                  {scheduledOrders.map((order, index) => (
-                    <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
-                      <div className="flex justify-between items-center mb-3">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs text-[#848E9C] font-mono">#{order.id}</span>
-                          <div className="flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-[#F0B90B]/20 text-[#F0B90B] border border-[#F0B90B]/30">
-                            <div className="w-2 h-2 bg-[#F0B90B] rounded-full animate-pulse" />
-                            scheduled
+                  {scheduledOrders.length > 0 ? (
+                    scheduledOrders.map((order) => (
+                      <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
+                        <div className="flex justify-between items-center mb-3">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs text-[#848E9C] font-mono">#{order.id.slice(0,8)}</span>
+                            <div className="flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-[#F0B90B]/20 text-[#F0B90B] border border-[#F0B90B]/30">
+                              <div className="w-2 h-2 bg-[#F0B90B] rounded-full animate-pulse" />
+                              scheduled
+                            </div>
                           </div>
+                          
+                          {/* Scheduled Time */}
+                          {order.scheduledTime && (
+                            <div className="flex items-center space-x-1">
+                              <Calendar className="w-3 h-3 text-[#848E9C]" />
+                              <span className="text-xs text-[#B7BDC6]">
+                                {new Date(order.scheduledTime).toLocaleTimeString()}
+                              </span>
+                            </div>
+                          )}
                         </div>
-                        
-                        {/* Scheduled Time */}
-                        {order.scheduledTime && (
-                          <div className="flex items-center space-x-1">
-                            <Calendar className="w-3 h-3 text-[#848E9C]" />
-                            <span className="text-xs text-[#B7BDC6]">
-                              {new Date(order.scheduledTime).toLocaleTimeString()}
-                            </span>
-                          </div>
-                        )}
-                      </div>
 
-                      {/* Main Trade Info */}
-                      <div className="grid grid-cols-2 gap-3 mb-3">
-                        <div className="flex items-center space-x-2">
-                          <div className={`p-1.5 rounded-lg ${
-                            order.direction === 'UP' 
-                              ? 'bg-[#0ECB81]/20 text-[#0ECB81]' 
-                              : 'bg-[#F6465D]/20 text-[#F6465D]'
-                          }`}>
-                            {order.direction === 'UP' ? (
-                              <TrendingUp className="w-4 h-4" />
-                            ) : (
-                              <TrendingDown className="w-4 h-4" />
-                            )}
+                        {/* Main Trade Info */}
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                          <div className="flex items-center space-x-2">
+                            <div className={`p-1.5 rounded-lg ${
+                              order.direction === 'UP' 
+                                ? 'bg-[#0ECB81]/20 text-[#0ECB81]' 
+                                : 'bg-[#F6465D]/20 text-[#F6465D]'
+                            }`}>
+                              {order.direction === 'UP' ? (
+                                <TrendingUp className="w-4 h-4" />
+                              ) : (
+                                <TrendingDown className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-[#EAECEF]">
+                                {order.symbol}
+                              </div>
+                              <div className="text-sm text-[#B7BDC6] font-mono">
+                                ${order.entryPrice?.toFixed(2) || displayPrice.toFixed(2)}
+                              </div>
+                            </div>
                           </div>
-                          <div>
+
+                          <div className="text-right">
                             <div className="text-sm font-medium text-[#EAECEF]">
-                              {order.symbol}
+                              ${order.amount}
                             </div>
-                            <div className="text-sm text-[#B7BDC6] font-mono">
-                              ${order.entryPrice?.toFixed(2) || displayPrice.toFixed(2)}
+                            <div className="text-xs text-[#848E9C]">
+                              {order.duration}s
                             </div>
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <div className="text-sm font-medium text-[#EAECEF]">
-                            ${order.amount}
-                          </div>
-                          <div className="text-xs text-[#848E9C]">
-                            {order.duration}s
-                          </div>
+                        {/* Action Buttons */}
+                        <div className="flex justify-end pt-3 border-t border-[#3A3F4A]">
+                          <button 
+                            onClick={async () => {
+                              try {
+                                const { supabase } = await import('@/lib/supabase');
+                                await supabase
+                                  .from('trades')
+                                  .update({ status: 'CANCELLED' })
+                                  .eq('id', order.id);
+                                setScheduledOrders(prev => prev.filter(o => o.id !== order.id));
+                                toast.success('Scheduled order cancelled');
+                              } catch (error) {
+                                console.error('Error cancelling order:', error);
+                                toast.error('Failed to cancel order');
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-[#F6465D]/20 text-[#F6465D] hover:bg-[#F6465D]/30 transition-colors text-xs font-medium"
+                          >
+                            Cancel Order
+                          </button>
                         </div>
                       </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex justify-end pt-3 border-t border-[#3A3F4A]">
-                        <button 
-                          onClick={() => {
-                            setScheduledOrders(prev => prev.filter(o => o.id !== order.id));
-                            toast.success('Scheduled order cancelled');
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-[#F6465D]/20 text-[#F6465D] hover:bg-[#F6465D]/30 transition-colors text-xs font-medium"
-                        >
-                          Cancel Order
-                        </button>
-                      </div>
+                    ))
+                  ) : (
+                    <div className="text-[#848E9C] text-sm text-center py-8">
+                      No scheduled orders
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
               
-              {activeBottomTab === 'completed' && completedOrders.length > 0 && (
+              {activeBottomTab === 'completed' && (
                 <div className="px-4 py-4 space-y-3">
-                  <h3 className="text-[#EAECEF] font-medium mb-3">Completed Options</h3>
-                  {completedOrders.map((order, index) => (
-                    <CompletedOrderCard key={order.id} order={order} />
-                  ))}
+                  <h3 className="text-[#EAECEF] font-medium mb-3">
+                    {activeTab === 'option' ? 'Completed Options' : 
+                     activeTab === 'future' ? 'Completed Futures' : 'Completed Spot'}
+                  </h3>
+                  {completedOrders.length > 0 ? (
+                    completedOrders.map((order) => (
+                      <CompletedOrderCard key={order.id} order={order} />
+                    ))
+                  ) : (
+                    <div className="text-[#848E9C] text-sm text-center py-8">
+                      No completed orders yet
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -2500,11 +2790,11 @@ export default function UnifiedTradingPage() {
                 <div className="px-4 py-4 space-y-3">
                   <h3 className="text-[#EAECEF] font-medium mb-3">Open Positions</h3>
                   {futuresPositions.length > 0 ? (
-                    futuresPositions.map((position, index) => (
+                    futuresPositions.map((position) => (
                       <div key={position.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
                         <div className="flex justify-between items-center mb-3">
                           <div className="flex items-center space-x-2">
-                            <span className="text-xs text-[#848E9C] font-mono">#{position.id}</span>
+                            <span className="text-xs text-[#848E9C] font-mono">#{position.id.slice(0,8)}</span>
                             <div className="flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-[#0ECB81]/20 text-[#0ECB81] border border-[#0ECB81]/30">
                               <div className="w-2 h-2 bg-[#0ECB81] rounded-full animate-pulse" />
                               {position.status}
@@ -2560,7 +2850,7 @@ export default function UnifiedTradingPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-[#848E9C] text-sm text-center py-4">No open positions</div>
+                    <div className="text-[#848E9C] text-sm text-center py-8">No open positions</div>
                   )}
                 </div>
               )}
@@ -2569,10 +2859,10 @@ export default function UnifiedTradingPage() {
                 <div className="px-4 py-4 space-y-3">
                   <h3 className="text-[#EAECEF] font-medium mb-3">Open Orders</h3>
                   {futuresOrders.length > 0 ? (
-                    futuresOrders.map((order, index) => (
+                    futuresOrders.map((order) => (
                       <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
                         <div className="flex justify-between items-center mb-2">
-                          <span className="text-xs text-[#848E9C] font-mono">#{order.id}</span>
+                          <span className="text-xs text-[#848E9C] font-mono">#{order.id.slice(0,8)}</span>
                           <span className={`text-xs px-2 py-1 rounded ${
                             order.status === 'filled' ? 'bg-[#0ECB81]/20 text-[#0ECB81]' : 'bg-[#F0B90B]/20 text-[#F0B90B]'
                           }`}>
@@ -2592,7 +2882,7 @@ export default function UnifiedTradingPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-[#848E9C] text-sm text-center py-4">No open orders</div>
+                    <div className="text-[#848E9C] text-sm text-center py-8">No open orders</div>
                   )}
                 </div>
               )}
@@ -2600,7 +2890,44 @@ export default function UnifiedTradingPage() {
               {activeBottomTab === 'closed' && (
                 <div className="px-4 py-4 space-y-3">
                   <h3 className="text-[#EAECEF] font-medium mb-3">Closed Orders</h3>
-                  <div className="text-[#848E9C] text-sm text-center py-4">No closed orders</div>
+                  {completedOrders.length > 0 ? (
+                    completedOrders.map((order) => (
+                      <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-xs text-[#848E9C] font-mono">#{order.id.slice(0,8)}</span>
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            order.result === 'win' 
+                              ? 'bg-[#0ECB81]/20 text-[#0ECB81] border border-[#0ECB81]/30'
+                              : 'bg-[#F6465D]/20 text-[#F6465D] border border-[#F6465D]/30'
+                          }`}>
+                            {order.result || 'loss'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <div className="text-sm text-[#848E9C]">Pair</div>
+                            <div className="text-sm font-medium text-[#EAECEF]">{order.symbol}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm text-[#848E9C]">Amount</div>
+                            <div className="text-sm font-medium text-[#EAECEF]">${order.amount}</div>
+                          </div>
+                        </div>
+                        {order.pnl !== undefined && (
+                          <div className="flex justify-between items-center pt-3 border-t border-[#3A3F4A]">
+                            <span className="text-sm text-[#848E9C]">PnL</span>
+                            <span className={`text-sm font-medium ${
+                              order.pnl >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'
+                            }`}>
+                              {order.pnl >= 0 ? '+' : ''}{order.pnl.toFixed(2)} USDT
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-[#848E9C] text-sm text-center py-8">No closed orders</div>
+                  )}
                 </div>
               )}
             </>
@@ -2611,10 +2938,10 @@ export default function UnifiedTradingPage() {
                 <div className="px-4 py-4 space-y-3">
                   <h3 className="text-[#EAECEF] font-medium mb-3">Open Orders</h3>
                   {spotOrders.length > 0 ? (
-                    spotOrders.map((order, index) => (
+                    spotOrders.map((order) => (
                       <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
                         <div className="flex justify-between items-center mb-2">
-                          <span className="text-xs text-[#848E9C] font-mono">#{order.id}</span>
+                          <span className="text-xs text-[#848E9C] font-mono">#{order.id.slice(0,8)}</span>
                           <span className={`text-xs px-2 py-1 rounded ${
                             order.status === 'filled' ? 'bg-[#0ECB81]/20 text-[#0ECB81]' : 'bg-[#F0B90B]/20 text-[#F0B90B]'
                           }`}>
@@ -2634,7 +2961,7 @@ export default function UnifiedTradingPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-[#848E9C] text-sm text-center py-4">No open orders</div>
+                    <div className="text-[#848E9C] text-sm text-center py-8">No open orders</div>
                   )}
                 </div>
               )}
@@ -2643,10 +2970,10 @@ export default function UnifiedTradingPage() {
                 <div className="px-4 py-4 space-y-3">
                   <h3 className="text-[#EAECEF] font-medium mb-3">Completed Orders</h3>
                   {completedOrders.length > 0 ? (
-                    completedOrders.map((order, index) => (
+                    completedOrders.map((order) => (
                       <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
                         <div className="flex justify-between items-center mb-2">
-                          <span className="text-xs text-[#848E9C] font-mono">#{order.id}</span>
+                          <span className="text-xs text-[#848E9C] font-mono">#{order.id.slice(0,8)}</span>
                           <span className="text-xs px-2 py-1 rounded bg-[#0ECB81]/20 text-[#0ECB81]">
                             completed
                           </span>
@@ -2666,28 +2993,95 @@ export default function UnifiedTradingPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-[#848E9C] text-sm text-center py-4">No completed orders</div>
+                    <div className="text-[#848E9C] text-sm text-center py-8">No completed orders</div>
                   )}
+                </div>
+              )}
+
+              {activeBottomTab === 'assets' && (
+                <div className="px-4 py-4 space-y-3">
+                  <h3 className="text-[#EAECEF] font-medium mb-3">Your Assets</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center p-3 bg-[#2B3139] rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-[#F0B90B]/20 rounded-full flex items-center justify-center">
+                          <span className="text-[#F0B90B] font-bold">$</span>
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-[#EAECEF]">USDT</div>
+                          <div className="text-xs text-[#848E9C]">Tether</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-medium text-[#EAECEF]">
+                          {hideBalances ? '••••' : getTradingBalance('USDT').toFixed(2)}
+                        </div>
+                        <div className="text-xs text-[#848E9C]">
+                          ≈ ${hideBalances ? '••••' : getTradingBalance('USDT').toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center p-3 bg-[#2B3139] rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-[#F0B90B]/20 rounded-full flex items-center justify-center">
+                          <span className="text-[#F0B90B] font-bold">₿</span>
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-[#EAECEF]">BTC</div>
+                          <div className="text-xs text-[#848E9C]">Bitcoin</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-medium text-[#EAECEF]">
+                          {hideBalances ? '••••' : '0.00000000'}
+                        </div>
+                        <div className="text-xs text-[#848E9C]">
+                          ≈ $0.00
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center p-3 bg-[#2B3139] rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-[#F0B90B]/20 rounded-full flex items-center justify-center">
+                          <span className="text-[#F0B90B] font-bold">Ξ</span>
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-[#EAECEF]">ETH</div>
+                          <div className="text-xs text-[#848E9C]">Ethereum</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-medium text-[#EAECEF]">
+                          {hideBalances ? '••••' : '0.00000000'}
+                        </div>
+                        <div className="text-xs text-[#848E9C]">
+                          ≈ $0.00
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </>
           )}
         </div>
 
-        {/* Chart Link */}
-        <div className="py-3 text-center border-t border-[#2B3139]">
-          <button 
-            onClick={() => navigate(`/trading/${symbol}/chart`)}
-            className="text-[#F0B90B] text-sm flex items-center justify-center space-x-2 hover:text-[#F0B90B]/80 transition-colors"
-          >
-            <BarChart3 className="h-4 w-4" />
-            <span>{selectedPair.baseAsset} Chart</span>
-          </button>
-        </div>
-
-        {/* Kryvex Footer */}
-        <div className="py-2 text-center text-xs text-[#848E9C]">
-          kryvex.com
+        {/* Footer - Fixed */}
+        <div className="flex-shrink-0">
+          <div className="py-3 text-center border-t border-[#2B3139]">
+            <button 
+              onClick={() => navigate(`/trading/${symbol}/chart`)}
+              className="text-[#F0B90B] text-sm flex items-center justify-center space-x-2 hover:text-[#F0B90B]/80 transition-colors"
+            >
+              <BarChart3 className="h-4 w-4" />
+              <span>{selectedPair.baseAsset} Chart</span>
+            </button>
+          </div>
+          <div className="py-2 text-center text-xs text-[#848E9C]">
+            kryvex.com
+          </div>
         </div>
       </div>
 

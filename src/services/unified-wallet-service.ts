@@ -78,7 +78,241 @@ class UnifiedWalletService {
     });
     keysToDelete.forEach(key => this.balanceCache.delete(key));
   }
-  // ==================== GET BALANCES (FROM WALLET_BALANCES) ====================
+  /**
+   * Get current trading balance for a user
+   */
+  async getTradingBalance(userId: string, asset: string = 'USDT'): Promise<number> {
+    try {
+      const { data, error } = await supabase
+        .from('wallet_balances')
+        .select('trading_balance')
+        .eq('user_id', userId)
+        .eq('asset', asset)
+        .single();
+
+      if (error) throw error;
+      return data?.trading_balance || 0;
+    } catch (error) {
+      console.error('Error getting trading balance:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Deduct balance from trading wallet
+   */
+  async deductBalance(
+    userId: string,
+    asset: string,
+    amount: number,
+    reference: string,
+    metadata?: any
+  ): Promise<BalanceResult> {
+    try {
+      console.log('💳 deductBalance called:', { userId, asset, amount, reference });
+      
+      // Start a transaction
+      const { data: wallet, error: fetchError } = await supabase
+        .from('wallet_balances')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('asset', asset)
+        .single();
+
+      if (fetchError) {
+        console.error('❌ Error fetching wallet:', fetchError);
+        return { success: false, error: 'Wallet not found' };
+      }
+
+      console.log('💰 Current wallet balance:', wallet.trading_balance);
+      
+      if (wallet.trading_balance < amount) {
+        console.error('❌ Insufficient balance:', { have: wallet.trading_balance, need: amount });
+        return { success: false, error: 'Insufficient balance' };
+      }
+
+      const newBalance = wallet.trading_balance - amount;
+      console.log('💸 New balance after deduction:', newBalance);
+
+      // Update wallet balance
+      const { error: updateError } = await supabase
+        .from('wallet_balances')
+        .update({
+          trading_balance: newBalance,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .eq('asset', asset);
+
+      if (updateError) {
+        console.error('Error updating wallet:', updateError);
+        return { success: false, error: updateError.message };
+      }
+
+      // Record transaction
+      const { error: txError } = await supabase
+        .from('wallet_transactions')
+        .insert({
+          user_id: userId,
+          asset,
+          type: 'deduction',
+          amount: -amount,
+          balance_after: newBalance,
+          reference,
+          metadata,
+          created_at: new Date().toISOString()
+        });
+
+      if (txError) {
+        console.error('Error recording transaction:', txError);
+        // Non-critical, continue
+      }
+
+      return { success: true, newBalance };
+    } catch (error) {
+      console.error('Error deducting balance:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
+   * Add balance to trading wallet
+   */
+  async addBalance(
+    userId: string,
+    asset: string,
+    amount: number,
+    reference: string,
+    metadata?: any
+  ): Promise<BalanceResult> {
+    try {
+      const { data: wallet, error: fetchError } = await supabase
+        .from('wallet_balances')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('asset', asset)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching wallet:', fetchError);
+        return { success: false, error: 'Wallet not found' };
+      }
+
+      const newBalance = wallet.trading_balance + amount;
+
+      // Update wallet balance
+      const { error: updateError } = await supabase
+        .from('wallet_balances')
+        .update({
+          trading_balance: newBalance,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .eq('asset', asset);
+
+      if (updateError) {
+        console.error('Error updating wallet:', updateError);
+        return { success: false, error: updateError.message };
+      }
+
+      // Record transaction
+      const { error: txError } = await supabase
+        .from('wallet_transactions')
+        .insert({
+          user_id: userId,
+          asset,
+          type: 'addition',
+          amount,
+          balance_after: newBalance,
+          reference,
+          metadata,
+          created_at: new Date().toISOString()
+        });
+
+      if (txError) {
+        console.error('Error recording transaction:', txError);
+      }
+
+      return { success: true, newBalance };
+    } catch (error) {
+      console.error('Error adding balance:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
+   * Transfer between funding and trading wallets
+   */
+  async transferBalance(
+    userId: string,
+    asset: string,
+    amount: number,
+    from: 'funding' | 'trading',
+    to: 'funding' | 'trading',
+    reference: string
+  ): Promise<BalanceResult> {
+    try {
+      const { data: wallet, error: fetchError } = await supabase
+        .from('wallet_balances')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('asset', asset)
+        .single();
+
+      if (fetchError) {
+        return { success: false, error: 'Wallet not found' };
+      }
+
+      // Check if source has enough balance
+      if (from === 'trading' && wallet.trading_balance < amount) {
+        return { success: false, error: 'Insufficient trading balance' };
+      }
+      if (from === 'funding' && wallet.funding_balance < amount) {
+        return { success: false, error: 'Insufficient funding balance' };
+      }
+
+      const updates: any = {};
+      if (from === 'trading') {
+        updates.trading_balance = wallet.trading_balance - amount;
+        updates.funding_balance = wallet.funding_balance + amount;
+      } else {
+        updates.funding_balance = wallet.funding_balance - amount;
+        updates.trading_balance = wallet.trading_balance + amount;
+      }
+
+      updates.updated_at = new Date().toISOString();
+
+      const { error: updateError } = await supabase
+        .from('wallet_balances')
+        .update(updates)
+        .eq('user_id', userId)
+        .eq('asset', asset);
+
+      if (updateError) {
+        console.error('Error transferring balance:', updateError);
+        return { success: false, error: updateError.message };
+      }
+
+      // Record transaction
+      await supabase
+        .from('wallet_transactions')
+        .insert({
+          user_id: userId,
+          asset,
+          type: 'transfer',
+          amount: from === 'trading' ? -amount : amount,
+          balance_after: from === 'trading' ? updates.trading_balance : updates.funding_balance,
+          reference,
+          metadata: { from, to },
+          created_at: new Date().toISOString()
+        });
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error transferring balance:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
 
   async getUserBalances(userId: string): Promise<Record<string, WalletBalance>> {
     try {
@@ -247,109 +481,6 @@ class UnifiedWalletService {
   }
 
   // ==================== BALANCE OPERATIONS (UPDATE BOTH TABLES) ====================
-
-  async addBalance(operation: BalanceOperation): Promise<BalanceResult> {
-    const transactionId = uuidv4();
-
-    try {
-      // Get current balance
-      const currentAvailable = await this.getBalance(operation.userId, operation.asset);
-      const currentLocked = await this.getLockedBalance(operation.userId, operation.asset);
-      const newAvailable = currentAvailable + operation.amount;
-
-      // Update wallet_balances
-      const { error: updateError } = await supabase
-        .from('wallet_balances')
-        .upsert({
-          user_id: operation.userId,
-          asset: operation.asset,
-          available: newAvailable,
-          locked: currentLocked,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id, asset' });
-
-      if (updateError) throw updateError;
-
-      // Also update wallets table for backward compatibility
-      await supabase
-        .from('wallets')
-        .update({
-          balance: newAvailable,
-          locked_balance: currentLocked,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', operation.userId)
-        .eq('currency', operation.asset);
-
-      return {
-        success: true,
-        newAvailable,
-        newLocked: currentLocked,
-        transactionId
-      };
-    } catch (error) {
-      console.error('Error adding balance:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
-  }
-
-  async deductBalance(operation: BalanceOperation): Promise<BalanceResult> {
-    const transactionId = uuidv4();
-
-    try {
-      // Invalidate cache for this user
-      this.invalidateCache(operation.userId);
-
-      // Get current balance
-      const currentAvailable = await this.getBalance(operation.userId, operation.asset);
-      
-      if (currentAvailable < operation.amount) {
-        throw new Error(`Insufficient balance: have ${currentAvailable}, need ${operation.amount}`);
-      }
-
-      const currentLocked = await this.getLockedBalance(operation.userId, operation.asset);
-      const newAvailable = currentAvailable - operation.amount;
-
-      // Update wallet_balances
-      const { error: updateError } = await supabase
-        .from('wallet_balances')
-        .upsert({
-          user_id: operation.userId,
-          asset: operation.asset,
-          available: newAvailable,
-          locked: currentLocked,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id, asset' });
-
-      if (updateError) throw updateError;
-
-      // Update wallets table
-      await supabase
-        .from('wallets')
-        .update({
-          balance: newAvailable,
-          locked_balance: currentLocked,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', operation.userId)
-        .eq('currency', operation.asset);
-
-      return {
-        success: true,
-        newAvailable,
-        newLocked: currentLocked
-      };
-    } catch (error) {
-      console.error('Error deducting balance:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
-  }
 
   async lockBalance(operation: BalanceOperation): Promise<BalanceResult> {
     const lockId = uuidv4();

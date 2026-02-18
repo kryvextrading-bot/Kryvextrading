@@ -18,7 +18,7 @@ class TradingControlService {
    */
   async checkTradeOutcome(userId, tradeType) {
     try {
-      const { data, error } = await this.supabase.rpc('check_user_trade_outcome', {
+      const { data, error } = await this.supabase.rpc('check_trade_outcome', {
         p_user_id: userId,
         p_trade_type: tradeType
       });
@@ -446,4 +446,4 @@ class TradingControlService {
   }
 }
 
-module.exports = TradingControlService;
+export default TradingControlService;

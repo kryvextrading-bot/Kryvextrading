@@ -152,10 +152,18 @@ app.post('/api/test-post', (req, res) => {
   res.json({ message: 'POST is working', body: req.body });
 });
 
+// Import routes
+import tradingRoutes from './backend/routes/tradingRoutes.js';
+import tradingControlRoutes from './backend/routes/admin/tradingControlRoutes.js';
+
 // Routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Swan IRA API is running' });
 });
+
+// Mount trading routes
+app.use('/api/trading', tradingRoutes);
+app.use('/api/admin/trading-control', tradingControlRoutes);
 
 // User routes
 app.get('/api/users', (req, res) => {

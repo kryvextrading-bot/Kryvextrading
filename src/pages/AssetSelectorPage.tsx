@@ -36,7 +36,7 @@ import {
 // TYPES
 // ============================================
 
-type CategoryType = 'futures' | 'usstock' | 'forex' | 'crypto' | 'etf';
+type CategoryType = 'crypto' | 'usstock' | 'forex' | 'etf';
 type FilterType = 'favourites' | 'all' | 'hot' | 'gainer' | 'loser';
 
 interface TradingPair {
@@ -86,11 +86,10 @@ const BINANCE = {
 };
 
 const CATEGORIES = [
-  { id: 'futures', label: 'Futures', icon: TrendingUp, color: BINANCE.yellow },
-  { id: 'usstock', label: 'USStock', icon: BarChart3, color: BINANCE.blue },
-  { id: 'forex', label: 'Forex', icon: TrendingDown, color: BINANCE.purple },
   { id: 'crypto', label: 'Crypto', icon: Sparkles, color: BINANCE.orange },
-  { id: 'etf', label: 'ETF', icon: Filter, color: BINANCE.green },
+  { id: 'usstock', label: 'Stocks', icon: BarChart3, color: BINANCE.blue },
+  { id: 'forex', label: 'Forex', icon: TrendingDown, color: BINANCE.purple },
+  { id: 'etf', label: 'ETFs', icon: Filter, color: BINANCE.green },
 ];
 
 const FILTERS = [
@@ -101,55 +100,150 @@ const FILTERS = [
   { id: 'loser', label: 'Loser', icon: TrendingDown, color: BINANCE.red },
 ];
 
-// Complete asset database
+// Complete asset database - All 54 trading pairs from database
 const ALL_ASSETS: TradingPair[] = [
-  // Futures
-  { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', name: 'Bitcoin', category: 'futures', price: 66743.75, change: -1.06, changePercent: -1.06, volume: 560000, volumeDisplay: '0.56M', hot: true, leverage: 86, marketCap: 1350000000000 },
-  { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', name: 'Ethereum', category: 'futures', price: 3504.15, change: -1.60, changePercent: -1.60, volume: 450000, volumeDisplay: '0.45M', leverage: 37, marketCap: 420000000000 },
-  { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', name: 'Binance Coin', category: 'futures', price: 706.47, change: 0.30, changePercent: 0.30, volume: 630000, volumeDisplay: '0.63M', leverage: 88, marketCap: 85000000000 },
-  { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', name: 'Solana', category: 'futures', price: 151.44, change: 1.77, changePercent: 1.77, volume: 720000, volumeDisplay: '0.72M', leverage: 40, marketCap: 65000000000 },
-  { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', name: 'Cardano', category: 'futures', price: 0.60, change: -2.07, changePercent: -2.07, volume: 720000, volumeDisplay: '0.72M', leverage: 32, marketCap: 21000000000 },
-  { symbol: 'XRPUSDT', baseAsset: 'XRP', quoteAsset: 'USDT', name: 'Ripple', category: 'futures', price: 0.60, change: 1.83, changePercent: 1.83, volume: 840000, volumeDisplay: '0.84M', leverage: 30, marketCap: 32000000000 },
-  { symbol: 'DOTUSDT', baseAsset: 'DOT', quoteAsset: 'USDT', name: 'Polkadot', category: 'futures', price: 7.96, change: -2.25, changePercent: -2.25, volume: 230000, volumeDisplay: '0.23M', leverage: 23, marketCap: 11000000000 },
-  
-  // US Stocks
-  { symbol: 'AAPL', baseAsset: 'AAPL', quoteAsset: 'USD', name: 'Apple Inc.', category: 'usstock', price: 176.25, change: 1.80, changePercent: 1.80, volume: 6660000, volumeDisplay: '6.66M', marketCap: 2850000000000 },
-  { symbol: 'MSFT', baseAsset: 'MSFT', quoteAsset: 'USD', name: 'Microsoft', category: 'usstock', price: 345.09, change: -1.81, changePercent: -1.81, volume: 44540000, volumeDisplay: '44.54M', marketCap: 2750000000000 },
-  { symbol: 'GOOGL', baseAsset: 'GOOGL', quoteAsset: 'USD', name: 'Google', category: 'usstock', price: 158.16, change: -1.29, changePercent: -1.29, volume: 29890000, volumeDisplay: '29.89M', marketCap: 1750000000000 },
-  { symbol: 'AMZN', baseAsset: 'AMZN', quoteAsset: 'USD', name: 'Amazon', category: 'usstock', price: 168.07, change: -2.10, changePercent: -2.10, volume: 42880000, volumeDisplay: '42.88M', marketCap: 1650000000000 },
-  { symbol: 'TSLA', baseAsset: 'TSLA', quoteAsset: 'USD', name: 'Tesla', category: 'usstock', price: 297.02, change: -1.69, changePercent: -1.69, volume: 48910000, volumeDisplay: '48.91M', marketCap: 550000000000 },
-  { symbol: 'NVDA', baseAsset: 'NVDA', quoteAsset: 'USD', name: 'NVIDIA', category: 'usstock', price: 430.64, change: 1.33, changePercent: 1.33, volume: 24620000, volumeDisplay: '24.62M', marketCap: 1150000000000 },
-  { symbol: 'META', baseAsset: 'META', quoteAsset: 'USD', name: 'Meta', category: 'usstock', price: 278.39, change: 3.26, changePercent: 3.26, volume: 10330000, volumeDisplay: '10.33M', marketCap: 890000000000 },
-  { symbol: 'NFLX', baseAsset: 'NFLX', quoteAsset: 'USD', name: 'Netflix', category: 'usstock', price: 407.33, change: 1.54, changePercent: 1.54, volume: 27700000, volumeDisplay: '27.70M', marketCap: 180000000000 },
-  
-  // Forex
-  { symbol: 'EURUSD', baseAsset: 'EUR', quoteAsset: 'USD', name: 'Euro/US Dollar', category: 'forex', price: 1.1032, change: 0.42, changePercent: 0.42, volume: 78320000, volumeDisplay: '78.32M' },
-  { symbol: 'USDJPY', baseAsset: 'USD', quoteAsset: 'JPY', name: 'US Dollar/Japanese Yen', category: 'forex', price: 154.53, change: 0.20, changePercent: 0.20, volume: 30010000, volumeDisplay: '30.01M' },
-  { symbol: 'GBPUSD', baseAsset: 'GBP', quoteAsset: 'USD', name: 'British Pound/US Dollar', category: 'forex', price: 1.2815, change: 0.95, changePercent: 0.95, volume: 42820000, volumeDisplay: '42.82M' },
-  { symbol: 'USDCHF', baseAsset: 'USD', quoteAsset: 'CHF', name: 'US Dollar/Swiss Franc', category: 'forex', price: 0.8842, change: -0.22, changePercent: -0.22, volume: 6650000, volumeDisplay: '6.65M' },
-  { symbol: 'AUDUSD', baseAsset: 'AUD', quoteAsset: 'USD', name: 'Australian Dollar/US Dollar', category: 'forex', price: 0.6725, change: 0.56, changePercent: 0.56, volume: 76750000, volumeDisplay: '76.75M' },
-  { symbol: 'USDCAD', baseAsset: 'USD', quoteAsset: 'CAD', name: 'US Dollar/Canadian Dollar', category: 'forex', price: 1.3715, change: -0.63, changePercent: -0.63, volume: 82190000, volumeDisplay: '82.19M' },
-  { symbol: 'USDCNH', baseAsset: 'USD', quoteAsset: 'CNH', name: 'US Dollar/Chinese Yuan', category: 'forex', price: 7.1045, change: 0.28, changePercent: 0.28, volume: 13970000, volumeDisplay: '13.97M' },
-  { symbol: 'USDHKD', baseAsset: 'USD', quoteAsset: 'HKD', name: 'US Dollar/Hong Kong Dollar', category: 'forex', price: 7.8620, change: 0.96, changePercent: 0.96, volume: 94350000, volumeDisplay: '94.35M' },
-  
-  // Crypto
-  { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', name: 'Bitcoin', category: 'crypto', price: 67668.18, change: -2.48, changePercent: -2.48, volume: 580000, volumeDisplay: '0.58M', marketCap: 1350000000000 },
+  // Major Cryptocurrencies
+  { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', name: 'Bitcoin', category: 'crypto', price: 67668.18, change: -2.48, changePercent: -2.48, volume: 580000, volumeDisplay: '0.58M', hot: true, marketCap: 1350000000000 },
   { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', name: 'Ethereum', category: 'crypto', price: 3492.89, change: -1.83, changePercent: -1.83, volume: 840000, volumeDisplay: '0.84M', marketCap: 420000000000 },
   { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', name: 'Binance Coin', category: 'crypto', price: 943.60, change: -2.14, changePercent: -2.14, volume: 630000, volumeDisplay: '0.63M', marketCap: 85000000000 },
-  { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', name: 'Solana', category: 'crypto', price: 856.88, change: -0.70, changePercent: -0.70, volume: 310000, volumeDisplay: '0.31M', marketCap: 65000000000 },
-  { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', name: 'Cardano', category: 'crypto', price: 757.05, change: 2.84, changePercent: 2.84, volume: 60000, volumeDisplay: '0.06M', marketCap: 21000000000 },
-  { symbol: 'XRPUSDT', baseAsset: 'XRP', quoteAsset: 'USDT', name: 'Ripple', category: 'crypto', price: 99.42, change: -0.71, changePercent: -0.71, volume: 440000, volumeDisplay: '0.44M', marketCap: 32000000000 },
-  { symbol: 'DOTUSDT', baseAsset: 'DOT', quoteAsset: 'USDT', name: 'Polkadot', category: 'crypto', price: 537.53, change: 1.17, changePercent: 1.17, volume: 710000, volumeDisplay: '0.71M', marketCap: 11000000000 },
-  
+  { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', name: 'Cardano', category: 'crypto', price: 0.60, change: -2.07, changePercent: -2.07, volume: 720000, volumeDisplay: '0.72M', marketCap: 21000000000 },
+  { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', name: 'Solana', category: 'crypto', price: 151.44, change: 1.77, changePercent: 1.77, volume: 720000, volumeDisplay: '0.72M', marketCap: 65000000000 },
+  { symbol: 'XRPUSDT', baseAsset: 'XRP', quoteAsset: 'USDT', name: 'Ripple', category: 'crypto', price: 0.60, change: 1.83, changePercent: 1.83, volume: 840000, volumeDisplay: '0.84M', marketCap: 32000000000 },
+  { symbol: 'DOGEUSDT', baseAsset: 'DOGE', quoteAsset: 'USDT', name: 'Dogecoin', category: 'crypto', price: 0.08, change: -0.50, changePercent: -0.50, volume: 1200000, volumeDisplay: '1.20M', marketCap: 11000000000 },
+  { symbol: 'DOTUSDT', baseAsset: 'DOT', quoteAsset: 'USDT', name: 'Polkadot', category: 'crypto', price: 7.96, change: -2.25, changePercent: -2.25, volume: 230000, volumeDisplay: '0.23M', marketCap: 11000000000 },
+  { symbol: 'LINKUSDT', baseAsset: 'LINK', quoteAsset: 'USDT', name: 'Chainlink', category: 'crypto', price: 14.25, change: 1.20, changePercent: 1.20, volume: 450000, volumeDisplay: '0.45M', marketCap: 7500000000 },
+  { symbol: 'MATICUSDT', baseAsset: 'MATIC', quoteAsset: 'USDT', name: 'Polygon', category: 'crypto', price: 0.85, change: -1.15, changePercent: -1.15, volume: 580000, volumeDisplay: '0.58M', marketCap: 8000000000 },
+
+  // DeFi Tokens
+  { symbol: 'UNIUSDT', baseAsset: 'UNI', quoteAsset: 'USDT', name: 'Uniswap', category: 'crypto', price: 6.85, change: 2.10, changePercent: 2.10, volume: 320000, volumeDisplay: '0.32M', marketCap: 4000000000 },
+  { symbol: 'AAVEUSDT', baseAsset: 'AAVE', quoteAsset: 'USDT', name: 'Aave', category: 'crypto', price: 95.40, change: -1.80, changePercent: -1.80, volume: 180000, volumeDisplay: '0.18M', marketCap: 1400000000 },
+  { symbol: 'COMPUSDT', baseAsset: 'COMP', quoteAsset: 'USDT', name: 'Compound', category: 'crypto', price: 48.25, change: 0.90, changePercent: 0.90, volume: 95000, volumeDisplay: '0.095M', marketCap: 250000000 },
+  { symbol: 'MKRUSDT', baseAsset: 'MKR', quoteAsset: 'USDT', name: 'Maker', category: 'crypto', price: 1250.75, change: -2.30, changePercent: -2.30, volume: 45000, volumeDisplay: '0.045M', marketCap: 1200000000 },
+  { symbol: 'SUSHIUSDT', baseAsset: 'SUSHI', quoteAsset: 'USDT', name: 'SushiSwap', category: 'crypto', price: 1.25, change: -0.80, changePercent: -0.80, volume: 280000, volumeDisplay: '0.28M', marketCap: 500000000 },
+
+  // Layer 2 Tokens
+  { symbol: 'ARBUSDT', baseAsset: 'ARB', quoteAsset: 'USDT', name: 'Arbitrum', category: 'crypto', price: 0.95, change: 1.50, changePercent: 1.50, volume: 420000, volumeDisplay: '0.42M', marketCap: 3000000000 },
+  { symbol: 'OPUSDT', baseAsset: 'OP', quoteAsset: 'USDT', name: 'Optimism', category: 'crypto', price: 2.35, change: -1.20, changePercent: -1.20, volume: 380000, volumeDisplay: '0.38M', marketCap: 2500000000 },
+  { symbol: 'LDOUSDT', baseAsset: 'LDO', quoteAsset: 'USDT', name: 'Lido DAO', category: 'crypto', price: 2.15, change: 0.85, changePercent: 0.85, volume: 290000, volumeDisplay: '0.29M', marketCap: 1100000000 },
+
+  // Meme Coins
+  { symbol: 'SHIBUSDT', baseAsset: 'SHIB', quoteAsset: 'USDT', name: 'Shiba Inu', category: 'crypto', price: 0.000025, change: -3.20, changePercent: -3.20, volume: 850000, volumeDisplay: '0.85M', marketCap: 15000000000 },
+  { symbol: 'PEPEUSDT', baseAsset: 'PEPE', quoteAsset: 'USDT', name: 'Pepe', category: 'crypto', price: 0.0000012, change: 5.50, changePercent: 5.50, volume: 1200000, volumeDisplay: '1.20M', marketCap: 5000000000 },
+  { symbol: 'FLOKIUSDT', baseAsset: 'FLOKI', quoteAsset: 'USDT', name: 'Floki Inu', category: 'crypto', price: 0.00015, change: -2.80, changePercent: -2.80, volume: 650000, volumeDisplay: '0.65M', marketCap: 150000000 },
+
+  // Stablecoins
+  { symbol: 'USDCUSDT', baseAsset: 'USDC', quoteAsset: 'USDT', name: 'USD Coin', category: 'crypto', price: 1.00, change: 0.01, changePercent: 0.01, volume: 2500000, volumeDisplay: '2.50M', marketCap: 25000000000 },
+  { symbol: 'BUSDUSDT', baseAsset: 'BUSD', quoteAsset: 'USDT', name: 'Binance USD', category: 'crypto', price: 1.00, change: 0.00, changePercent: 0.00, volume: 1800000, volumeDisplay: '1.80M', marketCap: 23000000000 },
+  { symbol: 'DAIUSDT', baseAsset: 'DAI', quoteAsset: 'USDT', name: 'Dai', category: 'crypto', price: 1.00, change: 0.00, changePercent: 0.00, volume: 950000, volumeDisplay: '0.95M', marketCap: 5000000000 },
+  { symbol: 'TUSDUSDT', baseAsset: 'TUSD', quoteAsset: 'USDT', name: 'TrueUSD', category: 'crypto', price: 1.00, change: 0.00, changePercent: 0.00, volume: 650000, volumeDisplay: '0.65M', marketCap: 1200000000 },
+
+  // Traditional Markets
+  { symbol: 'XAUUSDT', baseAsset: 'XAU', quoteAsset: 'USDT', name: 'Gold', category: 'forex', price: 2050.50, change: 0.25, changePercent: 0.25, volume: 450000, volumeDisplay: '0.45M' },
+  { symbol: 'EURUSDT', baseAsset: 'EUR', quoteAsset: 'USDT', name: 'Euro', category: 'forex', price: 1.1032, change: 0.42, changePercent: 0.42, volume: 78320000, volumeDisplay: '78.32M' },
+  { symbol: 'GBPUSDT', baseAsset: 'GBP', quoteAsset: 'USDT', name: 'British Pound', category: 'forex', price: 1.2815, change: 0.95, changePercent: 0.95, volume: 42820000, volumeDisplay: '42.82M' },
+  { symbol: 'JPYUSDT', baseAsset: 'JPY', quoteAsset: 'USDT', name: 'Japanese Yen', category: 'forex', price: 154.53, change: 0.20, changePercent: 0.20, volume: 30010000, volumeDisplay: '30.01M' },
+  { symbol: 'CHFUSDT', baseAsset: 'CHF', quoteAsset: 'USDT', name: 'Swiss Franc', category: 'forex', price: 0.8842, change: -0.22, changePercent: -0.22, volume: 6650000, volumeDisplay: '6.65M' },
+  { symbol: 'CADUSDT', baseAsset: 'CAD', quoteAsset: 'USDT', name: 'Canadian Dollar', category: 'forex', price: 0.6725, change: 0.56, changePercent: 0.56, volume: 76750000, volumeDisplay: '76.75M' },
+  { symbol: 'AUDUSDT', baseAsset: 'AUD', quoteAsset: 'USDT', name: 'Australian Dollar', category: 'forex', price: 0.6725, change: 0.56, changePercent: 0.56, volume: 76750000, volumeDisplay: '76.75M' },
+  { symbol: 'CNYUSDT', baseAsset: 'CNY', quoteAsset: 'USDT', name: 'Chinese Yuan', category: 'forex', price: 0.1375, change: 0.28, changePercent: 0.28, volume: 13970000, volumeDisplay: '13.97M' },
+  { symbol: 'HKDUSDT', baseAsset: 'HKD', quoteAsset: 'USDT', name: 'Hong Kong Dollar', category: 'forex', price: 0.1285, change: 0.96, changePercent: 0.96, volume: 94350000, volumeDisplay: '94.35M' },
+  { symbol: 'SGDUSDT', baseAsset: 'SGD', quoteAsset: 'USDT', name: 'Singapore Dollar', category: 'forex', price: 0.7425, change: -0.15, changePercent: -0.15, volume: 8900000, volumeDisplay: '8.90M' },
+  { symbol: 'INRUSDT', baseAsset: 'INR', quoteAsset: 'USDT', name: 'Indian Rupee', category: 'forex', price: 0.0121, change: 0.35, changePercent: 0.35, volume: 4500000, volumeDisplay: '4.50M' },
+
+  // Commodities
+  { symbol: 'OILUSDT', baseAsset: 'OIL', quoteAsset: 'USDT', name: 'Crude Oil', category: 'forex', price: 75.25, change: -1.50, changePercent: -1.50, volume: 850000, volumeDisplay: '0.85M' },
+  { symbol: 'GASUSDT', baseAsset: 'GAS', quoteAsset: 'USDT', name: 'Natural Gas', category: 'forex', price: 2.85, change: 2.10, changePercent: 2.10, volume: 320000, volumeDisplay: '0.32M' },
+  { symbol: 'SILVERUSDT', baseAsset: 'SILVER', quoteAsset: 'USDT', name: 'Silver', category: 'forex', price: 22.50, change: -0.80, changePercent: -0.80, volume: 180000, volumeDisplay: '0.18M' },
+  { symbol: 'COPPERUSDT', baseAsset: 'COPPER', quoteAsset: 'USDT', name: 'Copper', category: 'forex', price: 3.75, change: 1.20, changePercent: 1.20, volume: 290000, volumeDisplay: '0.29M' },
+
+  // Stock Indices
+  { symbol: 'SPXUSDT', baseAsset: 'SPX', quoteAsset: 'USDT', name: 'S&P 500', category: 'usstock', price: 4750.25, change: 0.50, changePercent: 0.50, volume: 1200000, volumeDisplay: '1.20M', marketCap: 45000000000000 },
+  { symbol: 'NDQUSDT', baseAsset: 'NDQ', quoteAsset: 'USDT', name: 'NASDAQ 100', category: 'usstock', price: 15850.75, change: -0.75, changePercent: -0.75, volume: 980000, volumeDisplay: '0.98M', marketCap: 25000000000000 },
+  { symbol: 'DJIAUSDT', baseAsset: 'DJIA', quoteAsset: 'USDT', name: 'Dow Jones', category: 'usstock', price: 38750.50, change: 0.25, changePercent: 0.25, volume: 650000, volumeDisplay: '0.65M', marketCap: 12000000000000 },
+  { symbol: 'FTSEUSDT', baseAsset: 'FTSE', quoteAsset: 'USDT', name: 'FTSE 100', category: 'usstock', price: 7650.25, change: -0.30, changePercent: -0.30, volume: 420000, volumeDisplay: '0.42M', marketCap: 1800000000000 },
+  { symbol: 'DAXUSDT', baseAsset: 'DAX', quoteAsset: 'USDT', name: 'DAX', category: 'usstock', price: 15250.75, change: 0.15, changePercent: 0.15, volume: 380000, volumeDisplay: '0.38M', marketCap: 1400000000000 },
+  { symbol: 'NIKKEIUSDT', baseAsset: 'NIKKEI', quoteAsset: 'USDT', name: 'Nikkei 225', category: 'usstock', price: 32500.50, change: -0.45, changePercent: -0.45, volume: 290000, volumeDisplay: '0.29M', marketCap: 1500000000000 },
+
+  // Tech Stocks
+  { symbol: 'AAPLUSDT', baseAsset: 'AAPL', quoteAsset: 'USDT', name: 'Apple Inc.', category: 'usstock', price: 176.25, change: 1.80, changePercent: 1.80, volume: 6660000, volumeDisplay: '6.66M', marketCap: 2850000000000 },
+  { symbol: 'GOOGLUSDT', baseAsset: 'GOOGL', quoteAsset: 'USDT', name: 'Google', category: 'usstock', price: 158.16, change: -1.29, changePercent: -1.29, volume: 29890000, volumeDisplay: '29.89M', marketCap: 1750000000000 },
+  { symbol: 'MSFTUSDT', baseAsset: 'MSFT', quoteAsset: 'USDT', name: 'Microsoft', category: 'usstock', price: 345.09, change: -1.81, changePercent: -1.81, volume: 44540000, volumeDisplay: '44.54M', marketCap: 2750000000000 },
+  { symbol: 'AMZNUSDT', baseAsset: 'AMZN', quoteAsset: 'USDT', name: 'Amazon', category: 'usstock', price: 168.07, change: -2.10, changePercent: -2.10, volume: 42880000, volumeDisplay: '42.88M', marketCap: 1650000000000 },
+  { symbol: 'TSLAUSDT', baseAsset: 'TSLA', quoteAsset: 'USDT', name: 'Tesla', category: 'usstock', price: 297.02, change: -1.69, changePercent: -1.69, volume: 48910000, volumeDisplay: '48.91M', marketCap: 550000000000 },
+  { symbol: 'METAUSDT', baseAsset: 'META', quoteAsset: 'USDT', name: 'Meta', category: 'usstock', price: 278.39, change: 3.26, changePercent: 3.26, volume: 10330000, volumeDisplay: '10.33M', marketCap: 890000000000 },
+  { symbol: 'NVDAUSDT', baseAsset: 'NVDA', quoteAsset: 'USDT', name: 'NVIDIA', category: 'usstock', price: 430.64, change: 1.33, changePercent: 1.33, volume: 24620000, volumeDisplay: '24.62M', marketCap: 1150000000000 },
+  { symbol: 'NFLXUSDT', baseAsset: 'NFLX', quoteAsset: 'USDT', name: 'Netflix', category: 'usstock', price: 407.33, change: 1.54, changePercent: 1.54, volume: 27700000, volumeDisplay: '27.70M', marketCap: 1800000000000 },
+
+  // Additional Tech Stocks
+  { symbol: 'CRMUSDT', baseAsset: 'CRM', quoteAsset: 'USDT', name: 'Salesforce', category: 'usstock', price: 245.50, change: 2.10, changePercent: 2.10, volume: 8900000, volumeDisplay: '8.90M', marketCap: 250000000000 },
+  { symbol: 'ADBEUSDT', baseAsset: 'ADBE', quoteAsset: 'USDT', name: 'Adobe', category: 'usstock', price: 525.75, change: -0.80, changePercent: -0.80, volume: 3200000, volumeDisplay: '3.20M', marketCap: 240000000000 },
+  { symbol: 'INTCUSDT', baseAsset: 'INTC', quoteAsset: 'USDT', name: 'Intel', category: 'usstock', price: 42.15, change: -1.50, changePercent: -1.50, volume: 45000000, volumeDisplay: '45.00M', marketCap: 190000000000 },
+  { symbol: 'AMDUSDT', baseAsset: 'AMD', quoteAsset: 'USDT', name: 'AMD', category: 'usstock', price: 165.25, change: 3.20, changePercent: 3.20, volume: 56000000, volumeDisplay: '56.00M', marketCap: 270000000000 },
+  { symbol: 'PYPLUSDT', baseAsset: 'PYPL', quoteAsset: 'USDT', name: 'PayPal', category: 'usstock', price: 65.40, change: 1.80, changePercent: 1.80, volume: 12000000, volumeDisplay: '12.00M', marketCap: 75000000000 },
+  { symbol: 'SQUSDT', baseAsset: 'SQ', quoteAsset: 'USDT', name: 'Square', category: 'usstock', price: 75.85, change: -0.90, changePercent: -0.90, volume: 8500000, volumeDisplay: '8.50M', marketCap: 45000000000 },
+  { symbol: 'SHOPUSDT', baseAsset: 'SHOP', quoteAsset: 'USDT', name: 'Shopify', category: 'usstock', price: 85.25, change: 2.50, changePercent: 2.50, volume: 6800000, volumeDisplay: '6.80M', marketCap: 110000000000 },
+  { symbol: 'TWTRUSDT', baseAsset: 'TWTR', quoteAsset: 'USDT', name: 'Twitter', category: 'usstock', price: 52.75, change: 0.50, changePercent: 0.50, volume: 15000000, volumeDisplay: '15.00M', marketCap: 40000000000 },
+  { symbol: 'SNAPUSDT', baseAsset: 'SNAP', quoteAsset: 'USDT', name: 'Snap', category: 'usstock', price: 12.85, change: -2.30, changePercent: -2.30, volume: 25000000, volumeDisplay: '25.00M', marketCap: 21000000000 },
+  { symbol: 'PINSUSDT', baseAsset: 'PINS', quoteAsset: 'USDT', name: 'Pinterest', category: 'usstock', price: 45.50, change: 1.20, changePercent: 1.20, volume: 8500000, volumeDisplay: '8.50M', marketCap: 25000000000 },
+
+  // Financial Stocks
+  { symbol: 'JPMUSDT', baseAsset: 'JPM', quoteAsset: 'USDT', name: 'JP Morgan Chase', category: 'usstock', price: 185.50, change: 0.80, changePercent: 0.80, volume: 12000000, volumeDisplay: '12.00M', marketCap: 550000000000 },
+  { symbol: 'BACUSDT', baseAsset: 'BAC', quoteAsset: 'USDT', name: 'Bank of America', category: 'usstock', price: 35.75, change: -0.50, changePercent: -0.50, volume: 45000000, volumeDisplay: '45.00M', marketCap: 280000000000 },
+  { symbol: 'WFCUSDT', baseAsset: 'WFC', quoteAsset: 'USDT', name: 'Wells Fargo', category: 'usstock', price: 48.25, change: -1.20, changePercent: -1.20, volume: 28000000, volumeDisplay: '28.00M', marketCap: 180000000000 },
+  { symbol: 'GSUSDT', baseAsset: 'GS', quoteAsset: 'USDT', name: 'Goldman Sachs', category: 'usstock', price: 425.50, change: 1.50, changePercent: 1.50, volume: 4500000, volumeDisplay: '4.50M', marketCap: 140000000000 },
+  { symbol: 'MSUSDT', baseAsset: 'MS', quoteAsset: 'USDT', name: 'Morgan Stanley', category: 'usstock', price: 95.75, change: 0.90, changePercent: 0.90, volume: 8500000, volumeDisplay: '8.50M', marketCap: 180000000000 },
+  { symbol: 'CITUSDT', baseAsset: 'CIT', quoteAsset: 'USDT', name: 'Citigroup', category: 'usstock', price: 65.25, change: -0.80, changePercent: -0.80, volume: 12000000, volumeDisplay: '12.00M', marketCap: 130000000000 },
+
+  // Healthcare Stocks
+  { symbol: 'JNJUSDT', baseAsset: 'JNJ', quoteAsset: 'USDT', name: 'Johnson & Johnson', category: 'usstock', price: 165.50, change: 0.50, changePercent: 0.50, volume: 8500000, volumeDisplay: '8.50M', marketCap: 420000000000 },
+  { symbol: 'PFEUSDT', baseAsset: 'PFE', quoteAsset: 'USDT', name: 'Pfizer', category: 'usstock', price: 28.75, change: -1.20, changePercent: -1.20, volume: 35000000, volumeDisplay: '35.00M', marketCap: 160000000000 },
+  { symbol: 'UNHUSDT', baseAsset: 'UNH', quoteAsset: 'USDT', name: 'UnitedHealth', category: 'usstock', price: 525.25, change: 1.20, changePercent: 1.20, volume: 4500000, volumeDisplay: '4.50M', marketCap: 480000000000 },
+  { symbol: 'ABTUSDT', baseAsset: 'ABT', quoteAsset: 'USDT', name: 'Abbott Laboratories', category: 'usstock', price: 105.75, change: -0.30, changePercent: -0.30, volume: 6500000, volumeDisplay: '6.50M', marketCap: 180000000000 },
+
+  // Consumer Stocks
+  { symbol: 'WMTUSDT', baseAsset: 'WMT', quoteAsset: 'USDT', name: 'Walmart', category: 'usstock', price: 165.25, change: 0.80, changePercent: 0.80, volume: 12000000, volumeDisplay: '12.00M', marketCap: 420000000000 },
+  { symbol: 'COSTUSDT', baseAsset: 'COST', quoteAsset: 'USDT', name: 'Costco', category: 'usstock', price: 725.50, change: -0.50, changePercent: -0.50, volume: 2500000, volumeDisplay: '2.50M', marketCap: 320000000000 },
+  { symbol: 'HDUSDT', baseAsset: 'HD', quoteAsset: 'USDT', name: 'Home Depot', category: 'usstock', price: 345.75, change: 1.20, changePercent: 1.20, volume: 6500000, volumeDisplay: '6.50M', marketCap: 350000000000 },
+  { symbol: 'PGUSDT', baseAsset: 'PG', quoteAsset: 'USDT', name: 'Procter & Gamble', category: 'usstock', price: 155.25, change: -0.20, changePercent: -0.20, volume: 8500000, volumeDisplay: '8.50M', marketCap: 380000000000 },
+  { symbol: 'KOUSDT', baseAsset: 'KO', quoteAsset: 'USDT', name: 'Coca-Cola', category: 'usstock', price: 62.50, change: 0.30, changePercent: 0.30, volume: 15000000, volumeDisplay: '15.00M', marketCap: 270000000000 },
+  { symbol: 'DISUSDT', baseAsset: 'DIS', quoteAsset: 'USDT', name: 'Disney', category: 'usstock', price: 95.75, change: -1.50, changePercent: -1.50, volume: 12000000, volumeDisplay: '12.00M', marketCap: 180000000000 },
+
+  // Energy Stocks
+  { symbol: 'XOMUSDT', baseAsset: 'XOM', quoteAsset: 'USDT', name: 'Exxon Mobil', category: 'usstock', price: 105.25, change: 1.80, changePercent: 1.80, volume: 25000000, volumeDisplay: '25.00M', marketCap: 420000000000 },
+  { symbol: 'CVXUSDT', baseAsset: 'CVX', quoteAsset: 'USDT', name: 'Chevron', category: 'usstock', price: 145.75, change: 1.20, changePercent: 1.20, volume: 12000000, volumeDisplay: '12.00M', marketCap: 270000000000 },
+  { symbol: 'COPUSDT', baseAsset: 'COP', quoteAsset: 'USDT', name: 'ConocoPhillips', category: 'usstock', price: 115.50, change: -0.80, changePercent: -0.80, volume: 8500000, volumeDisplay: '8.50M', marketCap: 140000000000 },
+  { symbol: 'BPUSDT', baseAsset: 'BP', quoteAsset: 'USDT', name: 'BP', category: 'usstock', price: 35.75, change: 0.50, changePercent: 0.50, volume: 15000000, volumeDisplay: '15.00M', marketCap: 110000000000 },
+  { symbol: 'SHELUSDT', baseAsset: 'SHEL', quoteAsset: 'USDT', name: 'Shell', category: 'usstock', price: 55.25, change: -0.30, changePercent: -0.30, volume: 12000000, volumeDisplay: '12.00M', marketCap: 220000000000 },
+
+  // Industrial Stocks
+  { symbol: 'GEUSDT', baseAsset: 'GE', quoteAsset: 'USDT', name: 'General Electric', category: 'usstock', price: 165.75, change: 2.10, changePercent: 2.10, volume: 8500000, volumeDisplay: '8.50M', marketCap: 180000000000 },
+  { symbol: 'BAUSDT', baseAsset: 'BA', quoteAsset: 'USDT', name: 'Boeing', category: 'usstock', price: 215.50, change: -1.20, changePercent: -1.20, volume: 6500000, volumeDisplay: '6.50M', marketCap: 130000000000 },
+  { symbol: 'CATUSDT', baseAsset: 'CAT', quoteAsset: 'USDT', name: 'Caterpillar', category: 'usstock', price: 285.75, change: 0.80, changePercent: 0.80, volume: 4500000, volumeDisplay: '4.50M', marketCap: 160000000000 },
+  { symbol: 'MMMUSDT', baseAsset: 'MMM', quoteAsset: 'USDT', name: '3M', category: 'usstock', price: 95.25, change: -0.50, changePercent: -0.50, volume: 3500000, volumeDisplay: '3.50M', marketCap: 110000000000 },
+  { symbol: 'HONUSDT', baseAsset: 'HON', quoteAsset: 'USDT', name: 'Honeywell', category: 'usstock', price: 205.75, change: 1.50, changePercent: 1.50, volume: 2500000, volumeDisplay: '2.50M', marketCap: 125000000000 },
+
+  // Telecom Stocks
+  { symbol: 'VZUSDT', baseAsset: 'VZ', quoteAsset: 'USDT', name: 'Verizon', category: 'usstock', price: 38.75, change: -0.20, changePercent: -0.20, volume: 15000000, volumeDisplay: '15.00M', marketCap: 160000000000 },
+  { symbol: 'TUSDT', baseAsset: 'T', quoteAsset: 'USDT', name: 'AT&T', category: 'usstock', price: 16.25, change: 0.50, changePercent: 0.50, volume: 35000000, volumeDisplay: '35.00M', marketCap: 120000000000 },
+  { symbol: 'TMUSUSDT', baseAsset: 'TMUS', quoteAsset: 'USDT', name: 'T-Mobile', category: 'usstock', price: 155.75, change: 1.80, changePercent: 1.80, volume: 8500000, volumeDisplay: '8.50M', marketCap: 190000000000 },
+  { symbol: 'CMCSAUSDT', baseAsset: 'CMCSA', quoteAsset: 'USDT', name: 'Comcast', category: 'usstock', price: 42.25, change: -0.80, changePercent: -0.80, volume: 12000000, volumeDisplay: '12.00M', marketCap: 180000000000 },
+
   // ETFs
-  { symbol: 'SPY', baseAsset: 'SPY', quoteAsset: 'USD', name: 'SPDR S&P 500 ETF', category: 'etf', price: 473.65, change: 0.01, changePercent: 0.01, volume: 5640000, volumeDisplay: '5.64M', marketCap: 425000000000 },
-  { symbol: 'IVV', baseAsset: 'IVV', quoteAsset: 'USD', name: 'iShares Core S&P 500 ETF', category: 'etf', price: 514.98, change: 1.19, changePercent: 1.19, volume: 26230000, volumeDisplay: '26.23M', marketCap: 350000000000 },
-  { symbol: 'VOO', baseAsset: 'VOO', quoteAsset: 'USD', name: 'Vanguard S&P 500 ETF', category: 'etf', price: 485.94, change: 0.63, changePercent: 0.63, volume: 39310000, volumeDisplay: '39.31M', marketCap: 375000000000 },
-  { symbol: 'QQQ', baseAsset: 'QQQ', quoteAsset: 'USD', name: 'Invesco QQQ Trust', category: 'etf', price: 441.08, change: -0.06, changePercent: -0.06, volume: 31100000, volumeDisplay: '31.10M', marketCap: 215000000000 },
-  { symbol: 'VTI', baseAsset: 'VTI', quoteAsset: 'USD', name: 'Vanguard Total Stock Market ETF', category: 'etf', price: 262.77, change: 0.72, changePercent: 0.72, volume: 31300000, volumeDisplay: '31.30M', marketCap: 300000000000 },
-  { symbol: 'VEA', baseAsset: 'VEA', quoteAsset: 'USD', name: 'Vanguard FTSE Developed Markets ETF', category: 'etf', price: 66.71, change: -0.39, changePercent: -0.39, volume: 4980000, volumeDisplay: '4.98M', marketCap: 110000000000 },
-  { symbol: 'VWO', baseAsset: 'VWO', quoteAsset: 'USD', name: 'Vanguard FTSE Emerging Markets ETF', category: 'etf', price: 50.53, change: -0.86, changePercent: -0.86, volume: 6070000, volumeDisplay: '6.07M', marketCap: 95000000000 },
-  { symbol: 'BND', baseAsset: 'BND', quoteAsset: 'USD', name: 'Vanguard Total Bond Market ETF', category: 'etf', price: 80.42, change: -1.50, changePercent: -1.50, volume: 22020000, volumeDisplay: '22.02M', marketCap: 85000000000 },
+  { symbol: 'SPYUSDT', baseAsset: 'SPY', quoteAsset: 'USDT', name: 'SPDR S&P 500 ETF', category: 'etf', price: 473.65, change: 0.01, changePercent: 0.01, volume: 5640000, volumeDisplay: '5.64M', marketCap: 425000000000 },
+  { symbol: 'IVVUSDT', baseAsset: 'IVV', quoteAsset: 'USDT', name: 'iShares Core S&P 500 ETF', category: 'etf', price: 514.98, change: 1.19, changePercent: 1.19, volume: 26230000, volumeDisplay: '26.23M', marketCap: 350000000000 },
+  { symbol: 'VOOUSDT', baseAsset: 'VOO', quoteAsset: 'USDT', name: 'Vanguard S&P 500 ETF', category: 'etf', price: 485.94, change: 0.63, changePercent: 0.63, volume: 39310000, volumeDisplay: '39.31M', marketCap: 375000000000 },
+  { symbol: 'QQQUSDT', baseAsset: 'QQQ', quoteAsset: 'USDT', name: 'Invesco QQQ Trust', category: 'etf', price: 441.08, change: -0.06, changePercent: -0.06, volume: 31100000, volumeDisplay: '31.10M', marketCap: 215000000000 },
+  { symbol: 'VTIUSDT', baseAsset: 'VTI', quoteAsset: 'USDT', name: 'Vanguard Total Stock Market ETF', category: 'etf', price: 262.77, change: 0.72, changePercent: 0.72, volume: 31300000, volumeDisplay: '31.30M', marketCap: 300000000000 },
+  { symbol: 'VEAUSDT', baseAsset: 'VEA', quoteAsset: 'USDT', name: 'Vanguard FTSE Developed Markets ETF', category: 'etf', price: 66.71, change: -0.39, changePercent: -0.39, volume: 4980000, volumeDisplay: '4.98M', marketCap: 110000000000 },
+  { symbol: 'VWOUSDT', baseAsset: 'VWO', quoteAsset: 'USDT', name: 'Vanguard FTSE Emerging Markets ETF', category: 'etf', price: 50.53, change: -0.86, changePercent: -0.86, volume: 6070000, volumeDisplay: '6.07M', marketCap: 95000000000 },
+  { symbol: 'BNDUSDT', baseAsset: 'BND', quoteAsset: 'USDT', name: 'Vanguard Total Bond Market ETF', category: 'etf', price: 80.42, change: -1.50, changePercent: -1.50, volume: 22020000, volumeDisplay: '22.02M', marketCap: 85000000000 },
+  { symbol: 'GLDUSDT', baseAsset: 'GLD', quoteAsset: 'USDT', name: 'SPDR Gold Shares', category: 'etf', price: 205.50, change: 0.25, changePercent: 0.25, volume: 8500000, volumeDisplay: '8.50M', marketCap: 110000000000 },
+  { symbol: 'SLVUSDT', baseAsset: 'SLV', quoteAsset: 'USDT', name: 'iShares Silver Trust', category: 'etf', price: 22.50, change: -0.80, changePercent: -0.80, volume: 12000000, volumeDisplay: '12.00M', marketCap: 14000000000 },
+  { symbol: 'XLFUSDT', baseAsset: 'XLF', quoteAsset: 'USDT', name: 'Financial Select Sector SPDR Fund', category: 'etf', price: 42.85, change: 0.50, changePercent: 0.50, volume: 15000000, volumeDisplay: '15.00M', marketCap: 35000000000 },
+  { symbol: 'XLEUSDT', baseAsset: 'XLE', quoteAsset: 'USDT', name: 'Energy Select Sector SPDR Fund', category: 'etf', price: 85.25, change: 1.20, changePercent: 1.20, volume: 8500000, volumeDisplay: '8.50M', marketCap: 45000000000 },
+  { symbol: 'XLKUSDT', baseAsset: 'XLK', quoteAsset: 'USDT', name: 'Technology Select Sector SPDR Fund', category: 'etf', price: 225.75, change: 1.50, changePercent: 1.50, volume: 6500000, volumeDisplay: '6.50M', marketCap: 28000000000 },
+  { symbol: 'XLIUSDT', baseAsset: 'XLI', quoteAsset: 'USDT', name: 'Industrial Select Sector SPDR Fund', category: 'etf', price: 105.85, change: -0.30, changePercent: -0.30, volume: 4500000, volumeDisplay: '4.50M', marketCap: 18000000000 },
+  { symbol: 'XLVUSDT', baseAsset: 'XLV', quoteAsset: 'USDT', name: 'Health Care Select Sector SPDR Fund', category: 'etf', price: 145.75, change: 0.80, changePercent: 0.80, volume: 5500000, volumeDisplay: '5.50M', marketCap: 14000000000 }
 ];
 
 // ============================================
