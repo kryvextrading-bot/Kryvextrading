@@ -49,6 +49,7 @@ import { useUnifiedTrading } from '@/hooks/useUnifiedTrading';
 import { useToast, toast } from '@/hooks/use-toast';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 import { useMarketData } from '@/contexts/MarketDataContext';
+import { walletApiService } from '@/services/wallet-api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,6 +61,7 @@ import { Separator } from '@/components/ui/separator';
 import PortfolioValueChart from '@/components/PortfolioValueChart';
 import AssetAllocationPieChart from '@/components/AssetAllocationPieChart';
 import { formatCurrency, formatPrice, formatPercentage } from '@/utils/tradingCalculations';
+import { cn } from '@/lib/utils';
 
 // ==================== TYPES ====================
 interface PortfolioAsset {
@@ -409,6 +411,77 @@ const HoldingsTable = ({ assets, hideBalances }: { assets: PortfolioAsset[]; hid
   );
 };
 
+// Transaction Item Component
+const TransactionItem = ({ transaction }: { transaction: any }) => {
+  const isPositive = transaction.amount > 0;
+  const Icon = transaction.type === 'Deposit' ? ArrowDownLeft : 
+               transaction.type === 'Withdrawal' ? ArrowUpRight : 
+               transaction.type === 'Swap' ? RefreshCw :
+               transaction.type === 'Trade' ? TrendingUp : Clock;
+  
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Completed': return 'bg-green-500/15 text-green-400 border-green-500/20';
+      case 'Pending': return 'bg-yellow-500/15 text-yellow-400 border-yellow-500/20';
+      case 'Processing': return 'bg-blue-500/15 text-blue-400 border-blue-500/20';
+      case 'Failed': return 'bg-red-500/15 text-red-400 border-red-500/20';
+      case 'Cancelled': return 'bg-gray-500/15 text-gray-400 border-gray-500/20';
+      default: return 'bg-gray-500/15 text-gray-400 border-gray-500/20';
+    }
+  };
+
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'Deposit': return 'bg-green-500/15 text-green-400';
+      case 'Withdrawal': return 'bg-red-500/15 text-red-400';
+      case 'Swap': return 'bg-blue-500/15 text-blue-400';
+      case 'Trade': return 'bg-purple-500/15 text-purple-400';
+      case 'Options': return 'bg-orange-500/15 text-orange-400';
+      case 'Staking': return 'bg-yellow-500/15 text-yellow-400';
+      default: return 'bg-gray-500/15 text-gray-400';
+    }
+  };
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      className="flex items-center justify-between py-3 border-b border-[#2B3139]/50 last:border-0 hover:bg-[#23262F]/50 transition-colors px-2 rounded-lg"
+    >
+      <div className="flex items-center gap-3">
+        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", getTypeColor(transaction.type))}>
+          <Icon size={14} />
+        </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-[#EAECEF]">{transaction.type}</span>
+            {transaction.metadata?.shouldWin && (
+              <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/20 text-[8px] px-1 py-0">
+                <Crown className="w-2 h-2 mr-0.5" />
+                FW
+              </Badge>
+            )}
+          </div>
+          <div className="text-xs text-[#848E9C]">{transaction.asset}</div>
+        </div>
+      </div>
+      <div className="text-right">
+        <div className={cn("text-sm font-medium", isPositive ? 'text-green-400' : 'text-red-400')}>
+          {isPositive ? '+' : '-'}{Math.abs(transaction.amount).toFixed(6)} {transaction.asset}
+        </div>
+        {transaction.pnl !== undefined && transaction.pnl !== 0 && (
+          <div className={cn("text-xs", transaction.pnl >= 0 ? 'text-green-400' : 'text-red-400')}>
+            {transaction.pnl >= 0 ? '+' : ''}{transaction.pnl.toFixed(2)} USDT
+          </div>
+        )}
+        <Badge className={cn("text-[10px] mt-1", getStatusColor(transaction.status))}>
+          {transaction.status}
+        </Badge>
+      </div>
+    </motion.div>
+  );
+};
+
 // Activity Item Component
 const ActivityItem = ({ activity }: { activity: TradingActivity }) => {
   const getIcon = () => {
@@ -559,6 +632,7 @@ export default function Portfolio() {
   const [userTrades, setUserTrades] = useState<any[]>([]);
   const [positions, setPositions] = useState<any[]>([]);
   const [options, setOptions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d' | '1y' | 'all'>('30d');
@@ -567,6 +641,7 @@ export default function Portfolio() {
   useEffect(() => {
     if (user) {
       loadUserData();
+      loadTransactions();
     }
   }, [user]);
 

@@ -36,7 +36,7 @@ import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 
 // Services
-import { walletService } from '@/services/wallet-service-new';
+import { walletApiService } from '@/services/wallet-api';
 import { tradingDataService } from '@/services/trading-data-service';
 import { depositService } from '@/services/depositService';
 import { supabase } from '@/lib/supabase';
@@ -836,7 +836,58 @@ export default function WalletPage() {
   // Initialize data on mount
   useEffect(() => {
     refreshBalances?.();
+    loadTransactions();
   }, [refreshBalances]);
+
+  // Load transactions from backend
+  const loadTransactions = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      console.log('🔄 Loading transactions for user:', user.id);
+      
+      // Load transactions from wallet service
+      const walletTransactions = await walletApiService.getUserTransactions(user.id);
+      console.log('📊 Loaded wallet transactions:', walletTransactions);
+      
+      // Convert wallet transactions to Transaction type
+      const formattedTransactions: Transaction[] = walletTransactions.map(tx => ({
+        id: tx.id,
+        type: tx.type === 'deposit' ? 'Deposit' : 
+              tx.type === 'withdrawal' ? 'Withdrawal' : 
+              tx.type === 'transfer' ? 'Trade' :
+              tx.type === 'fee' ? 'Fee' : 'Funding',
+        asset: tx.currency || 'USDT',
+        amount: tx.amount || 0,
+        status: tx.status === 'completed' ? 'Completed' : 
+               tx.status === 'pending' ? 'Pending' :
+               tx.status === 'failed' ? 'Failed' : 'Processing',
+        date: tx.created_at || new Date().toISOString(),
+        details: {
+          reference: tx.reference_id,
+          description: tx.description,
+          balanceBefore: tx.balance_before,
+          balanceAfter: tx.balance_after
+        },
+        metadata: {
+          reference: tx.reference_id,
+          network: tx.network || 'blockchain',
+          address: tx.address || '',
+          txHash: tx.tx_hash || ''
+        }
+      }));
+      
+      // Sort by date (newest first)
+      formattedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      setTransactions(formattedTransactions);
+      console.log('✅ Transactions loaded and formatted:', formattedTransactions.length);
+      
+    } catch (error) {
+      console.error('❌ Failed to load transactions:', error);
+      // Don't show error to user, just keep empty state
+    }
+  }, [user?.id]);
 
   // Optimized click handlers
   const handleTransferClick = useCallback(() => {

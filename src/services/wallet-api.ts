@@ -66,6 +66,10 @@ export interface WalletTransaction {
   reference_id?: string;
   description?: string;
   created_at: string;
+  status?: 'pending' | 'completed' | 'failed' | 'processing';
+  network?: string;
+  address?: string;
+  tx_hash?: string;
 }
 
 export interface WalletRequest {
