@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Bell, 
@@ -37,13 +37,20 @@ import {
   Star,
   AlertCircle
 } from 'lucide-react';
-import { useWallet } from '@/contexts/WalletContext';
 import { useMarketData } from '@/contexts/MarketDataContext';
 import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Import assets from AssetPage
-const ALL_ASSETS = {
+const ALL_ASSETS: Record<string, {
+  name: string;
+  symbol: string;
+  baseAsset: string;
+  quoteAsset: string;
+  category: 'crypto' | 'stable' | 'meme' | 'stock' | 'commodity';
+  marketCap: number;
+  supply: number;
+}> = {
   // Crypto
   'BTC': { name: 'Bitcoin', symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', category: 'crypto', marketCap: 1350000000000, supply: 19500000 },
   'ETH': { name: 'Ethereum', symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', category: 'crypto', marketCap: 420000000000, supply: 120000000 },
@@ -58,8 +65,8 @@ const ALL_ASSETS = {
   'PEPE': { name: 'Pepe', symbol: 'PEPEUSDT', baseAsset: 'PEPE', quoteAsset: 'USDT', category: 'meme', marketCap: 4200000000, supply: 420690000000000 },
   // Stocks
   'AAPL': { name: 'Apple Inc.', symbol: 'AAPL', baseAsset: 'AAPL', quoteAsset: 'USD', category: 'stock', marketCap: 2800000000000, supply: 15600000000 },
-  'GOOGL': { name: 'Alphabet Inc.', symbol: 'GOOGL', quoteAsset: 'USD', category: 'stock', marketCap: 1700000000000, supply: 12600000000 },
-  'TSLA': { name: 'Tesla Inc.', symbol: 'TSLA', quoteAsset: 'USD', category: 'stock', marketCap: 780000000000, supply: 3100000000 },
+  'GOOGL': { name: 'Alphabet Inc.', symbol: 'GOOGL', baseAsset: 'GOOGL', quoteAsset: 'USD', category: 'stock', marketCap: 1700000000000, supply: 12600000000 },
+  'TSLA': { name: 'Tesla Inc.', symbol: 'TSLA', baseAsset: 'TSLA', quoteAsset: 'USD', category: 'stock', marketCap: 780000000000, supply: 3100000000 },
   // Commodities
   'GOLD': { name: 'Gold', symbol: 'XAU', baseAsset: 'XAU', quoteAsset: 'USD', category: 'commodity', marketCap: 13000000000000, supply: 197400000 },
   'SILVER': { name: 'Silver', symbol: 'XAG', baseAsset: 'XAG', quoteAsset: 'USD', category: 'commodity', marketCap: 1200000000000, supply: 1900000 }
@@ -89,6 +96,15 @@ interface WatchlistItem {
   low24h: number;
 }
 
+interface TrendingAsset {
+  symbol: string;
+  name: string;
+  price: number;
+  change24h: string;
+  volume: string;
+  icon: string;
+}
+
 interface ServiceItem {
   name: string;
   icon: React.ElementType;
@@ -112,6 +128,14 @@ interface Notification {
   message: string;
   time: Date;
   read: boolean;
+}
+
+interface ActivityItem {
+  asset: string;
+  action: string;
+  amount: string;
+  value: string;
+  time: string;
 }
 
 // ============================================
@@ -150,17 +174,20 @@ const BANNERS: BannerItem[] = [
 
 export default function Index() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { prices, loading: marketLoading } = useMarketData();
   
   // Use unified wallet for real data
   const {
-    getTotalBalance,
+    fundingBalances,
+    tradingBalances,
     getFundingBalance,
     getTradingBalance,
     getLockedBalance,
-    refreshBalances,
+    getTotalBalance,
+    refreshData: refreshWalletData,
     loading: walletLoading,
-    balances
+    balances // Legacy property (same as fundingBalances)
   } = useUnifiedWallet();
   
   const [showBalance, setShowBalance] = useState(true);
@@ -173,42 +200,100 @@ export default function Index() {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
-  // Calculate real wallet balances
+  // Calculate real wallet balances using proper unified wallet structure
   const totalFundingBalance = useMemo(() => {
-    return Object.values(balances?.funding || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
-  }, [balances?.funding]);
+    // Use fundingBalances from the unified wallet hook
+    const funding = balances || {}; // balances is the legacy property containing funding balances
+    return Object.values(funding).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  }, [balances]);
 
   const totalTradingBalance = useMemo(() => {
-    return Object.values(balances?.trading || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
-  }, [balances?.trading]);
+    // Use tradingBalances from unified wallet hook
+    // tradingBalances is an object with { available, locked, total } for each asset
+    let total = 0;
+    Object.entries(tradingBalances || {}).forEach(([_, balance]) => {
+      // Handle both simple number format and TradingBalance object format
+      if (typeof balance === 'number') {
+        total += balance;
+      } else if (balance && typeof balance === 'object' && 'available' in balance) {
+        total += (balance as { available: number }).available || 0;
+      }
+    });
+    return total;
+  }, [tradingBalances]);
 
   const totalLockedBalance = useMemo(() => {
-    return Object.values(balances?.locked || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
-  }, [balances?.locked]);
+    // Locked balances would come from the locks or locked balances
+    let total = 0;
+    Object.entries(tradingBalances || {}).forEach(([_, balance]) => {
+      if (balance && typeof balance === 'object' && 'locked' in balance) {
+        total += (balance as { locked: number }).locked || 0;
+      }
+    });
+    return total;
+  }, [tradingBalances]);
 
-  // Real wallet balance
+  // Real wallet balance - show actual USDT balance
   const usdtBalance = useMemo(() => {
-    return totalFundingBalance + totalTradingBalance;
-  }, [totalFundingBalance, totalTradingBalance]);
+    // Get USDT balance directly from funding wallet
+    const usdtFunding = Number(balances?.USDT || 0);
+    const result = usdtFunding + totalTradingBalance;
+    console.log(' [Index] Balance calculation:', {
+      usdtFunding,
+      totalTradingBalance,
+      totalLockedBalance,
+      usdtBalance: result,
+      rawBalances: balances,
+      loading: walletLoading
+    });
+    return result;
+  }, [balances, totalTradingBalance, walletLoading]);
 
-  // Calculate total portfolio value using ALL_ASSETS
+  // Calculate total portfolio value using market prices
   const totalPortfolioValue = useMemo(() => {
     let total = 0;
     
     // Add funding balances
-    Object.entries(balances?.funding || {}).forEach(([asset, balance]) => {
-      const price = prices?.[asset] || (asset === 'USDT' ? 1 : 0);
-      total += (Number(balance) || 0) * price;
+    Object.entries(balances || {}).forEach(([asset, balance]) => {
+      const numBalance = Number(balance) || 0;
+      if (numBalance <= 0) return;
+      
+      // Skip trading wallet entries (they shouldn't be in funding balances anyway)
+      if (asset.includes('_TRADING')) return;
+      
+      // Get price for the asset
+      let price = 1; // Default to 1 for USDT
+      if (asset !== 'USDT' && prices && prices[asset]) {
+        price = prices[asset];
+      }
+      
+      total += numBalance * price;
     });
     
     // Add trading balances
-    Object.entries(balances?.trading || {}).forEach(([asset, balance]) => {
-      const price = prices?.[asset] || (asset === 'USDT' ? 1 : 0);
-      total += (Number(balance) || 0) * price;
+    Object.entries(tradingBalances || {}).forEach(([asset, balance]) => {
+      let numBalance = 0;
+      
+      // Handle both simple number format and TradingBalance object format
+      if (typeof balance === 'number') {
+        numBalance = balance;
+      } else if (balance && typeof balance === 'object' && 'available' in balance) {
+        numBalance = (balance as { available: number }).available || 0;
+      }
+      
+      if (numBalance <= 0) return;
+      
+      // Get price for the asset
+      let price = 1; // Default to 1 for USDT
+      if (asset !== 'USDT' && prices && prices[asset]) {
+        price = prices[asset];
+      }
+      
+      total += numBalance * price;
     });
     
     return total;
-  }, [balances, prices]);
+  }, [balances, tradingBalances, prices]);
 
   const [walletBalance, setWalletBalance] = useState<WalletBalance>({
     totalUSDT: usdtBalance,
@@ -225,10 +310,18 @@ export default function Index() {
       totalUSD: totalPortfolioValue,
       lastUpdated: new Date()
     }));
-  }, [usdtBalance, totalPortfolioValue]);
+    
+    console.log('💰 [Index] Balance updated:', {
+      usdtBalance,
+      totalPortfolioValue,
+      totalFundingBalance,
+      totalTradingBalance,
+      totalLockedBalance
+    });
+  }, [usdtBalance, totalPortfolioValue, totalFundingBalance, totalTradingBalance, totalLockedBalance]);
 
   // Trending assets from ALL_ASSETS
-  const trendingAssets = useMemo(() => {
+  const trendingAssets: TrendingAsset[] = useMemo(() => {
     return Object.values(ALL_ASSETS)
       .filter(asset => asset.category === 'crypto')
       .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))
@@ -246,7 +339,7 @@ export default function Index() {
   // Initialize watchlist with real data from ALL_ASSETS
   useEffect(() => {
     const watchlistData = Object.entries(ALL_ASSETS).map(([symbol, asset]) => {
-      const price = prices?.[symbol] || (symbol.includes('USDT') ? 1 : 0);
+      const price = prices?.[symbol] || (symbol === 'USDT' ? 1 : 0);
       return {
         symbol,
         name: asset.name,
@@ -255,7 +348,7 @@ export default function Index() {
         usdPrice: price,
         change24h: (Math.random() - 0.5) * 10, // Random change between -5% and +5%
         icon: asset.category === 'crypto' ? '₿' : asset.category === 'stock' ? '📈' : asset.category === 'commodity' ? '🥇' : '💎',
-        category: asset.category,
+        category: asset.category as any,
         high24h: price * (1 + (Math.random() - 0.5) * 0.1),
         low24h: price * (1 - (Math.random() - 0.5) * 0.1)
       };
@@ -268,51 +361,18 @@ export default function Index() {
   const marketOverview = useMemo(() => {
     const cryptoAssets = Object.values(ALL_ASSETS).filter(asset => asset.category === 'crypto' || asset.category === 'meme');
     const totalMarketCap = cryptoAssets.reduce((sum, asset) => sum + asset.marketCap, 0);
-    const topGainer = cryptoAssets.reduce((best, asset) => {
-      const change = (Math.random() - 0.5) * 10; // Random change between -5% and +5%
-      return change > best.change ? asset : best;
-    }, cryptoAssets[0]);
-
+    
     return {
       totalMarketCap,
-      topGainer: topGainer.name || 'BTC',
-      topGainerChange: `${topGainer.change > 0 ? '+' : ''}${Math.abs(topGainer.change).toFixed(2)}%`,
-      topGainerSymbol: topGainer.symbol || 'BTCUSDT',
       totalAssets: cryptoAssets.length,
-      activeAssets: cryptoAssets.filter(asset => prices?.[topGainer.symbol?.split('/')[0]]).length
+      activeAssets: cryptoAssets.filter(asset => prices?.[asset.baseAsset]).length
     };
   }, [prices]);
 
+  // Initialize data on mount
   useEffect(() => {
-    const watchlistData = Object.entries(ALL_ASSETS).map(([symbol, asset]) => {
-      const price = prices?.[symbol] || (symbol.includes('USDT') ? 1 : 0);
-      return {
-        symbol,
-        name: asset.name,
-        volume: asset.category === 'crypto' ? `${(Math.random() * 100).toFixed(1)}B` : `${(Math.random() * 10).toFixed(1)}M`,
-        price: price,
-        usdPrice: price,
-        change24h: (Math.random() - 0.5) * 10, // Random change between -5% and +5%
-        icon: asset.category === 'crypto' ? '₿' : asset.category === 'stock' ? '📈' : asset.category === 'commodity' ? '🥇' : '💎',
-        category: asset.category,
-        high24h: price * (1 + (Math.random() - 0.5) * 0.1),
-        low24h: price * (1 - (Math.random() - 0.5) * 0.1)
-      };
-    }).slice(0, 6); // Show first 6 assets
-
-    setWatchlist(prev => [...prev, {
-      symbol: 'AAPL',
-      name: 'Apple Inc.',
-      volume: '52.3M',
-      price: 189.84,
-      usdPrice: 189.84,
-      change24h: -0.78,
-      icon: '🍎',
-      category: 'stock',
-      high24h: 192.45,
-      low24h: 187.90
-    }]);
-  }, [prices]);
+    refreshWalletData();
+  }, [refreshWalletData]);
 
   // Track scroll position for scroll to top button
   useEffect(() => {
@@ -364,17 +424,17 @@ export default function Index() {
   };
 
   // Refresh data using real wallet context
-  const refreshData = useCallback(async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await refreshBalances();
+      await refreshWalletData();
       setLastRefresh(new Date());
     } catch (error) {
       console.error('Failed to refresh data:', error);
     } finally {
       setRefreshing(false);
     }
-  }, [refreshBalances]);
+  }, [refreshWalletData]);
 
   // Simulate real-time updates
   useEffect(() => {
@@ -387,6 +447,60 @@ export default function Index() {
     }, 5000);
 
     return () => clearInterval(interval);
+  }, []);
+
+  // Recent activity data
+  const recentActivity: ActivityItem[] = useMemo(() => {
+    return Object.values(ALL_ASSETS)
+      .filter(asset => prices?.[asset.baseAsset])
+      .slice(0, 3)
+      .map(asset => {
+        const action = Math.random() > 0.5 ? 'Buy' : 'Sell';
+        const amount = (Math.random() * 10).toFixed(4);
+        const price = prices?.[asset.baseAsset] || 0;
+        return {
+          asset: asset.symbol,
+          action,
+          amount,
+          value: `$${(parseFloat(amount) * price).toFixed(0)}`,
+          time: `${Math.floor(Math.random() * 60) + 1} min ago`
+        };
+      });
+  }, [prices]);
+
+  // Quick actions
+  const quickActions = useMemo(() => {
+    const topAssets = Object.values(ALL_ASSETS)
+      .filter(asset => asset.category === 'crypto')
+      .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))
+      .slice(0, 4);
+
+    return [
+      { 
+        icon: CreditCard, 
+        label: 'Deposit', 
+        color: '#0ECB81', 
+        route: '/wallet' 
+      },
+      { 
+        icon: Wallet, 
+        label: 'Withdraw', 
+        color: '#F0B90B', 
+        route: '/wallet' 
+      },
+      { 
+        icon: TrendingUp, 
+        label: 'Trade', 
+        color: '#F6465D', 
+        route: `/trading/${topAssets[0]?.baseAsset || 'BTC'}` 
+      },
+      { 
+        icon: Gift, 
+        label: 'Rewards', 
+        color: '#F0B90B', 
+        route: '/rewards' 
+      }
+    ];
   }, []);
 
   // Loading state
@@ -412,7 +526,7 @@ export default function Index() {
               {/* Refresh Button */}
               <motion.button
                 whileTap={{ scale: 0.95 }}
-                onClick={refreshData}
+                onClick={handleRefresh}
                 className="relative p-2 hover:bg-[#2B3139] rounded-lg transition-colors"
                 disabled={refreshing || isLoading}
               >
@@ -812,8 +926,8 @@ export default function Index() {
               className="bg-[#2B3139]/30 rounded-lg p-3"
             >
               <div className="text-[#848E9C] text-xs mb-1">Active Pairs</div>
-              <div className="text-[#EAECEF] text-sm font-bold">156</div>
-              <div className="text-[#848E9C] text-xs mt-1">+12 new</div>
+              <div className="text-[#EAECEF] text-sm font-bold">{marketOverview.activeAssets}</div>
+              <div className="text-[#848E9C] text-xs mt-1">{marketOverview.totalAssets} total</div>
             </motion.div>
             
             <motion.div 
@@ -836,13 +950,8 @@ export default function Index() {
               whileHover={{ scale: 1.02 }}
               className="bg-[#2B3139]/30 rounded-lg p-3"
             >
-              <div className="text-[#848E9C] text-xs mb-1">Gas Fee</div>
-              <div className="flex items-center justify-between">
-                <span className="text-[#EAECEF] text-sm font-bold">23 Gwei</span>
-                <span className="text-[#0ECB81] text-xs bg-[#0ECB81]/10 px-1.5 py-0.5 rounded">
-                  ↓12%
-                </span>
-              </div>
+              <div className="text-[#848E9C] text-xs mb-1">Market Cap</div>
+              <div className="text-[#EAECEF] text-sm font-bold">{formatCurrency(marketOverview.totalMarketCap)}</div>
             </motion.div>
           </div>
 
@@ -850,7 +959,7 @@ export default function Index() {
           <div className="mt-4 pt-4 border-t border-[#2B3139]">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[#848E9C] text-xs">Market Cap Distribution</span>
-              <span className="text-[#EAECEF] text-xs font-medium">$2.1T</span>
+              <span className="text-[#EAECEF] text-xs font-medium">{formatCurrency(marketOverview.totalMarketCap)}</span>
             </div>
             <div className="flex h-2 rounded-full overflow-hidden">
               <motion.div 
@@ -900,11 +1009,7 @@ export default function Index() {
           </div>
 
           <div className="space-y-2">
-            {[
-              { name: 'PEPE/USDT', price: '0.00000123', change: '+45.6%', volume: '$124M' },
-              { name: 'WIF/USDT', price: '2.34', change: '+32.1%', volume: '$89M' },
-              { name: 'DOGE/USDT', price: '0.156', change: '+18.9%', volume: '$567M' },
-            ].map((item, index) => (
+            {trendingAssets.map((item, index) => (
               <motion.div
                 key={index}
                 initial={{ opacity: 0, x: -20 }}
@@ -925,8 +1030,8 @@ export default function Index() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-[#EAECEF] text-sm font-bold">${item.price}</span>
-                  <div className="text-[#0ECB81] text-xs font-medium">{item.change}</div>
+                  <span className="text-[#EAECEF] text-sm font-bold">${item.price.toFixed(item.price < 0.01 ? 8 : 2)}</span>
+                  <div className="text-[#0ECB81] text-xs font-medium">{item.change24h}</div>
                 </div>
               </motion.div>
             ))}
@@ -948,23 +1053,8 @@ export default function Index() {
             <span className="text-[#848E9C] text-xs">Live updates</span>
           </div>
 
-          {/**
-           * Recent activity from ALL_ASSETS
-           */}
           <div className="space-y-3">
-            {useMemo(() => {
-              return Object.values(ALL_ASSETS)
-                .filter(asset => prices?.[asset.symbol])
-                .slice(0, 3)
-                .map(asset => ({
-                  symbol: asset.symbol,
-                  name: asset.name,
-                  action: Math.random() > 0.5 ? 'Buy' : 'Sell',
-                  amount: (Math.random() * 10).toFixed(4),
-                  value: `$${(Math.random() * 10000).toFixed(0)}`,
-                  time: `${Math.floor(Math.random() * 60) + 1} min ago`
-                }));
-            }, [prices]).map((activity, index) => (
+            {recentActivity.map((activity, index) => (
               <motion.div
                 key={index}
                 initial={{ opacity: 0 }}
@@ -974,8 +1064,7 @@ export default function Index() {
               >
                 <div className="flex items-center space-x-3">
                   <div className={`w-2 h-2 rounded-full ${
-                    activity.action === 'Buy' ? 'bg-[#0ECB81]' : 
-                    activity.action === 'Sell' ? 'bg-[#F6465D]' : 'bg-[#F0B90B]'
+                    activity.action === 'Buy' ? 'bg-[#0ECB81]' : 'bg-[#F6465D]'
                   }`} />
                   <div>
                     <span className="text-[#EAECEF] text-xs font-medium">
@@ -1000,39 +1089,7 @@ export default function Index() {
           transition={{ duration: 0.5, delay: 0.8 }}
           className="grid grid-cols-4 gap-2"
         >
-          {useMemo(() => {
-            const topAssets = Object.values(ALL_ASSETS)
-              .filter(asset => asset.category === 'crypto')
-              .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))
-              .slice(0, 4);
-
-            return [
-              { 
-                icon: CreditCard, 
-                label: 'Deposit', 
-                color: '#0ECB81', 
-                route: '/wallet' 
-              },
-              { 
-                icon: Wallet, 
-                label: 'Withdraw', 
-                color: '#F0B90B', 
-                route: '/wallet' 
-              },
-              { 
-                icon: TrendingUp, 
-                label: 'Trade', 
-                color: '#F6465D', 
-                route: `/trading/${topAssets[0]?.symbol?.split('/')[0] || 'BTC'}` 
-              },
-              { 
-                icon: Gift, 
-                label: 'Rewards', 
-                color: '#F0B90B', 
-                route: '/rewards' 
-              }
-            ];
-          }, [prices]).map((action, index) => {
+          {quickActions.map((action, index) => {
             const Icon = action.icon;
             return (
               <motion.button
@@ -1096,22 +1153,23 @@ export default function Index() {
         <div className="grid grid-cols-5 gap-1">
           {bottomNavItems.map((item, index) => {
             const Icon = item.icon;
+            const isActive = location.pathname === item.route;
             return (
               <motion.button
                 key={index}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => navigate(item.route)}
                 className={`flex flex-col items-center py-3 rounded-xl transition-all relative ${
-                  item.active 
+                  isActive 
                     ? 'text-[#F0B90B]' 
                     : 'text-[#5E6673] hover:text-[#848E9C]'
                 }`}
               >
-                <Icon className={`h-5 w-5 ${item.active ? 'text-[#F0B90B]' : ''}`} />
-                <span className={`text-xs mt-1 ${item.active ? 'text-[#F0B90B] font-medium' : 'text-[#5E6673]'}`}>
+                <Icon className={`h-5 w-5 ${isActive ? 'text-[#F0B90B]' : ''}`} />
+                <span className={`text-xs mt-1 ${isActive ? 'text-[#F0B90B] font-medium' : 'text-[#5E6673]'}`}>
                   {item.label}
                 </span>
-                {item.active && (
+                {isActive && (
                   <motion.div
                     layoutId="activeTab"
                     className="absolute bottom-0 w-1 h-1 bg-[#F0B90B] rounded-full"
@@ -1211,19 +1269,21 @@ export default function Index() {
       </AnimatePresence>
 
       {/* ===== LOADING STATES ===== */}
-      {isLoading && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
-        >
-          <div className="bg-[#1E2329] rounded-2xl p-6 flex flex-col items-center">
-            <div className="w-12 h-12 border-4 border-[#F0B90B] border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-[#EAECEF]">Loading your portfolio...</p>
-          </div>
-        </motion.div>
-      )}
+      <AnimatePresence>
+        {isLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+          >
+            <div className="bg-[#1E2329] rounded-2xl p-6 flex flex-col items-center">
+              <div className="w-12 h-12 border-4 border-[#F0B90B] border-t-transparent rounded-full animate-spin mb-4" />
+              <p className="text-[#EAECEF]">Loading your portfolio...</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ===== REFRESH INDICATOR ===== */}
       <AnimatePresence>
