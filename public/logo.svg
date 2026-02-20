@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="60" viewBox="0 0 200 60">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e40af;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#1e293b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#475569;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Logo Icon - Trading Chart Symbol -->
+  <g transform="translate(10, 15)">
+    <!-- Background circle -->
+    <circle cx="15" cy="15" r="15" fill="url(#logoGradient)" opacity="0.1"/>
+    
+    <!-- Chart lines -->
+    <polyline points="5,20 8,15 12,18 15,10 18,12 22,8 25,14" 
+              stroke="url(#logoGradient)" 
+              stroke-width="2" 
+              fill="none" 
+              stroke-linecap="round" 
+              stroke-linejoin="round"/>
+    
+    <!-- Trend arrow -->
+    <path d="M20 8 L25 8 L25 13" 
+          stroke="url(#logoGradient)" 
+          stroke-width="2" 
+          fill="none" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+  </g>
+  
+  <!-- Company Name -->
+  <text x="45" y="25" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="url(#textGradient)">
+    Kryvex
+  </text>
+  
+  <!-- Tagline -->
+  <text x="45" y="42" font-family="Arial, sans-serif" font-size="10" font-weight="normal" fill="#64748b">
+    Trading Platform
+  </text>
+</svg>

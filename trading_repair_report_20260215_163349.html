@@ -1,0 +1,160 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Trading System Repair Report</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                h1 { color: #333; }
+                h2 { color: #666; margin-top: 30px; }
+                .critical { color: #dc3545; }
+                .high { color: #fd7e14; }
+                .medium { color: #ffc107; }
+                .success { color: #28a745; }
+                table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; }
+                tr:nth-child(even) { background-color: #f9f9f9; }
+                .summary { background-color: #e9ecef; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            </style>
+        </head>
+        <body>
+            <h1>Trading System Repair Report</h1>
+            <p>Generated: 2026-02-15 16:33:49</p>
+            
+            <div class="summary">
+                <h2>Summary</h2>
+                <p>Issues Found: 5</p>
+                <p>Fixes Applied: 5</p>
+                <p>Issues Remaining: 1</p>
+                <p>Successfully Fixed: 4</p>
+            </div>
+            
+            <h2>Issues Found</h2>
+            <table>
+                <tr>
+                    <th>Severity</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                </tr>
+        
+                <tr>
+                    <td class="high">HIGH</td>
+                    <td>NEGATIVE_BALANCE</td>
+                    <td>Found 1 users with negative balances</td>
+                </tr>
+            
+                <tr>
+                    <td class="high">HIGH</td>
+                    <td>LOCKED_EXCEEDS_AVAILABLE</td>
+                    <td>Found 2 wallets where frozen > balance</td>
+                </tr>
+            
+                <tr>
+                    <td class="medium">MEDIUM</td>
+                    <td>STALE_ORDERS</td>
+                    <td>Found 1 stale orders</td>
+                </tr>
+            
+                <tr>
+                    <td class="critical">CRITICAL</td>
+                    <td>INCORRECT_PNL_CALCULATION</td>
+                    <td>PnL calculation error - this causes the 'lose by default' issue</td>
+                </tr>
+            
+                <tr>
+                    <td class="medium">MEDIUM</td>
+                    <td>ORPHANED_LEDGER_ENTRIES</td>
+                    <td>Found 2 orphaned ledger entries</td>
+                </tr>
+            
+            </table>
+            
+            <h2>Fixes Applied</h2>
+            <table>
+                <tr>
+                    <th>Type</th>
+                    <th>Details</th>
+                </tr>
+        
+                <tr>
+                    <td>PNL_FIX</td>
+                    <td>{
+  "positions_updated": 3,
+  "force_win_applied": false
+}</td>
+                </tr>
+            
+                <tr>
+                    <td>NEGATIVE_BALANCE_FIX</td>
+                    <td>{
+  "balances_fixed": 1
+}</td>
+                </tr>
+            
+                <tr>
+                    <td>FROZEN_BALANCE_FIX</td>
+                    <td>{
+  "balances_fixed": 2
+}</td>
+                </tr>
+            
+                <tr>
+                    <td>STALE_ORDER_FIX</td>
+                    <td>{
+  "orders_cancelled": 1
+}</td>
+                </tr>
+            
+                <tr>
+                    <td>LEDGER_FIX</td>
+                    <td>{
+  "entries_fixed": 2
+}</td>
+                </tr>
+            
+            </table>
+            
+            <h2>Verification Results</h2>
+            <table>
+                <tr>
+                    <th>Category</th>
+                    <th>Items</th>
+                </tr>
+                <tr>
+                    <td class="success">Fixed Successfully</td>
+                    <td>NEGATIVE_BALANCE, LOCKED_EXCEEDS_AVAILABLE, STALE_ORDERS, INCORRECT_PNL_CALCULATION</td>
+                </tr>
+                <tr>
+                    <td class="critical">Issues Remaining</td>
+                    <td>ORPHANED_LEDGER_ENTRIES</td>
+                </tr>
+                <tr>
+                    <td class="high">Failed Fixes</td>
+                    <td>0</td>
+                </tr>
+            </table>
+            
+            <h2>Wallet Status</h2>
+            <table>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td>Total Users</td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td>Negative Balances</td>
+                    <td>1</td>
+                </tr>
+                <tr>
+                    <td>Frozen Exceeds Available</td>
+                    <td>2</td>
+                </tr>
+            </table>
+        
+        </body>
+        </html>
+        

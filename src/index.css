@@ -1,0 +1,306 @@
+/* Trading page styles */
+@import './styles/trading.css';
+
+/* Inter Fonts - Binance uses Inter font family */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Inter+Mono:wght@400;500;600&display=swap');
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .login-page input, .login-page button,
+  .forgot-password-page input, .forgot-password-page button,
+  .portfolio-page input, .portfolio-page select, .portfolio-page button {
+    font-size: 16px !important; /* Prevents zoom on mobile */
+  }
+  .login-page .rounded-2xl,
+  .forgot-password-page .rounded-2xl,
+  .portfolio-page .rounded-2xl {
+    border-radius: 1.5rem;
+  }
+  .login-page button,
+  .forgot-password-page button,
+  .portfolio-page button {
+    min-height: 48px; /* Better touch target */
+  }
+}
+
+/* Binance-style custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar,
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track,
+::-webkit-scrollbar-track {
+  background: #1E2329;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb {
+  background: #2B3139;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:hover {
+  background: #F0B90B;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Kryvex Trading Design System - Binance Theme
+Professional cryptocurrency trading platform styling
+*/
+
+@layer base {
+  :root {
+    /* Binance color system */
+    --background: 210 15% 4%;
+    --foreground: 210 5% 91%;
+    --card: 210 15% 8%;
+    --card-foreground: 210 5% 91%;
+    --popover: 210 15% 8%;
+    --popover-foreground: 210 5% 91%;
+    --primary: 45 91% 58%;
+    --primary-foreground: 210 15% 4%;
+    --secondary: 210 15% 16%;
+    --secondary-foreground: 210 5% 91%;
+    --muted: 210 15% 16%;
+    --muted-foreground: 210 5% 53%;
+    --accent: 210 15% 16%;
+    --accent-foreground: 45 91% 58%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 210 15% 23%;
+    --input: 210 15% 16%;
+    --ring: 45 91% 58%;
+    --radius: 0.75rem;
+    
+    /* Sidebar variables */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 210 15% 4%;
+    --foreground: 210 5% 91%;
+    --card: 210 15% 8%;
+    --card-foreground: 210 5% 91%;
+    --popover: 210 15% 8%;
+    --popover-foreground: 210 5% 91%;
+    --primary: 45 91% 58%;
+    --primary-foreground: 210 15% 4%;
+    --secondary: 210 15% 16%;
+    --secondary-foreground: 210 5% 91%;
+    --muted: 210 15% 16%;
+    --muted-foreground: 210 5% 53%;
+    --accent: 210 15% 16%;
+    --accent-foreground: 45 91% 58%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 210 15% 23%;
+    --input: 210 15% 16%;
+    --ring: 45 91% 58%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-[#0B0E11] text-[#EAECEF] antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  /* Selection color - Binance yellow */
+  ::selection {
+    background: #F0B90B;
+    color: #0B0E11;
+  }
+
+  /* Focus outline */
+  :focus-visible {
+    outline: 2px solid #F0B90B;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Card styles */
+  .binance-card {
+    @apply bg-[#1E2329] border border-[#2B3139] rounded-xl hover:border-[#F0B90B]/30 transition-all duration-300;
+  }
+
+  .gradient-card {
+    @apply bg-gradient-to-br from-[#1E2329] to-[#2B3139] border border-[#3A3F4A] rounded-xl;
+  }
+
+  /* Button styles */
+  .btn-primary {
+    @apply bg-[#F0B90B] hover:bg-[#F0B90B]/90 text-[#0B0E11] font-semibold rounded-lg transition-all duration-200;
+  }
+
+  .btn-secondary {
+    @apply bg-[#2B3139] hover:bg-[#3A3F4A] text-[#EAECEF] border border-[#3A3F4A] rounded-lg transition-all duration-200;
+  }
+
+  .btn-success {
+    @apply bg-[#0ECB81] hover:bg-[#0ECB81]/90 text-[#0B0E11] font-semibold rounded-lg transition-all duration-200;
+  }
+
+  .btn-danger {
+    @apply bg-[#F6465D] hover:bg-[#F6465D]/90 text-white font-semibold rounded-lg transition-all duration-200;
+  }
+
+  /* Price tags */
+  .price-positive {
+    @apply text-[#0ECB81] font-mono font-medium;
+  }
+
+  .price-negative {
+    @apply text-[#F6465D] font-mono font-medium;
+  }
+
+  /* Badges */
+  .badge-primary {
+    @apply bg-[#F0B90B]/10 text-[#F0B90B] border border-[#F0B90B]/20 text-xs px-2 py-0.5 rounded-full;
+  }
+
+  .badge-success {
+    @apply bg-[#0ECB81]/10 text-[#0ECB81] border border-[#0ECB81]/20 text-xs px-2 py-0.5 rounded-full;
+  }
+
+  .badge-warning {
+    @apply bg-[#F0B90B]/10 text-[#F0B90B] border border-[#F0B90B]/20 text-xs px-2 py-0.5 rounded-full;
+  }
+
+  .badge-danger {
+    @apply bg-[#F6465D]/10 text-[#F6465D] border border-[#F6465D]/20 text-xs px-2 py-0.5 rounded-full;
+  }
+}
+
+/* Custom Binance-style slider */
+input[type="range"].binance-slider {
+  width: 100%;
+  height: 6px;
+  background: #23262F;
+  border-radius: 6px;
+  outline: none;
+  transition: background 0.3s;
+}
+input[type="range"].binance-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #181A20;
+  border: 3px solid #F0B90B;
+  cursor: pointer;
+  transition: background 0.3s, border 0.3s;
+}
+input[type="range"].binance-slider::-webkit-slider-thumb:hover {
+  background: #23262F;
+  border-color: #FFD666;
+}
+input[type="range"].binance-slider::-ms-fill-lower,
+input[type="range"].binance-slider::-ms-fill-upper {
+  background: #23262F;
+}
+input[type="range"].binance-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #181A20;
+  border: 3px solid #F0B90B;
+  cursor: pointer;
+}
+input[type="range"].binance-slider::-moz-range-track {
+  background: #23262F;
+  height: 6px;
+  border-radius: 6px;
+}
+input[type="range"].binance-slider::-ms-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #181A20;
+  border: 3px solid #F0B90B;
+  cursor: pointer;
+}
+input[type="range"].binance-slider:focus {
+  outline: none;
+}
+input[type="range"].binance-slider::-ms-tooltip {
+  display: none;
+}
+
+/* Loading skeleton animation */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(
+    to right,
+    #1E2329 4%,
+    #2B3139 25%,
+    #1E2329 36%
+  );
+  background-size: 1000px 100%;
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  input, select, textarea, button {
+    font-size: 16px !important;
+  }
+  
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Shimmer animation for buttons */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%) skewX(-12deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(-12deg);
+  }
+}
+
+.group:hover .animate-shimmer {
+  animation: shimmer 0.6s ease-out;
+}

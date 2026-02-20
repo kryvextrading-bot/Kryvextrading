@@ -1,0 +1,139 @@
+body, #root {
+  background: #181A20;
+  color: #fff;
+  font-family: 'Inter', Arial, sans-serif;
+  min-height: 100vh;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.card, .binance-card, section, .section {
+  background: #23262F !important;
+  color: #fff !important;
+  border-radius: 14px;
+  box-shadow: 0 4px 24px 0 rgba(0,0,0,0.18);
+  border: 1.5px solid #23262F;
+  padding: 2em;
+}
+.text-secondary, .text-muted, .text-muted-foreground {
+  color: #bbb !important;
+}
+input, select, textarea, button {
+  color: #fff !important;
+}
+
+.binance-btn {
+  background: #F0B90B;
+  color: #181A20;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 1em 2.5em;
+  font-size: 1.1em;
+  transition: background 0.2s, box-shadow 0.2s;
+  border: none;
+  box-shadow: 0 2px 8px 0 rgba(240,185,11,0.10);
+  letter-spacing: 0.02em;
+}
+.binance-btn:hover, .binance-btn:focus {
+  background: #ffd666;
+  box-shadow: 0 4px 16px 0 rgba(240,185,11,0.18);
+}
+
+.binance-btn.red {
+  background: #F6465D;
+  color: #fff;
+}
+.binance-btn.red:hover, .binance-btn.red:focus {
+  background: #ff7b8a;
+}
+.binance-btn.green {
+  background: #0ECB81;
+  color: #fff;
+}
+.binance-btn.green:hover, .binance-btn.green:focus {
+  background: #1ee9a6;
+}
+
+.binance-tab {
+  background: transparent;
+  color: #fff;
+  border: none;
+  border-bottom: 3px solid transparent;
+  font-weight: 700;
+  font-size: 1.08em;
+  padding: 0.7em 2em;
+  transition: border 0.2s, color 0.2s;
+  letter-spacing: 0.01em;
+}
+.binance-tab.active {
+  color: #F0B90B;
+  border-bottom: 3px solid #F0B90B;
+}
+
+.binance-orderbook {
+  background: #23262F;
+  border-radius: 10px;
+  padding: 1.5em;
+  color: #fff;
+  font-size: 1em;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.14);
+  border: 1.5px solid #23262F;
+}
+
+input, select, textarea {
+  background: #23262F;
+  color: #fff;
+  border: 1.5px solid #393C49;
+  border-radius: 8px;
+  padding: 0.7em 1.2em;
+  font-size: 1.05em;
+  font-weight: 600;
+  margin-bottom: 0.5em;
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid #F0B90B;
+  background: #23262F;
+}
+option {
+  background: #23262F;
+  color: #fff;
+  font-size: 1em;
+}
+input::placeholder, select:disabled, input:disabled, textarea:disabled {
+  color: #bbb;
+  opacity: 1;
+}
+
+.binance-label {
+  color: #fff;
+  font-size: 1em;
+  font-weight: 600;
+  margin-bottom: 0.2em;
+  display: block;
+}
+.binance-balance {
+  color: #F0B90B;
+  font-weight: 700;
+  font-size: 1.05em;
+}
+.binance-error {
+  color: #F6465D;
+  font-weight: 600;
+  font-size: 1em;
+  margin-top: 0.5em;
+}
+.binance-info {
+  color: #0ECB81;
+  font-weight: 600;
+  font-size: 1em;
+  margin-top: 0.5em;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  background: #23262F;
+}
+::-webkit-scrollbar-thumb {
+  background: #181A20;
+  border-radius: 4px;
+}

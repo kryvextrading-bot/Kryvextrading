@@ -1,0 +1,1627 @@
+// pages/UnifiedTradingPage.tsx
+
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  ArrowLeft,
+  BarChart3,
+  Eye,
+  RefreshCw,
+  User,
+  ChevronDown,
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  X,
+  Plus,
+  Minus,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Info
+} from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useBinanceStream } from '@/hooks/useBinanceStream';
+import { useOptionOrderLifecycle } from '@/hooks/useOptionOrderLifecycle';
+import { toast } from 'react-hot-toast';
+import { formatCurrency, formatPrice } from '@/utils/tradingCalculations';
+import Countdown from 'react-countdown';
+
+// Types
+type TabType = 'spot' | 'future' | 'option';
+type OrderSide = 'buy' | 'sell' | 'up' | 'down';
+type PositionSide = 'long' | 'short';
+type BottomTabType = 'active' | 'scheduled' | 'completed' | 'positions' | 'open' | 'closed' | 'assets';
+
+interface OrderBookLevel {
+  price: number;
+  quantity: number;
+}
+
+interface OptionOrder {
+  id: string;
+  direction: 'UP' | 'DOWN';
+  stake: number;
+  entryPrice: number;
+  duration: number;
+  profit: number;
+  endTime: number;
+  status: 'ACTIVE' | 'COMPLETED';
+  pnl?: number;
+}
+
+// Constants
+const TRADING_PAIRS = [
+  { symbol: 'XAUUSDT', baseAsset: 'XAU', quoteAsset: 'USDT', price: 4909.35, change: -1.68, volume: 1200000000 },
+  { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', price: 67000, change: 2.34, volume: 1250000000 },
+  { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', price: 3500, change: 1.56, volume: 800000000 },
+  { symbol: 'XAGUSDT', baseAsset: 'XAG', quoteAsset: 'USDT', price: 74.62, change: -1.81, volume: 890000000 },
+  { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', price: 145, change: 3.21, volume: 150000000 },
+];
+
+const TIMEFRAMES = ['1M', '5M', '15M', '30M', '1H'];
+
+// Options Timeframes - Updated with proper configuration
+const OPTIONS_TIMEFRAMES = [
+  { label: '60s', value: 60, profit: 0.176, move: 0.01 },
+  { label: '3m', value: 180, profit: 0.30, move: 0.03 },
+  { label: '5m', value: 300, profit: 0.45, move: 0.05 },
+  { label: '10m', value: 600, profit: 0.65, move: 0.10 },
+  { label: '15m', value: 900, profit: 0.85, move: 0.15 },
+  { label: '30m', value: 1800, profit: 1.20, move: 0.30 },
+];
+
+// Fluctuation Ranges - Updated to match new timeframes
+const FLUCTUATION_RANGES = {
+  60: [{ label: 'UP > 0.01%', value: 0.01, payout: 0.176 }],
+  180: [{ label: 'UP > 0.03%', value: 0.03, payout: 0.30 }],
+  300: [{ label: 'UP > 0.05%', value: 0.05, payout: 0.45 }],
+  600: [{ label: 'UP > 0.10%', value: 0.10, payout: 0.65 }],
+  900: [{ label: 'UP > 0.15%', value: 0.15, payout: 0.85 }],
+  1800: [{ label: 'UP > 0.30%', value: 0.30, payout: 1.20 }],
+};
+
+// Purchase Ranges - Updated for new timeframes
+const PURCHASE_RANGES = {
+  60: { min: 100, max: 50000 },
+  180: { min: 1000, max: 100000 },
+  300: { min: 5000, max: 200000 },
+  600: { min: 10000, max: 500000 },
+  900: { min: 25000, max: 750000 },
+  1800: { min: 50000, max: 1000000 },
+};
+
+// Leverage Options
+const LEVERAGE_OPTIONS = [1, 2, 3, 5, 10, 20, 25, 33, 50, 100];
+
+// Countdown Renderer
+const CountdownRenderer = ({ hours, minutes, seconds, completed }: any) => {
+  if (completed) return null;
+  
+  const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+  
+  if (totalSeconds > 60) {
+    return (
+      <span className="text-xs text-blue-400 font-mono font-bold">
+        {minutes}:{seconds.toString().padStart(2, '0')}
+      </span>
+    );
+  }
+  
+  return (
+    <span className="text-xs text-yellow-400 font-mono font-bold animate-pulse">
+      {seconds}s
+    </span>
+  );
+};
+
+export default function UnifiedTradingPage() {
+  const navigate = useNavigate();
+  const { symbol, tab } = useParams();
+  const { user, isAuthenticated } = useAuth();
+  const { getTradingBalance } = useUnifiedWallet();
+
+  // Find selected pair
+  const selectedPair = useMemo(() => {
+    if (symbol) {
+      const pair = TRADING_PAIRS.find(p => p.baseAsset.toLowerCase() === symbol.toLowerCase());
+      return pair || TRADING_PAIRS[0];
+    }
+    return TRADING_PAIRS[0];
+  }, [symbol]);
+
+  // Update futures balance from wallet
+  useEffect(() => {
+    const balance = getTradingBalance('USDT');
+    setFuturesBalance(balance);
+  }, [getTradingBalance]);
+
+  // Chart animation state
+  const [chartData, setChartData] = useState([16, 24, 12, 20, 8, 28, 16, 22]);
+  const animationRef = useRef<NodeJS.Timeout>();
+
+  // Animate chart data
+  useEffect(() => {
+    const animateChart = () => {
+      setChartData(prev => {
+        const newData = [...prev.slice(1)];
+        const lastValue = prev[prev.length - 1];
+        const change = (Math.random() - 0.5) * 8; // Random change between -4 and 4
+        const newValue = Math.max(4, Math.min(32, lastValue + change));
+        newData.push(newValue);
+        return newData;
+      });
+    };
+
+    animationRef.current = setInterval(animateChart, 2000); // Update every 2 seconds
+
+    return () => {
+      if (animationRef.current) {
+        clearInterval(animationRef.current);
+      }
+    };
+  }, []);
+  const { currentPrice, priceChange24h } = useBinanceStream(selectedPair?.symbol || 'XAUUSDT');
+  const displayPrice = currentPrice || selectedPair.price;
+  const displayChange = priceChange24h || selectedPair.change;
+
+  // UI State
+  const [activeTab, setActiveTab] = useState<TabType>(
+    tab === 'future' ? 'future' : tab === 'option' ? 'option' : 'spot'
+  );
+  const [selectedTimeframe, setSelectedTimeframe] = useState('1H');
+  const [hideBalances, setHideBalances] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  
+  // Spot State
+  const [spotSide, setSpotSide] = useState<'buy' | 'sell'>('buy');
+  const [spotAmount, setSpotAmount] = useState('');
+  
+  // Futures State
+  const [futuresTradeType, setFuturesTradeType] = useState<'open' | 'close'>('open');
+  const [futuresSide, setFuturesSide] = useState<'long' | 'short'>('long');
+  const [futuresLeverage, setFuturesLeverage] = useState(100);
+  const [futuresAmount, setFuturesAmount] = useState('');
+  const [futuresPercentage, setFuturesPercentage] = useState(0);
+  const [tpSlEnabled, setTpSlEnabled] = useState(false);
+  const [showLeverageModal, setShowLeverageModal] = useState(false);
+  const [futuresBalance, setFuturesBalance] = useState(0.00);
+
+  // Options State
+  const [optionDirection, setOptionDirection] = useState<'up' | 'down'>('up');
+  const [optionDuration, setOptionDuration] = useState(60);
+  const [optionFluctuation, setOptionFluctuation] = useState(0.01);
+  const [optionAmount, setOptionAmount] = useState('');
+  const [optionPercentage, setOptionPercentage] = useState(0);
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [showDurationModal, setShowDurationModal] = useState(false);
+  const [showFluctuationModal, setShowFluctuationModal] = useState(false);
+  const [showScheduledModal, setShowScheduledModal] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState({ hours: 0, minutes: 0, seconds: 30 });
+
+  // Bottom Tabs
+  const [activeBottomTab, setActiveBottomTab] = useState<BottomTabType>('active');
+
+  // Mock Active Options Trade
+  const [activeOptionTrade, setActiveOptionTrade] = useState<OptionOrder | null>({
+    id: '1',
+    direction: 'UP',
+    stake: 10000,
+    entryPrice: 4927.37,
+    duration: 60,
+    profit: 1760,
+    endTime: Date.now() / 1000 + 45,
+    status: 'ACTIVE'
+  });
+
+  // Mock Completed Orders
+  const [completedOrders] = useState<OptionOrder[]>([
+    {
+      id: '2',
+      direction: 'UP',
+      stake: 5000,
+      entryPrice: 4910.25,
+      duration: 120,
+      profit: 900,
+      endTime: Date.now() / 1000 - 3600,
+      status: 'COMPLETED',
+      pnl: 900
+    },
+    {
+      id: '3',
+      direction: 'DOWN',
+      stake: 2500,
+      entryPrice: 4920.50,
+      duration: 60,
+      profit: 440,
+      endTime: Date.now() / 1000 - 7200,
+      status: 'COMPLETED',
+      pnl: -2500
+    }
+  ]);
+
+  // Order Book Data - Spot (Exact Screenshot)
+  const spotOrderBookAsks = [
+    { price: 4911, quantity: 9909.066 },
+    { price: 4910, quantity: 31947.091 },
+    { price: 4909, quantity: 65874.109 }
+  ];
+
+  const spotOrderBookBids = [
+    { price: 4909, quantity: 0.400 },
+    { price: 4908, quantity: 57036.023 },
+    { price: 4907, quantity: 79386.899 }
+  ];
+
+  // Order Book Data - Futures (Exact Screenshot)
+  const futuresOrderBook = {
+    market: { price: 4911, available: 13992.735 },
+    level1: { price: 4910, available: 35090.467 },
+    level2: { price: 4909, available: 74579.926 }
+  };
+
+  const futuresAvailableAmounts = [
+    { price: 4909, amount: 0.300 },
+    { price: 4908, amount: 1.000 },
+    { price: 4907, amount: 139044.478 }
+  ];
+
+  // Order Book Data - Options (Updated with new timeframes)
+  const optionsOrderBookAsks = [
+    { timeLabel: '60s', price: 4911, quantity: 0.400, duration: 60, fluctuation: 0.01 },
+    { timeLabel: '3m', price: 4910, quantity: 65188.195, duration: 180, fluctuation: 0.03 },
+    { timeLabel: 'UP>0.05%(0.45)', price: 4909, quantity: 74578.626, duration: 300, fluctuation: 0.05 }
+  ];
+
+  const optionsOrderBookBids = [
+    { price: 4909, quantity: 0.700 },
+    { price: 4908, quantity: 5896.877 },
+    { price: 4907, quantity: 133148.201 }
+  ];
+
+  // Handlers
+  const handleSpotTrade = () => {
+    if (!isAuthenticated) {
+      toast.error('Please login to trade');
+      return;
+    }
+
+    const parsedAmount = parseFloat(spotAmount);
+    if (!parsedAmount || parsedAmount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    const total = parsedAmount * displayPrice;
+    const balance = getTradingBalance('USDT');
+
+    if (total > balance) {
+      toast.error(`Insufficient balance. Need $${total.toFixed(2)} USDT`);
+      return;
+    }
+
+    toast.success(`${spotSide === 'buy' ? 'Bought' : 'Sold'} ${parsedAmount} ${selectedPair.baseAsset}`);
+    setSpotAmount('');
+  };
+
+  const handleFuturesTrade = () => {
+    if (!isAuthenticated) {
+      toast.error('Please login to trade');
+      return;
+    }
+
+    const parsedAmount = parseFloat(futuresAmount);
+    if (!parsedAmount || parsedAmount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    const margin = parsedAmount / futuresLeverage;
+    const balance = getTradingBalance('USDT');
+
+    if (margin > balance) {
+      toast.error(`Insufficient balance. Need $${margin.toFixed(2)} USDT for margin`);
+      return;
+    }
+
+    // Calculate position value and P&L
+    const positionValue = parsedAmount * displayPrice;
+    const maxLoss = positionValue * 0.1; // 10% max loss
+    const requiredMargin = maxLoss / futuresLeverage;
+
+    if (requiredMargin > balance) {
+      toast.error(`Insufficient balance for this position size`);
+      return;
+    }
+
+    toast.success(`${futuresTradeType === 'open' ? 'Opened' : 'Closed'} ${futuresSide} position with ${futuresLeverage}x leverage`);
+    setFuturesAmount('');
+    setFuturesPercentage(0);
+  };
+
+  const handleOptionTrade = () => {
+    if (!isAuthenticated) {
+      toast.error('Please login to trade');
+      return;
+    }
+
+    const parsedAmount = parseFloat(optionAmount);
+    if (!parsedAmount || parsedAmount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    const purchaseRange = PURCHASE_RANGES[optionDuration as keyof typeof PURCHASE_RANGES];
+    if (parsedAmount < purchaseRange.min || parsedAmount > purchaseRange.max) {
+      toast.error(`Amount must be between ${purchaseRange.min} and ${purchaseRange.max} USDT`);
+      return;
+    }
+
+    const balance = getTradingBalance('USDT');
+    if (parsedAmount > balance) {
+      toast.error(`Insufficient balance. Need $${parsedAmount.toFixed(2)} USDT`);
+      return;
+    }
+
+    if (isScheduled) {
+      toast.success(`Trade scheduled for ${scheduledTime.hours}:${scheduledTime.minutes}:${scheduledTime.seconds} UTC`);
+      setIsScheduled(false);
+    } else {
+      // Simulate active trade
+      const newTrade: OptionOrder = {
+        id: Date.now().toString(),
+        direction: optionDirection === 'up' ? 'UP' : 'DOWN',
+        stake: parsedAmount,
+        entryPrice: displayPrice,
+        duration: optionDuration,
+        profit: parsedAmount * (FLUCTUATION_RANGES[optionDuration as keyof typeof FLUCTUATION_RANGES]?.find(f => f.value === optionFluctuation)?.payout || 0.176),
+        endTime: Date.now() / 1000 + optionDuration,
+        status: 'ACTIVE'
+      };
+      setActiveOptionTrade(newTrade);
+      toast.success('Option purchased successfully');
+    }
+
+    setOptionAmount('');
+    setOptionPercentage(0);
+  };
+
+  const handleCancelScheduled = () => {
+    setIsScheduled(false);
+    setShowScheduledModal(false);
+  };
+
+  const handleSaveScheduled = () => {
+    setIsScheduled(true);
+    setShowScheduledModal(false);
+    toast.success(`Trade scheduled for ${scheduledTime.hours}:${scheduledTime.minutes}:${scheduledTime.seconds} UTC`);
+  };
+
+  // Get current UTC time
+  const currentUTC = new Date().toISOString().split('T')[1].split('.')[0];
+
+  return (
+    <div className="min-h-screen bg-[#0A0B0D] text-white">
+      {/* Header - Exact Screenshot */}
+      <div className="sticky top-0 z-50 bg-[#0A0B0D]/95 backdrop-blur-xl border-b border-gray-800">
+        <div className="px-4 py-3">
+          {/* Top Row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <button onClick={() => navigate('/trading')} className="text-gray-400">
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <h1 className="text-xl font-semibold">{selectedPair.baseAsset}</h1>
+              <span className={`text-sm ${displayChange >= 0 ? 'text-teal-400' : 'text-red-400'}`}>
+                {displayChange >= 0 ? '+' : ''}{displayChange.toFixed(2)}%
+              </span>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <button 
+                onClick={() => setHideBalances(!hideBalances)}
+                className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <Eye className="h-5 w-5 text-gray-400" />
+              </button>
+              <button 
+                onClick={() => navigate(`/trading/${symbol}/chart`)}
+                className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <BarChart3 className="h-5 w-5 text-gray-400" />
+              </button>
+              <button className="p-2 hover:bg-gray-800 rounded-lg transition-colors">
+                <RefreshCw className="h-5 w-5 text-gray-400" />
+              </button>
+              <button
+                onClick={() => setProfileOpen(!profileOpen)}
+                className="w-8 h-8 bg-teal-400 rounded-lg flex items-center justify-center"
+              >
+                <span className="text-sm font-bold text-gray-900">
+                  {user?.email?.[0] || 'U'}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Market Tabs - Exact Screenshot */}
+          <div className="flex space-x-4 mt-3">
+            {['Spot', 'Future', 'Option'].map((tabName) => (
+              <button
+                key={tabName}
+                onClick={() => {
+                  const newTab = tabName.toLowerCase() as TabType;
+                  setActiveTab(newTab);
+                  navigate(`/trading/${symbol}/${newTab === 'spot' ? '' : newTab}`);
+                }}
+                className={`pb-1 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tabName.toLowerCase()
+                    ? 'border-teal-400 text-teal-400'
+                    : 'border-transparent text-gray-500'
+                }`}
+              >
+                {tabName}
+              </button>
+            ))}
+          </div>
+
+          {/* Price Info - Exact Screenshot */}
+          <div className="flex items-center justify-between mt-3">
+            <div className="flex items-center space-x-2">
+              <span className="text-2xl font-bold text-white">
+                {displayPrice.toFixed(2)} ↓
+              </span>
+              <span className={`text-sm ${displayChange >= 0 ? 'text-teal-400' : 'text-red-400'}`}>
+                {displayChange.toFixed(2)}%
+              </span>
+            </div>
+            <span className="text-xs text-gray-500">
+              ≈${displayPrice.toFixed(2)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Timeframes - Exact Screenshot */}
+      <div className="px-4 py-2 flex space-x-4 border-b border-gray-800">
+        {TIMEFRAMES.map(tf => (
+          <button
+            key={tf}
+            onClick={() => setSelectedTimeframe(tf)}
+            className={`text-sm font-medium transition-colors ${
+              selectedTimeframe === tf 
+                ? 'text-teal-400' 
+                : 'text-gray-500'
+            }`}
+          >
+            {tf}
+          </button>
+        ))}
+      </div>
+
+      {/* Main Content */}
+      <div className="px-4 py-4 pb-32">
+        {/* Mini Chart with Animated Movements */}
+        <div className="h-32 bg-gray-900 rounded-lg mb-4 flex items-end justify-between px-2">
+          <div className="flex items-end gap-1 h-full py-2">
+            {chartData.map((height, i) => (
+              <div
+                key={i}
+                className={`w-8 rounded-t transition-all duration-500 ease-in-out ${
+                  i > 0 && height > chartData[i - 1] ? 'bg-green-400/40' : 'bg-red-400/40'
+                }`}
+                style={{ height: `${height * 4}px` }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* SPOT TAB */}
+        {activeTab === 'spot' && (
+          <div>
+            {/* Trade Type Selector - Exact Screenshot */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <button
+                onClick={() => setSpotSide('buy')}
+                className={`py-2 rounded-lg text-sm font-medium ${
+                  spotSide === 'buy'
+                    ? 'bg-teal-400 text-gray-900'
+                    : 'bg-gray-800 text-gray-400'
+                }`}
+              >
+                Buy
+              </button>
+              <button
+                onClick={() => setSpotSide('sell')}
+                className={`py-2 rounded-lg text-sm font-medium ${
+                  spotSide === 'sell'
+                    ? 'bg-red-400 text-gray-900'
+                    : 'bg-gray-800 text-gray-400'
+                }`}
+              >
+                Sell
+              </button>
+              <button className="py-2 rounded-lg text-sm font-medium bg-gray-800 text-gray-400">
+                Borrow/Repay
+              </button>
+            </div>
+
+            {/* Order Book - Exact Screenshot Layout */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              {/* Left - Order Book */}
+              <div>
+                <div className="text-xs text-gray-500 mb-2">Market</div>
+                
+                {/* Asks (Sell orders) - Red */}
+                <div className="space-y-1">
+                  {spotOrderBookAsks.map((ask, i) => (
+                    <div key={i} className="flex justify-between text-xs">
+                      <span className="text-red-400 font-mono">{ask.price}</span>
+                      <span className="text-gray-300">{ask.quantity.toFixed(3)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Current Price */}
+                <div className="flex justify-between items-center py-2 border-y border-gray-800 my-2">
+                  <span className="text-white font-bold font-mono">{displayPrice.toFixed(2)} ↓</span>
+                  <span className="text-xs text-gray-500">≈${displayPrice.toFixed(2)}</span>
+                </div>
+
+                {/* Bids (Buy orders) - Green */}
+                <div className="space-y-1 mt-2">
+                  {spotOrderBookBids.map((bid, i) => (
+                    <div key={i} className="flex justify-between text-xs">
+                      <span className="text-teal-400 font-mono">{bid.price}</span>
+                      <span className="text-gray-300">{bid.quantity.toFixed(3)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right - Trading Form */}
+              <div>
+                {/* Amount Display */}
+                <div className="flex justify-between text-xs mb-4">
+                  <span className="text-gray-500">0.00000 {selectedPair.baseAsset}</span>
+                </div>
+
+                {/* Available Balance */}
+                <div className="flex justify-between text-xs mb-2">
+                  <span className="text-gray-500">Available</span>
+                  <span className="text-white">
+                    {hideBalances ? '••••' : formatCurrency(getTradingBalance('USDT'))} USDT
+                  </span>
+                </div>
+
+                {/* Estimated Fee */}
+                <div className="flex justify-between text-xs mb-4">
+                  <span className="text-gray-500">Est. fee</span>
+                  <span className="text-white">-- USDT</span>
+                </div>
+
+                {/* Amount Input */}
+                <input
+                  type="number"
+                  value={spotAmount}
+                  onChange={(e) => setSpotAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono mb-4"
+                />
+
+                {/* Order Book Prices */}
+                <div className="space-y-1 mb-4">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-teal-400 font-mono">4909</span>
+                    <span className="text-gray-300">0.400</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-teal-400 font-mono">4908</span>
+                    <span className="text-gray-300">57036.023</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-teal-400 font-mono">4907</span>
+                    <span className="text-gray-300">79386.899</span>
+                  </div>
+                </div>
+
+                {/* Buy Button */}
+                <button
+                  onClick={handleSpotTrade}
+                  disabled={!spotAmount || parseFloat(spotAmount) <= 0}
+                  className="w-full bg-teal-400 text-gray-900 py-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {spotSide === 'buy' ? 'Buy' : 'Sell'} {selectedPair.baseAsset}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* FUTURES TAB */}
+        {activeTab === 'future' && (
+          <div>
+            {/* Trade Type Selector - Exact Screenshot */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <button
+                onClick={() => setFuturesTradeType('open')}
+                className={`py-2 rounded-lg text-sm font-medium ${
+                  futuresTradeType === 'open'
+                    ? 'bg-teal-400 text-gray-900'
+                    : 'bg-gray-800 text-gray-400'
+                }`}
+              >
+                Open
+              </button>
+              <button
+                onClick={() => setFuturesTradeType('close')}
+                className={`py-2 rounded-lg text-sm font-medium ${
+                  futuresTradeType === 'close'
+                    ? 'bg-teal-400 text-gray-900'
+                    : 'bg-gray-800 text-gray-400'
+                }`}
+              >
+                Close
+              </button>
+              <button className="py-2 rounded-lg text-sm font-medium bg-gray-800 text-gray-400">
+                Borrow/Repay
+              </button>
+            </div>
+
+            {/* Leverage Selector - 100x from screenshot */}
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm text-gray-400">Leverage</span>
+              <button
+                onClick={() => setShowLeverageModal(true)}
+                className="flex items-center space-x-1 bg-gray-800 px-3 py-1 rounded-lg"
+              >
+                <span className="text-teal-400 font-medium">{futuresLeverage}x</span>
+                <ChevronDown className="h-4 w-4 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Order Book - Exact Screenshot Layout */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              {/* Left - Order Book */}
+              <div>
+                <div className="text-xs text-gray-500 mb-2">Price (USDT) • Available (XAU)</div>
+                
+                {/* Sell Orders */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-red-400 font-mono">{futuresOrderBook.level2.price}</span>
+                    <span className="text-gray-300">{futuresOrderBook.level2.available.toFixed(3)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-red-400 font-mono">{futuresOrderBook.level1.price}</span>
+                    <span className="text-gray-300">{futuresOrderBook.level1.available.toFixed(3)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-red-400 font-mono">{futuresOrderBook.market.price}</span>
+                    <span className="text-gray-300">{futuresOrderBook.market.available.toFixed(3)}</span>
+                  </div>
+                </div>
+
+                {/* Current Price */}
+                <div className="flex justify-between items-center py-2 border-y border-gray-800 my-2">
+                  <span className="text-white font-bold font-mono">{displayPrice.toFixed(2)} ↓</span>
+                  <span className="text-xs text-gray-500">≈${displayPrice.toFixed(2)}</span>
+                </div>
+
+                {/* Buy Orders */}
+                <div className="space-y-1 mt-2">
+                  {futuresAvailableAmounts.map((item, i) => (
+                    <div key={i} className="flex justify-between text-xs">
+                      <span className="text-teal-400 font-mono">{item.price}</span>
+                      <span className="text-gray-300">{item.amount.toFixed(3)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right - Trading Form */}
+              <div>
+                {/* Buy Hands - Exact Screenshot */}
+                <div className="flex justify-between text-xs mb-2">
+                  <span className="text-gray-500">Buy Hands</span>
+                  <span className="text-white">{selectedPair.baseAsset}</span>
+                </div>
+                <div className="flex justify-between text-xs mb-4">
+                  <span className="text-gray-500">≈${displayPrice.toFixed(2)}</span>
+                  <span className="text-gray-400">Leverage: {futuresLeverage}x</span>
+                </div>
+
+                {/* Percentage Buttons */}
+                <div className="grid grid-cols-4 gap-1 mb-4">
+                  {[0, 25, 50, 75].map(p => (
+                    <button
+                      key={p}
+                      onClick={() => {
+                        setFuturesPercentage(p);
+                        if (p > 0) {
+                          const maxAmount = futuresBalance;
+                          setFuturesAmount(((maxAmount * p) / 100).toFixed(3));
+                        } else {
+                          setFuturesAmount('');
+                        }
+                      }}
+                      className={`py-2 rounded text-xs transition-colors ${
+                        futuresPercentage === p
+                          ? 'bg-teal-400 text-gray-900'
+                          : 'bg-gray-800 text-gray-400'
+                      }`}
+                    >
+                      {p}%
+                    </button>
+                  ))}
+                </div>
+
+                {/* Amount Input */}
+                <input
+                  type="number"
+                  value={futuresAmount}
+                  onChange={(e) => {
+                    setFuturesAmount(e.target.value);
+                    setFuturesPercentage(0);
+                  }}
+                  placeholder="0.000"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono mb-4"
+                />
+
+                {/* Take Profit / Stop Lose - Exact Screenshot */}
+                <div className="flex items-center space-x-2 mb-4">
+                  <input
+                    type="checkbox"
+                    id="tpSl"
+                    checked={tpSlEnabled}
+                    onChange={(e) => setTpSlEnabled(e.target.checked)}
+                    className="rounded bg-gray-800 border-gray-700"
+                  />
+                  <label htmlFor="tpSl" className="text-xs text-gray-400">
+                    Take Profit / Stop Lose
+                  </label>
+                </div>
+
+                {/* Available - Exact Screenshot */}
+                <div className="flex justify-between text-xs mb-2">
+                  <span className="text-gray-500">Available</span>
+                  <span className="text-white">{futuresBalance.toFixed(2)} {selectedPair.baseAsset}</span>
+                </div>
+
+                {/* Max open - Exact Screenshot */}
+                <div className="flex justify-between text-xs mb-4">
+                  <span className="text-gray-500">Max open</span>
+                  <span className="text-white">{(futuresBalance * futuresLeverage).toFixed(2)}</span>
+                </div>
+
+                {/* Buy Button */}
+                <button
+                  onClick={handleFuturesTrade}
+                  disabled={!futuresAmount || parseFloat(futuresAmount) <= 0}
+                  className="w-full bg-teal-400 text-gray-900 py-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Buy
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* OPTIONS TAB */}
+        {activeTab === 'option' && (
+          <div>
+            {/* Direction Selector - Exact Screenshot */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <button
+                onClick={() => setOptionDirection('up')}
+                className={`py-2 rounded-lg text-sm font-medium ${
+                  optionDirection === 'up'
+                    ? 'bg-teal-400 text-gray-900'
+                    : 'bg-gray-800 text-gray-400'
+                }`}
+              >
+                Up
+              </button>
+              <button
+                onClick={() => setOptionDirection('down')}
+                className={`py-2 rounded-lg text-sm font-medium ${
+                  optionDirection === 'down'
+                    ? 'bg-red-400 text-gray-900'
+                    : 'bg-gray-800 text-gray-400'
+                }`}
+              >
+                Down
+              </button>
+              <button className="py-2 rounded-lg text-sm font-medium bg-gray-800 text-gray-400">
+                Borrow/Repay
+              </button>
+            </div>
+
+            {/* Open Position Mode */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setIsScheduled(false)}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  !isScheduled
+                    ? 'bg-teal-400 text-gray-900'
+                    : 'bg-gray-800 text-gray-400'
+                }`}
+              >
+                Open Position Now
+              </button>
+              <button
+                onClick={() => setShowScheduledModal(true)}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1 ${
+                  isScheduled
+                    ? 'bg-teal-400 text-gray-900'
+                    : 'bg-gray-800 text-gray-400'
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                Scheduled Time
+              </button>
+            </div>
+
+            {/* Active Trade Display */}
+            <AnimatePresence>
+              {activeOptionTrade && activeOptionTrade.status === 'ACTIVE' && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl p-4 mb-4"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-semibold ${
+                          activeOptionTrade.direction === 'UP' ? 'text-teal-400' : 'text-red-400'
+                        }`}>
+                          {activeOptionTrade.direction}
+                        </span>
+                        <span className="text-xs text-gray-400">{selectedPair.baseAsset}</span>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        Stake: ${activeOptionTrade.stake.toFixed(2)} • Duration: {activeOptionTrade.duration}s
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-gray-400">Expected Profit</div>
+                      <div className="text-sm font-semibold text-green-400">
+                        +${activeOptionTrade.profit.toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Countdown
+                    date={activeOptionTrade.endTime * 1000}
+                    renderer={({ hours, minutes, seconds, completed }) => {
+                      if (completed) return null;
+                      const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+                      const progress = 1 - (totalSeconds / activeOptionTrade.duration);
+                      
+                      return (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-400">Time Remaining</span>
+                            <span className="text-sm font-mono font-bold text-yellow-400">
+                              {totalSeconds > 60 
+                                ? `${minutes}:${seconds.toString().padStart(2, '0')}`
+                                : `${seconds}s`
+                              }
+                            </span>
+                          </div>
+                          
+                          <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-teal-400"
+                              style={{ width: `${progress * 100}%` }}
+                            />
+                          </div>
+                          
+                          <div className="flex justify-between text-xs mt-2">
+                            <span className="text-gray-400">
+                              Entry: ${activeOptionTrade.entryPrice.toFixed(2)}
+                            </span>
+                            <span className={`${
+                              (activeOptionTrade.direction === 'UP' && displayPrice > activeOptionTrade.entryPrice) ||
+                              (activeOptionTrade.direction === 'DOWN' && displayPrice < activeOptionTrade.entryPrice)
+                                ? 'text-green-400'
+                                : 'text-red-400'
+                            }`}>
+                              Current: ${displayPrice.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+        {/* OPTIONS TAB */}
+              {activeTab === 'option' && (
+                  <div className="flex justify-between text-xs items-center">
+                    <button 
+                      onClick={() => {
+                        setOptionDuration(60);
+                        setOptionFluctuation(0.01);
+                        setShowDurationModal(false);
+                      }}
+                      className="text-gray-400 hover:text-teal-400 transition-colors cursor-pointer w-12 text-left"
+                    >
+                      60s
+                    </button>
+                    <span className="text-red-400 font-mono w-16 text-right">{optionsOrderBookAsks[0].price}</span>
+                    <span className="text-gray-300 w-20 text-right">{optionsOrderBookAsks[0].quantity.toFixed(3)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs items-center">
+                    <button 
+                      onClick={() => {
+                        setOptionDuration(180);
+                        setOptionFluctuation(0.03);
+                        setShowDurationModal(false);
+                      }}
+                      className="text-gray-400 hover:text-teal-400 transition-colors cursor-pointer w-12 text-left"
+                    >
+                      3m
+                    </button>
+                    <span className="text-red-400 font-mono w-16 text-right">{optionsOrderBookAsks[1].price}</span>
+                    <span className="text-gray-300 w-20 text-right">{optionsOrderBookAsks[1].quantity.toFixed(3)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs items-center">
+                    <button 
+                      onClick={() => {
+                        setOptionDuration(300);
+                        setOptionFluctuation(0.05);
+                        setShowFluctuationModal(false);
+                      }}
+                      className="text-teal-400 hover:text-teal-300 transition-colors cursor-pointer w-12 text-left"
+                    >
+                      UP&gt;0.05%(0.45)
+                    </button>
+                    <span className="text-red-400 font-mono w-16 text-right">{optionsOrderBookAsks[2].price}</span>
+                    <span className="text-gray-300 w-20 text-right">{optionsOrderBookAsks[2].quantity.toFixed(3)}</span>
+                  </div>
+                </div>
+
+                {/* USDT Display */}
+                <div className="mt-3 mb-2">
+                  <span className="text-xs text-gray-400">USDT</span>
+                </div>
+
+                {/* Current Price */}
+                <div className="flex justify-between items-center py-2 border-y border-gray-800 my-2">
+                  <span className="text-white font-bold font-mono">{displayPrice.toFixed(2)} ↓</span>
+                  <span className="text-xs text-gray-500">≈${displayPrice.toFixed(2)}</span>
+                </div>
+
+                {/* Total Section */}
+                <div className="mt-3">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-400">Total</span>
+                    <span className="text-gray-400">USDT</span>
+                  </div>
+                  <div className="space-y-1">
+                    {optionsOrderBookBids.map((bid, i) => (
+                      <div key={i} className="flex justify-between text-xs items-center">
+                        <span className="text-teal-400 font-mono w-16 text-right">{bid.price}</span>
+                        <span className="text-gray-300 w-20 text-right">{bid.quantity.toFixed(3)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right - Trading Form */}
+              <div>
+                {/* Purchase Range - Exact Screenshot */}
+                <div className="space-y-3">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Purchase Range</span>
+                    <span className="text-white">
+                      {PURCHASE_RANGES[optionDuration as keyof typeof PURCHASE_RANGES].min}-
+                      {PURCHASE_RANGES[optionDuration as keyof typeof PURCHASE_RANGES].max}
+                    </span>
+                  </div>
+
+                  {/* Duration Selection */}
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Duration</span>
+                    <button 
+                      onClick={() => setShowDurationModal(true)}
+                      className="text-teal-400 hover:text-teal-300 transition-colors flex items-center gap-1"
+                    >
+                      {OPTIONS_TIMEFRAMES.find(tf => tf.value === optionDuration)?.label || '60s'}
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                  </div>
+
+                  {/* Fluctuation Rate */}
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Fluctuation</span>
+                    <button 
+                      onClick={() => setShowFluctuationModal(true)}
+                      className="text-teal-400 hover:text-teal-300 transition-colors flex items-center gap-1"
+                    >
+                      {FLUCTUATION_RANGES[optionDuration as keyof typeof FLUCTUATION_RANGES]?.[0]?.label || 'UP > 0.01%'}
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                  </div>
+
+                  {/* Available */}
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Available</span>
+                    <span className="text-white">
+                      {hideBalances ? '••••' : formatCurrency(getTradingBalance('USDT'))} USDT
+                    </span>
+                  </div>
+
+                  {/* Expected Profit */}
+                  {optionAmount && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">Expected Profit</span>
+                      <span className="text-green-400 font-mono">
+                        +${(parseFloat(optionAmount) * 
+                          (FLUCTUATION_RANGES[optionDuration as keyof typeof FLUCTUATION_RANGES]?.find(
+                            f => f.value === optionFluctuation
+                          )?.payout || 0.176)).toFixed(2)} USDT
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Amount Input */}
+                  <input
+                    type="number"
+                    value={optionAmount}
+                    onChange={(e) => {
+                      setOptionAmount(e.target.value);
+                      setOptionPercentage(0);
+                    }}
+                    placeholder="Enter amount"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono"
+                    min={PURCHASE_RANGES[optionDuration as keyof typeof PURCHASE_RANGES].min}
+                    max={PURCHASE_RANGES[optionDuration as keyof typeof PURCHASE_RANGES].max}
+                  />
+
+                  {/* Percentage Buttons */}
+                  <div className="grid grid-cols-4 gap-1">
+                    {[25, 50, 75, 100].map(p => {
+                      const max = PURCHASE_RANGES[optionDuration as keyof typeof PURCHASE_RANGES].max;
+                      const amount = Math.floor(max * (p / 100));
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => {
+                            setOptionAmount(amount.toString());
+                            setOptionPercentage(p);
+                          }}
+                          className={`py-2 rounded text-xs transition-colors ${
+                            optionPercentage === p
+                              ? 'bg-teal-400 text-gray-900'
+                              : 'bg-gray-800 text-gray-400'
+                          }`}
+                        >
+                          {p}%
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Buy Button */}
+                  <button
+                    onClick={handleOptionTrade}
+                    disabled={!optionAmount || parseFloat(optionAmount) <= 0}
+                    className="w-full bg-teal-400 text-gray-900 py-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isScheduled ? 'Schedule Trade' : 'Buy'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Tabs - Exact Screenshot */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#0A0B0D] border-t border-gray-800">
+        <div className="flex border-b border-gray-800">
+          {activeTab === 'option' ? (
+            // Options Tabs
+            <>
+              <button
+                onClick={() => setActiveBottomTab('active')}
+                className={`flex-1 py-3 text-sm border-b-2 transition-colors ${
+                  activeBottomTab === 'active'
+                    ? 'border-teal-400 text-teal-400'
+                    : 'border-transparent text-gray-500'
+                }`}
+              >
+                Active
+              </button>
+              <button
+                onClick={() => setActiveBottomTab('scheduled')}
+                className={`flex-1 py-3 text-sm border-b-2 transition-colors ${
+                  activeBottomTab === 'scheduled'
+                    ? 'border-teal-400 text-teal-400'
+                    : 'border-transparent text-gray-500'
+                }`}
+              >
+                Scheduled
+              </button>
+              <button
+                onClick={() => setActiveBottomTab('completed')}
+                className={`flex-1 py-3 text-sm border-b-2 transition-colors ${
+                  activeBottomTab === 'completed'
+                    ? 'border-teal-400 text-teal-400'
+                    : 'border-transparent text-gray-500'
+                }`}
+              >
+                Completed
+              </button>
+            </>
+          ) : activeTab === 'future' ? (
+            // Futures Tabs
+            <>
+              <button
+                onClick={() => setActiveBottomTab('positions')}
+                className={`flex-1 py-3 text-sm border-b-2 transition-colors ${
+                  activeBottomTab === 'positions'
+                    ? 'border-teal-400 text-teal-400'
+                    : 'border-transparent text-gray-500'
+                }`}
+              >
+                Positions
+              </button>
+              <button
+                onClick={() => setActiveBottomTab('open')}
+                className={`flex-1 py-3 text-sm border-b-2 transition-colors ${
+                  activeBottomTab === 'open'
+                    ? 'border-teal-400 text-teal-400'
+                    : 'border-transparent text-gray-500'
+                }`}
+              >
+                Open orders
+              </button>
+              <button
+                onClick={() => setActiveBottomTab('closed')}
+                className={`flex-1 py-3 text-sm border-b-2 transition-colors ${
+                  activeBottomTab === 'closed'
+                    ? 'border-teal-400 text-teal-400'
+                    : 'border-transparent text-gray-500'
+                }`}
+              >
+                Closed Orders
+              </button>
+            </>
+          ) : (
+            // Spot Tabs
+            <>
+              <button
+                onClick={() => setActiveBottomTab('open')}
+                className={`flex-1 py-3 text-sm border-b-2 transition-colors ${
+                  activeBottomTab === 'open'
+                    ? 'border-teal-400 text-teal-400'
+                    : 'border-transparent text-gray-500'
+                }`}
+              >
+                Open orders
+              </button>
+              <button
+                onClick={() => setActiveBottomTab('completed')}
+                className={`flex-1 py-3 text-sm border-b-2 transition-colors ${
+                  activeBottomTab === 'completed'
+                    ? 'border-teal-400 text-teal-400'
+                    : 'border-transparent text-gray-500'
+                }`}
+              >
+                Completed
+              </button>
+              <button
+                onClick={() => setActiveBottomTab('assets')}
+                className={`flex-1 py-3 text-sm border-b-2 transition-colors ${
+                  activeBottomTab === 'assets'
+                    ? 'border-teal-400 text-teal-400'
+                    : 'border-transparent text-gray-500'
+                }`}
+              >
+                Assets
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Tab Content */}
+        <div className="max-h-64 overflow-y-auto">
+          {activeBottomTab === 'active' && activeTab === 'option' && (
+            <div className="p-4">
+              {activeOptionTrade ? (
+                <div className="bg-gray-800 rounded-lg p-3">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold ${
+                          activeOptionTrade.direction === 'UP' ? 'text-teal-400' : 'text-red-400'
+                        }`}>
+                          {activeOptionTrade.direction}
+                        </span>
+                        <span className="text-xs text-gray-400">{selectedPair.baseAsset}</span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Stake: ${activeOptionTrade.stake.toFixed(2)}
+                      </div>
+                    </div>
+                    <Countdown
+                      date={activeOptionTrade.endTime * 1000}
+                      renderer={CountdownRenderer}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4 text-gray-500 text-sm">
+                  No active trades
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeBottomTab === 'completed' && (
+            <div className="p-4 space-y-3">
+              {completedOrders.map(order => (
+                <div key={order.id} className="bg-gray-800 rounded-lg p-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold ${
+                          order.direction === 'UP' ? 'text-teal-400' : 'text-red-400'
+                        }`}>
+                          {order.direction}
+                        </span>
+                        <span className="text-xs text-gray-400">{selectedPair.baseAsset}</span>
+                        {(order.pnl ?? 0) > 0 ? (
+                          <span className="text-xs bg-green-400/20 text-green-400 px-2 py-0.5 rounded-full">
+                            WIN
+                          </span>
+                        ) : (
+                          <span className="text-xs bg-red-400/20 text-red-400 px-2 py-0.5 rounded-full">
+                            LOSS
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Stake: ${order.stake.toFixed(2)} • PnL: {(order.pnl ?? 0) > 0 ? '+' : ''}{order.pnl?.toFixed(2)} USDT
+                      </div>
+                    </div>
+                    <span className={`text-sm font-semibold ${
+                      (order.pnl ?? 0) > 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {(order.pnl ?? 0) > 0 ? '+' : ''}{order.pnl?.toFixed(2)} USDT
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeBottomTab === 'open' && activeTab === 'future' && (
+            <div className="p-4 text-center text-gray-500 text-sm">
+              No Records Found
+            </div>
+          )}
+        </div>
+
+        {/* Chart Link */}
+        <div className="py-3 text-center border-t border-gray-800">
+          <button 
+            onClick={() => navigate(`/trading/${symbol}/chart`)}
+            className="text-teal-400 text-sm flex items-center justify-center space-x-2"
+          >
+            <BarChart3 className="h-4 w-4" />
+            <span>{selectedPair.baseAsset} Chart</span>
+          </button>
+        </div>
+
+        {/* Swan IRA Footer */}
+        <div className="py-2 text-center text-xs text-gray-600">
+          swan-ira.org
+        </div>
+      </div>
+
+      {/* Leverage Modal */}
+      <AnimatePresence>
+        {showLeverageModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-end justify-center z-50 p-4"
+            onClick={() => setShowLeverageModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              className="bg-[#1E2329] border border-gray-800 rounded-t-2xl w-full max-w-md"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-gray-800">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-white">Select Leverage</h3>
+                  <button onClick={() => setShowLeverageModal(false)}>
+                    <X className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-4 grid grid-cols-3 gap-3">
+                {LEVERAGE_OPTIONS.map(lev => (
+                  <button
+                    key={lev}
+                    onClick={() => {
+                      setFuturesLeverage(lev);
+                      setShowLeverageModal(false);
+                    }}
+                    className={`p-3 rounded-lg text-center ${
+                      futuresLeverage === lev
+                        ? 'bg-teal-400 text-gray-900'
+                        : 'bg-gray-800 text-gray-400'
+                    }`}
+                  >
+                    {lev}x
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Scheduled Time Modal */}
+      <AnimatePresence>
+        {showScheduledModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-end justify-center z-50 p-4"
+            onClick={() => setShowScheduledModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              className="bg-[#1E2329] border border-gray-800 rounded-t-2xl w-full max-w-md"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-gray-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Scheduled Time</h3>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Customize opening time (UTC+0) for your position
+                    </p>
+                  </div>
+                  <button onClick={() => setShowScheduledModal(false)}>
+                    <X className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {/* Current Time Display */}
+                <div className="bg-gray-800 rounded-lg p-3">
+                  <div className="text-center">
+                    <div className="text-xs text-gray-400 mb-1">Current Time (UTC+0)</div>
+                    <div className="text-lg font-mono text-white">{currentUTC}</div>
+                  </div>
+                </div>
+
+                {/* Time Selector */}
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Hours */}
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Hours</label>
+                    <div className="bg-gray-800 rounded-lg p-2 flex items-center justify-between">
+                      <button
+                        onClick={() => setScheduledTime(prev => ({ ...prev, hours: Math.max(0, prev.hours - 1) }))}
+                        className="text-gray-400 hover:text-white"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <span className="text-lg font-mono text-white">
+                        {scheduledTime.hours.toString().padStart(2, '0')}
+                      </span>
+                      <button
+                        onClick={() => setScheduledTime(prev => ({ ...prev, hours: Math.min(23, prev.hours + 1) }))}
+                        className="text-gray-400 hover:text-white"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Minutes */}
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Minutes</label>
+                    <div className="bg-gray-800 rounded-lg p-2 flex items-center justify-between">
+                      <button
+                        onClick={() => setScheduledTime(prev => ({ ...prev, minutes: Math.max(0, prev.minutes - 1) }))}
+                        className="text-gray-400 hover:text-white"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <span className="text-lg font-mono text-white">
+                        {scheduledTime.minutes.toString().padStart(2, '0')}
+                      </span>
+                      <button
+                        onClick={() => setScheduledTime(prev => ({ ...prev, minutes: Math.min(59, prev.minutes + 1) }))}
+                        className="text-gray-400 hover:text-white"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Seconds */}
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Seconds</label>
+                    <div className="bg-gray-800 rounded-lg p-2 flex items-center justify-between">
+                      <button
+                        onClick={() => setScheduledTime(prev => ({ ...prev, seconds: Math.max(0, prev.seconds - 1) }))}
+                        className="text-gray-400 hover:text-white"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <span className="text-lg font-mono text-white">
+                        {scheduledTime.seconds.toString().padStart(2, '0')}
+                      </span>
+                      <button
+                        onClick={() => setScheduledTime(prev => ({ ...prev, seconds: Math.min(59, prev.seconds + 1) }))}
+                        className="text-gray-400 hover:text-white"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Scheduled Time Display */}
+                <div className="bg-gray-800 rounded-lg p-3">
+                  <div className="text-center">
+                    <div className="text-xs text-gray-400 mb-1">Open Position</div>
+                    <div className="text-lg font-mono text-teal-400">
+                      {scheduledTime.hours.toString().padStart(2, '0')}:
+                      {scheduledTime.minutes.toString().padStart(2, '0')}:
+                      {scheduledTime.seconds.toString().padStart(2, '0')} (UTC+0)
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={handleCancelScheduled}
+                    className="flex-1 bg-gray-800 text-gray-400 py-3 rounded-lg font-medium hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveScheduled}
+                    className="flex-1 bg-teal-400 text-gray-900 py-3 rounded-lg font-medium hover:bg-teal-500"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Duration Modal for Options */}
+      <AnimatePresence>
+        {showDurationModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-end justify-center z-50 p-4"
+            onClick={() => setShowDurationModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              className="bg-[#1E2329] border border-gray-800 rounded-t-2xl w-full max-w-md"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-gray-800">
+                <h3 className="text-lg font-semibold text-white">Select Duration</h3>
+              </div>
+              <div className="p-4 space-y-2">
+                {OPTIONS_TIMEFRAMES.map(option => (
+                  <button
+                    key={option.value}
+                    onClick={() => {
+                      setOptionDuration(option.value);
+                      setOptionFluctuation(option.move);
+                      setShowDurationModal(false);
+                    }}
+                    className={`w-full flex items-center justify-between p-4 rounded-lg ${
+                      optionDuration === option.value
+                        ? 'bg-teal-400/20 border border-teal-400'
+                        : 'bg-gray-800 hover:bg-gray-700'
+                    }`}
+                  >
+                    <div>
+                      <span className="text-white font-medium">{option.label}</span>
+                      <span className="text-xs text-gray-400 block mt-1">
+                        Profit: +{(option.profit * 100).toFixed(0)}% • Move: ≥{option.move}%
+                      </span>
+                    </div>
+                    {optionDuration === option.value && (
+                      <CheckCircle className="w-5 h-5 text-teal-400" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Fluctuation Modal for Options */}
+      <AnimatePresence>
+        {showFluctuationModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-end justify-center z-50 p-4"
+            onClick={() => setShowFluctuationModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              className="bg-[#1E2329] border border-gray-800 rounded-t-2xl w-full max-w-md"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-gray-800">
+                <h3 className="text-lg font-semibold text-white">Fluctuation Range</h3>
+              </div>
+              <div className="p-4 space-y-2">
+                {FLUCTUATION_RANGES[optionDuration as keyof typeof FLUCTUATION_RANGES]?.map((range, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setOptionFluctuation(range.value);
+                      setShowFluctuationModal(false);
+                    }}
+                    className={`w-full flex items-center justify-between p-4 rounded-lg ${
+                      optionFluctuation === range.value
+                        ? 'bg-teal-400/20 border border-teal-400'
+                        : 'bg-gray-800 hover:bg-gray-700'
+                    }`}
+                  >
+                    <div>
+                      <span className="text-white font-medium">{range.label}</span>
+                      <span className="text-xs text-gray-400 block mt-1">
+                        Payout: {range.payout.toFixed(3)}x
+                      </span>
+                    </div>
+                    {optionFluctuation === range.value && (
+                      <CheckCircle className="w-5 h-5 text-teal-400" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
