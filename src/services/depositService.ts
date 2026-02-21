@@ -88,8 +88,8 @@ class DepositService {
           .from('deposit-proofs')
           .upload(fileName, proofFile, {
             upsert: true,
-            cacheControl: '3600'
-            // Remove contentType - let Supabase auto-detect
+            cacheControl: '3600',
+            contentType: proofFile.type || 'image/jpeg' // Explicitly set the content type
           });
         
         if (uploadError) {

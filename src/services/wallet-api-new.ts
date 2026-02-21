@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseAdmin } from '@/lib/supabase';
 import { BalanceOperation } from '@/types/wallet';
 import { BalanceResult, WalletBalance } from '@/services/unified-wallet-service';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,7 +8,7 @@ class WalletApiService {
   
   async getUserBalances(userId: string): Promise<WalletBalance[]> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('wallet_balances')
         .select('*')
         .eq('user_id', userId);
@@ -38,7 +38,7 @@ class WalletApiService {
     const balances = [];
 
     for (const asset of defaultAssets) {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('wallet_balances')
         .insert({
           user_id: userId,

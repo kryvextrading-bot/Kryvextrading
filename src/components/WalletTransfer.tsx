@@ -149,17 +149,17 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0B0E11] to-[#1A1D24] p-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#0B0E11] to-[#1A1D24] p-2 sm:p-4">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#F0B90B] rounded-xl flex items-center justify-center">
-              <ArrowUpDown className="w-5 h-5 text-[#181A20]" />
+        <div className="flex items-center justify-between mb-4 sm:mb-6">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[#F0B90B] rounded-xl flex items-center justify-center">
+              <ArrowUpDown className="w-4 h-4 sm:w-5 sm:h-5 text-[#181A20]" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-[#EAECEF]">Wallet Transfer</h1>
-              <p className="text-sm text-[#848E9C]">Move funds between funding and trading wallets</p>
+              <h1 className="text-lg sm:text-xl font-bold text-[#EAECEF]">Wallet Transfer</h1>
+              <p className="text-xs sm:text-sm text-[#848E9C]">Move funds between funding and trading wallets</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -170,7 +170,7 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
               disabled={loading}
               className="text-[#848E9C] hover:text-[#EAECEF]"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
             {onClose && (
               <Button
@@ -179,7 +179,8 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
                 onClick={onClose}
                 className="text-[#848E9C] hover:text-[#EAECEF]"
               >
-                ✕
+                <span className="hidden sm:inline">✕</span>
+                <span className="sm:hidden">✕</span>
               </Button>
             )}
           </div>
@@ -214,9 +215,9 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
         </AnimatePresence>
 
         {/* Transfer Type Selector */}
-        <Card className="bg-[#1E2329] border-[#2B3139] mb-6">
+        <Card className="bg-[#1E2329] border-[#2B3139] mb-4 sm:mb-6">
           <Tabs value={transferType} onValueChange={(value: any) => setTransferType(value)} className="w-full">
-            <div className="p-4">
+            <div className="p-3 sm:p-4">
               <TabsList className="grid grid-cols-2 w-full bg-[#181A20] p-1 rounded-xl">
                 <TabsTrigger 
                   value="to-trading" 
@@ -238,14 +239,14 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
             </div>
 
             {/* Balance Overview */}
-            <div className="p-4 border-t border-[#2B3139]">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-[#181A20] rounded-xl p-4">
+            <div className="p-3 sm:p-4 border-t border-[#2B3139]">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div className="bg-[#181A20] rounded-xl p-3 sm:p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <Wallet className="w-4 h-4 text-[#848E9C]" />
-                    <span className="text-sm text-[#848E9C]">Funding Wallet</span>
+                    <Wallet className="w-3 h-3 sm:w-4 sm:h-4 text-[#848E9C]" />
+                    <span className="text-xs sm:text-sm text-[#848E9C]">Funding Wallet</span>
                   </div>
-                  <div className="text-xl font-bold text-[#EAECEF]">
+                  <div className="text-lg sm:text-xl font-bold text-[#EAECEF]">
                     {formatCurrency(totalFundingBalance)}
                   </div>
                   <div className="text-xs text-[#848E9C] mt-1">
@@ -253,12 +254,12 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
                   </div>
                 </div>
                 
-                <div className="bg-[#181A20] rounded-xl p-4">
+                <div className="bg-[#181A20] rounded-xl p-3 sm:p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <TrendingUp className="w-4 h-4 text-[#848E9C]" />
-                    <span className="text-sm text-[#848E9C]">Trading Wallet</span>
+                    <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 text-[#848E9C]" />
+                    <span className="text-xs sm:text-sm text-[#848E9C]">Trading Wallet</span>
                   </div>
-                  <div className="text-xl font-bold text-[#EAECEF]">
+                  <div className="text-lg sm:text-xl font-bold text-[#EAECEF]">
                     {formatCurrency(totalTradingBalance)}
                   </div>
                   <div className="text-xs text-[#848E9C] mt-1">
@@ -271,17 +272,17 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
         </Card>
 
         {/* Asset Selection */}
-        <Card className="bg-[#1E2329] border-[#2B3139] mb-6">
-          <div className="p-4">
-            <h3 className="text-sm font-semibold text-[#EAECEF] mb-3">Select Asset</h3>
-            <div className="grid grid-cols-2 gap-3">
+        <Card className="bg-[#1E2329] border-[#2B3139] mb-4 sm:mb-6">
+          <div className="p-3 sm:p-4">
+            <h3 className="text-xs sm:text-sm font-semibold text-[#EAECEF] mb-3">Select Asset</h3>
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
               {assets.map((asset) => (
                 <motion.button
                   key={asset.symbol}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setSelectedAsset(asset.symbol)}
-                  className={`p-3 rounded-xl border transition-all ${
+                  className={`p-2 sm:p-3 rounded-xl border transition-all ${
                     selectedAsset === asset.symbol
                       ? 'border-[#F0B90B] bg-[#F0B90B]/10'
                       : 'border-[#2B3139] bg-[#181A20] hover:border-[#F0B90B]/50'
@@ -289,10 +290,10 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-lg">{asset.icon}</span>
+                      <span className="text-sm sm:text-lg">{asset.icon}</span>
                       <div className="text-left">
-                        <div className="font-medium text-[#EAECEF]">{asset.symbol}</div>
-                        <div className="text-xs text-[#848E9C]">{asset.name}</div>
+                        <div className="font-medium text-xs sm:text-sm text-[#EAECEF]">{asset.symbol}</div>
+                        <div className="text-xs text-[#848E9C] hidden sm:block">{asset.name}</div>
                       </div>
                     </div>
                     {selectedAsset === asset.symbol && (
@@ -306,26 +307,26 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
         </Card>
 
         {/* Transfer Form */}
-        <Card className="bg-[#1E2329] border-[#2B3139] mb-6">
-          <div className="p-4">
-            <h3 className="text-sm font-semibold text-[#EAECEF] mb-3">Transfer Amount</h3>
+        <Card className="bg-[#1E2329] border-[#2B3139] mb-4 sm:mb-6">
+          <div className="p-3 sm:p-4">
+            <h3 className="text-xs sm:text-sm font-semibold text-[#EAECEF] mb-3">Transfer Amount</h3>
             
-            <div className="relative mb-4">
+            <div className="relative mb-3 sm:mb-4">
               <Input
                 type="number"
                 placeholder="0.00"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full bg-[#181A20] border-[#2B3139] text-[#EAECEF] h-12 pr-20"
+                className="w-full bg-[#181A20] border-[#2B3139] text-[#EAECEF] h-10 sm:h-12 pr-16 sm:pr-20 text-sm"
                 disabled={loading}
               />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                <span className="text-sm text-[#848E9C]">{selectedAsset}</span>
+              <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 sm:gap-2">
+                <span className="text-xs sm:text-sm text-[#848E9C]">{selectedAsset}</span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setAmount(transferType === 'to-trading' ? fundingBalance.toString() : tradingBalance.toString())}
-                  className="text-xs px-2 py-1 h-auto bg-[#2B3139] hover:bg-[#374151] text-[#EAECEF]"
+                  className="text-xs px-1 sm:px-2 py-1 h-auto bg-[#2B3139] hover:bg-[#374151] text-[#EAECEF]"
                 >
                   MAX
                 </Button>
@@ -333,14 +334,14 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
             </div>
 
             {/* Quick Amount Buttons */}
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-1 sm:gap-2 mb-3 sm:mb-4">
               {[10, 50, 100, 500, 1000].map((value) => (
                 <Button
                   key={value}
                   variant="ghost"
                   size="sm"
                   onClick={() => setAmount(value.toString())}
-                  className="flex-1 bg-[#181A20] hover:bg-[#2B3139] text-[#EAECEF] border border-[#2B3139]"
+                  className="flex-1 bg-[#181A20] hover:bg-[#2B3139] text-[#EAECEF] border border-[#2B3139] text-xs"
                 >
                   {value}
                 </Button>
@@ -348,24 +349,24 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
             </div>
 
             {/* Transfer Info */}
-            <div className="bg-[#181A20] rounded-xl p-4 mb-4">
+            <div className="bg-[#181A20] rounded-xl p-3 sm:p-4 mb-3 sm:mb-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-[#848E9C]">You will transfer:</span>
-                <span className="font-bold text-[#EAECEF]">
+                <span className="text-xs sm:text-sm text-[#848E9C]">You will transfer:</span>
+                <span className="font-bold text-xs sm:text-sm text-[#EAECEF]">
                   {transferAmount > 0 ? formatCurrency(transferAmount) : formatCurrency(0)} {selectedAsset}
                 </span>
               </div>
               
               <div className="flex items-center justify-between">
-                <span className="text-sm text-[#848E9C]">From:</span>
-                <span className="font-medium text-[#EAECEF]">
+                <span className="text-xs sm:text-sm text-[#848E9C]">From:</span>
+                <span className="font-medium text-xs sm:text-sm text-[#EAECEF]">
                   {transferType === 'to-trading' ? 'Funding Wallet' : 'Trading Wallet'}
                 </span>
               </div>
               
               <div className="flex items-center justify-between">
-                <span className="text-sm text-[#848E9C]">To:</span>
-                <span className="font-medium text-[#EAECEF]">
+                <span className="text-xs sm:text-sm text-[#848E9C]">To:</span>
+                <span className="font-medium text-xs sm:text-sm text-[#EAECEF]">
                   {transferType === 'to-trading' ? 'Trading Wallet' : 'Funding Wallet'}
                 </span>
               </div>
@@ -374,10 +375,10 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
             {/* Warning */}
             {(transferType === 'to-trading' && transferAmount > fundingBalance) ||
              (transferType === 'to-funding' && transferAmount > tradingBalance) ? (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-4">
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-2 sm:p-3 mb-3 sm:mb-4">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-400" />
-                  <span className="text-sm text-red-400">
+                  <AlertTriangle className="w-3 h-3 sm:w-4 sm:h-4 text-red-400" />
+                  <span className="text-xs sm:text-sm text-red-400">
                     Insufficient balance in {transferType === 'to-trading' ? 'funding' : 'trading'} wallet
                   </span>
                 </div>
@@ -394,17 +395,18 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
                 (transferType === 'to-trading' && transferAmount > fundingBalance) ||
                 (transferType === 'to-funding' && transferAmount > tradingBalance)
               }
-              className="w-full bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20] font-bold py-3 rounded-xl disabled:opacity-50"
+              className="w-full bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20] font-bold py-2 sm:py-3 rounded-xl disabled:opacity-50 text-sm sm:text-base"
             >
               {isTransferring ? (
                 <div className="flex items-center justify-center gap-2">
-                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
                   Processing...
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-2">
-                  <ArrowUpDown className="w-4 h-4" />
-                  Transfer {formatCurrency(transferAmount)} {selectedAsset}
+                  <ArrowUpDown className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Transfer {formatCurrency(transferAmount)} {selectedAsset}</span>
+                  <span className="sm:hidden">Transfer</span>
                 </div>
               )}
             </Button>
@@ -413,12 +415,12 @@ export default function WalletTransfer({ onClose }: WalletTransferProps) {
 
         {/* Info Card */}
         <Card className="bg-blue-500/10 border border-blue-500/30">
-          <div className="p-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-blue-400 mt-0.5" />
+          <div className="p-3 sm:p-4">
+            <div className="flex items-start gap-2 sm:gap-3">
+              <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400 mt-0.5" />
               <div>
-                <h4 className="font-medium text-blue-400 mb-1">Important Notes</h4>
-                <ul className="text-sm text-blue-300 space-y-1">
+                <h4 className="font-medium text-blue-400 mb-1 text-xs sm:text-sm">Important Notes</h4>
+                <ul className="text-xs sm:text-sm text-blue-300 space-y-1">
                   <li>• Only funding wallet can be used for withdrawals</li>
                   <li>• Only trading wallet can be used for trading/arbitrage</li>
                   <li>• Transfers are instant and irreversible</li>

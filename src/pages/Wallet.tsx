@@ -70,6 +70,7 @@ interface Transaction {
     address?: string;
     txHash?: string;
     confirmations?: number;
+    reference?: string;
   };
 }
 
@@ -194,6 +195,19 @@ const ETFS: Asset[] = [
   { symbol: 'QQQ', name: 'Invesco QQQ Trust', balance: 0, locked: 0, value: 0 },
 ];
 
+// ==================== ANIMATION VARIANTS ====================
+const fadeInUp = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -20 }
+};
+
+const fadeInScale = {
+  initial: { opacity: 0, scale: 0.9 },
+  animate: { opacity: 1, scale: 1 },
+  exit: { opacity: 0, scale: 0.9 }
+};
+
 // ==================== HELPER FUNCTIONS ====================
 const getAssetIcon = (symbol: string): string => {
   return CRYPTO_ICONS[symbol] || '◉';
@@ -235,7 +249,7 @@ function Modal({ open, onClose, title, children, fullScreen = false }: ModalProp
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-4"
       onClick={onClose}
     >
       <motion.div
@@ -251,20 +265,20 @@ function Modal({ open, onClose, title, children, fullScreen = false }: ModalProp
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between p-5 border-b border-[#2B3139] bg-[#1E2329]/50 backdrop-blur">
-          <h2 className="text-lg font-semibold text-[#EAECEF]">{title}</h2>
+        <div className="flex items-center justify-between p-3 sm:p-5 border-b border-[#2B3139] bg-[#1E2329]/50 backdrop-blur">
+          <h2 className="text-base sm:text-lg font-semibold text-[#EAECEF]">{title}</h2>
           <motion.button
             whileHover={{ scale: 1.1, rotate: 90 }}
             whileTap={{ scale: 0.9 }}
             className="p-2 hover:bg-[#2B3139] rounded-xl transition-colors"
             onClick={onClose}
           >
-            <X size={20} className="text-[#848E9C]" />
+            <X size={16} className="sm:w-5 sm:h-5 text-[#848E9C]" />
           </motion.button>
         </div>
         
         {/* Modal Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-5 pb-20 sm:pb-5">
           {children}
         </div>
       </motion.div>
@@ -290,14 +304,14 @@ function QuickAction({ icon, label, onClick, color = 'default', disabled = false
       whileTap={!disabled ? { scale: 0.98 } : {}}
       transition={{ type: "spring", stiffness: 400, damping: 17 }}
       className={cn(
-        "flex flex-col items-center gap-2 p-3 rounded-xl transition-all relative group",
+        "flex flex-col items-center gap-2 p-2 sm:p-3 rounded-xl transition-all relative group",
         disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-[#23262F]'
       )}
       onClick={disabled ? undefined : onClick}
       style={{ willChange: 'transform' }}
     >
       <div className={cn(
-        "w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300",
+        "w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300",
         "group-hover:shadow-lg group-hover:shadow-black/20",
         color === 'primary' && 'bg-gradient-to-br from-[#F0B90B] to-[#F0B90B]/80 text-[#181A20] shadow-lg shadow-[#F0B90B]/10',
         color === 'success' && 'bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/10',
@@ -306,12 +320,12 @@ function QuickAction({ icon, label, onClick, color = 'default', disabled = false
       )}>
         {icon}
         {badge && badge > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#F0B90B] text-[#181A20] text-xs font-bold rounded-full flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-[#F0B90B] text-[#181A20] text-[10px] sm:text-xs font-bold rounded-full flex items-center justify-center">
             {badge}
           </span>
         )}
       </div>
-      <span className="text-xs font-medium text-[#EAECEF]/90 select-none">{label}</span>
+      <span className="text-[10px] sm:text-xs font-medium text-[#EAECEF]/90 select-none">{label}</span>
     </motion.button>
   );
 
@@ -481,9 +495,10 @@ function AssetCard({ asset, onClick, showActions = false, loading = false, hideB
 interface TransactionItemProps {
   transaction: Transaction;
   hideBalances?: boolean;
+  onDownloadSlip?: (transaction: Transaction) => void;
 }
 
-function TransactionItem({ transaction, hideBalances }: TransactionItemProps) {
+function TransactionItem({ transaction, hideBalances, onDownloadSlip }: TransactionItemProps) {
   const isPositive = transaction.amount > 0;
   const Icon = transaction.type === 'Deposit' ? ArrowDownLeft : 
                transaction.type === 'Withdrawal' ? ArrowUpRight : 
@@ -519,11 +534,11 @@ function TransactionItem({ transaction, hideBalances }: TransactionItemProps) {
       animate={{ opacity: 1, x: 0 }}
       className="flex items-center justify-between py-3 border-b border-[#2B3139]/50 last:border-0 hover:bg-[#23262F]/50 transition-colors px-2 rounded-lg"
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-1">
         <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", getTypeColor(transaction.type))}>
           <Icon size={14} />
         </div>
-        <div>
+        <div className="flex-1">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-[#EAECEF]">{transaction.type}</span>
             {transaction.metadata?.shouldWin && (
@@ -536,22 +551,36 @@ function TransactionItem({ transaction, hideBalances }: TransactionItemProps) {
           <div className="text-xs text-[#848E9C]">{transaction.asset}</div>
         </div>
       </div>
-      <div className="text-right">
-        <div className={cn("text-sm font-medium", isPositive ? 'text-green-400' : 'text-red-400')}>
-          {hideBalances ? '••••••' : (
-            <>{isPositive ? '+' : '-'}{Math.abs(transaction.amount).toFixed(6)} {transaction.asset}</>
-          )}
-        </div>
-        {transaction.pnl !== undefined && transaction.pnl !== 0 && (
-          <div className={cn("text-xs", transaction.pnl >= 0 ? 'text-green-400' : 'text-red-400')}>
+      <div className="text-right flex items-center gap-2">
+        <div>
+          <div className={cn("text-sm font-medium", isPositive ? 'text-green-400' : 'text-red-400')}>
             {hideBalances ? '••••••' : (
-              <>{transaction.pnl >= 0 ? '+' : ''}{transaction.pnl.toFixed(2)} USDT</>
+              <>{isPositive ? '+' : '-'}{Math.abs(transaction.amount).toFixed(6)} {transaction.asset}</>
             )}
           </div>
+          {transaction.pnl !== undefined && transaction.pnl !== 0 && (
+            <div className={cn("text-xs", transaction.pnl >= 0 ? 'text-green-400' : 'text-red-400')}>
+              {hideBalances ? '••••••' : (
+                <>{transaction.pnl >= 0 ? '+' : ''}{transaction.pnl.toFixed(2)} USDT</>
+              )}
+            </div>
+          )}
+          <Badge className={cn("text-[10px] mt-1", getStatusColor(transaction.status))}>
+            {transaction.status}
+          </Badge>
+        </div>
+        {(transaction.type === 'Deposit' || transaction.type === 'Withdrawal') && 
+         transaction.status === 'Completed' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-[#848E9C] hover:text-[#F0B90B]"
+            onClick={() => onDownloadSlip?.(transaction)}
+            title="Download receipt"
+          >
+            <Download size={14} />
+          </Button>
         )}
-        <Badge className={cn("text-[10px] mt-1", getStatusColor(transaction.status))}>
-          {transaction.status}
-        </Badge>
       </div>
     </motion.div>
   );
@@ -623,7 +652,7 @@ export default function WalletPage() {
   const { theme, currency = 'USD', setCurrency = () => {} } = useUserSettings() || {};
   const { prices = {} } = useMarketData() || {};
 
-  // State management - Initialize all state with proper defaults
+  // State management
   const [modal, setModal] = useState<string | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [profileOpen, setProfileOpen] = useState<boolean>(false);
@@ -642,10 +671,10 @@ export default function WalletPage() {
   const [depositRequests, setDepositRequests] = useState<any[]>([]);
   const [showDepositModal, setShowDepositModal] = useState<boolean>(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [showDepositSlip, setShowDepositSlip] = useState<boolean>(false);
-  const [depositSlipData, setDepositSlipData] = useState<any>(null);
+  const [showTransactionSlip, setShowTransactionSlip] = useState<boolean>(false);
+  const [selectedSlipTransaction, setSelectedSlipTransaction] = useState<Transaction | null>(null);
   
-  // Initialize stats with default values
+  // Stats
   const [stats, setStats] = useState({
     activeLocks: 0,
     totalVolume: 0,
@@ -679,9 +708,8 @@ export default function WalletPage() {
     return names[symbol] || symbol;
   }, []);
 
-  // Create portfolio from balances for display - FIXED with null checks
+  // Create portfolio from balances for display
   const portfolio = useMemo(() => {
-    // Ensure balances exists with default empty objects
     const safeBalances = {
       funding: balances?.funding || {},
       trading: balances?.trading || {},
@@ -693,7 +721,6 @@ export default function WalletPage() {
     
     // Add funding assets
     Object.entries(safeBalances.funding).forEach(([symbol, balance]) => {
-      // Skip legacy trading wallet entries
       if (!symbol.includes('_TRADING') && balance && Number(balance) > 0) {
         const price = prices?.[symbol] || (symbol === 'USDT' ? 1 : 0);
         const numBalance = Number(balance) || 0;
@@ -710,7 +737,6 @@ export default function WalletPage() {
     
     // Add trading assets
     Object.entries(safeBalances.trading).forEach(([symbol, balance]) => {
-      // Skip legacy trading wallet entries
       if (!symbol.includes('_TRADING') && balance && Number(balance) > 0) {
         const price = prices?.[symbol] || (symbol === 'USDT' ? 1 : 0);
         const numBalance = Number(balance) || 0;
@@ -734,7 +760,6 @@ export default function WalletPage() {
     
     // Add locked assets
     Object.entries(safeBalances.locked).forEach(([symbol, balance]) => {
-      // Skip legacy trading wallet entries
       if (!symbol.includes('_TRADING') && balance && Number(balance) > 0) {
         const price = prices?.[symbol] || (symbol === 'USDT' ? 1 : 0);
         const numBalance = Number(balance) || 0;
@@ -756,10 +781,7 @@ export default function WalletPage() {
       }
     });
     
-    // Convert map to array
     const assetsArray = Array.from(assetMap.values());
-    
-    // Sort by value descending
     assetsArray.sort((a, b) => b.value - a.value);
     
     return assetsArray;
@@ -782,7 +804,7 @@ export default function WalletPage() {
     return (getFundingBalance?.(asset) || 0) + (getTradingBalance?.(asset) || 0);
   }, [getFundingBalance, getTradingBalance]);
 
-  // Total balance calculations - MOVED BEFORE displayBalance to fix initialization error
+  // Total balance calculations
   const totalFundingBalance = useMemo(() => {
     return Object.values(balances?.funding || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
   }, [balances?.funding]);
@@ -795,7 +817,6 @@ export default function WalletPage() {
     return Object.values(balances?.locked || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
   }, [balances?.locked]);
 
-  // Calculate total balance in selected currency - FIXED to use same data as wallet distribution
   const displayBalance = useMemo(() => {
     const total = totalFundingBalance + totalTradingBalance + totalLockedBalance;
     if (currency === 'BTC' && prices?.BTC) {
@@ -804,31 +825,11 @@ export default function WalletPage() {
     return total;
   }, [totalFundingBalance, totalTradingBalance, totalLockedBalance, currency, prices]);
 
-  // Debug logging with safe checks
-  useEffect(() => {
-    console.log('💰 Wallet Debug:', {
-      userId: user?.id,
-      currency,
-      fundingBalance: getFundingBalance?.('USDT'),
-      tradingBalance: getTradingBalance?.('USDT'),
-      lockedBalance: getLockedBalance?.('USDT'),
-      totalBalance: totalFundingBalance + totalTradingBalance + totalLockedBalance,
-      totalFunding: totalFundingBalance,
-      totalTrading: totalTradingBalance,
-      totalLocked: totalLockedBalance,
-      portfolioCount: portfolio.length,
-      hasData: portfolio.length > 0,
-      walletLoading
-    });
-  }, [user, currency, getFundingBalance, getTradingBalance, getLockedBalance, totalFundingBalance, totalTradingBalance, totalLockedBalance, portfolio.length, walletLoading]);
-
   // Manual refresh handler
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    
-    // Refresh from unified wallet v2
     await refreshBalances?.();
-    
+    await loadTransactions();
     setRefreshing(false);
     toast({
       title: "Balance Updated",
@@ -847,44 +848,11 @@ export default function WalletPage() {
       
       if (result.success && result.data) {
         setDepositRequests(result.data);
-        
-        // Check if any deposit was approved and show slip
-        const approvedDeposits = result.data.filter((req: any) => 
-          req.status === 'Approved' || req.status === 'Completed'
-        );
-        
-        if (approvedDeposits.length > 0) {
-          // Show the most recent approved deposit slip
-          const latestApproved = approvedDeposits[0];
-          const slipData = {
-            transactionId: latestApproved.id,
-            date: latestApproved.updated_at || latestApproved.created_at,
-            time: latestApproved.updated_at || latestApproved.created_at,
-            asset: latestApproved.currency,
-            status: 'Completed' as const,
-            amount: latestApproved.amount,
-            amountUsd: latestApproved.amount,
-            userName: `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || user?.email || '',
-            userEmail: user?.email || '',
-            network: latestApproved.network,
-            address: latestApproved.address
-          };
-          
-          setDepositSlipData(slipData);
-          setShowDepositSlip(true);
-        }
       }
     } catch (error) {
       console.error('❌ Failed to load deposit requests:', error);
     }
   }, [user]);
-
-  // Initialize data on mount
-  useEffect(() => {
-    refreshBalances?.();
-    loadTransactions();
-    loadDepositRequests();
-  }, [refreshBalances, loadDepositRequests]);
 
   // Load transactions from backend
   const loadTransactions = useCallback(async () => {
@@ -893,48 +861,86 @@ export default function WalletPage() {
     try {
       console.log('🔄 Loading transactions for user:', user.id);
       
-      // Load transactions from wallet service
+      // Load from wallet service
       const walletTransactions = await walletApiService.getUserTransactions(user.id);
-      console.log('📊 Loaded wallet transactions:', walletTransactions);
       
-      // Convert wallet transactions to Transaction type
-      const formattedTransactions: Transaction[] = walletTransactions.map(tx => ({
-        id: tx.id,
-        type: tx.type === 'deposit' ? 'Deposit' : 
-              tx.type === 'withdrawal' ? 'Withdrawal' : 
-              tx.type === 'transfer' ? 'Trade' :
-              tx.type === 'fee' ? 'Fee' : 'Funding',
-        asset: tx.currency || 'USDT',
-        amount: tx.amount || 0,
-        status: tx.status === 'completed' ? 'Completed' : 
-               tx.status === 'pending' ? 'Pending' :
-               tx.status === 'failed' ? 'Failed' : 'Processing',
-        date: tx.created_at || new Date().toISOString(),
-        details: {
-          reference: tx.reference_id,
-          description: tx.description,
-          balanceBefore: tx.balance_before,
-          balanceAfter: tx.balance_after
-        },
-        metadata: {
-          reference: tx.reference_id,
-          network: tx.network || 'blockchain',
-          address: tx.address || '',
-          txHash: tx.tx_hash || ''
-        }
-      }));
+      // Load from deposit requests
+      const depositResult = await depositService.getUserDepositRequests(user.id);
+      
+      let allTransactions: Transaction[] = [];
+      
+      // Format wallet transactions
+      if (walletTransactions && walletTransactions.length > 0) {
+        const formattedWalletTxs: Transaction[] = walletTransactions.map(tx => ({
+          id: tx.id,
+          type: tx.type === 'deposit' ? 'Deposit' : 
+                tx.type === 'withdrawal' ? 'Withdrawal' : 
+                tx.type === 'transfer' ? 'Trade' : 'Funding',
+          asset: tx.currency || 'USDT',
+          amount: tx.amount || 0,
+          status: tx.status === 'completed' ? 'Completed' : 
+                 tx.status === 'pending' ? 'Pending' : 'Processing',
+          date: tx.created_at || new Date().toISOString(),
+          metadata: {
+            network: tx.network || 'blockchain',
+            address: tx.address || '',
+            txHash: tx.tx_hash || '',
+            reference: tx.reference_id
+          }
+        }));
+        allTransactions = [...allTransactions, ...formattedWalletTxs];
+      }
+      
+      // Format deposit requests
+      if (depositResult.success && depositResult.data) {
+        const formattedDepositTxs: Transaction[] = depositResult.data.map((req: any) => ({
+          id: req.id,
+          type: 'Deposit',
+          asset: req.currency || 'USDT',
+          amount: req.amount || 0,
+          status: req.status === 'Completed' || req.status === 'Approved' ? 'Completed' : 
+                  req.status === 'Pending' ? 'Pending' : 
+                  req.status === 'Rejected' ? 'Failed' : 'Processing',
+          date: req.updated_at || req.created_at,
+          metadata: {
+            network: req.network,
+            address: req.address,
+            txHash: req.transaction_hash,
+            reference: req.id
+          }
+        }));
+        allTransactions = [...allTransactions, ...formattedDepositTxs];
+      }
       
       // Sort by date (newest first)
-      formattedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      allTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
-      setTransactions(formattedTransactions);
-      console.log('✅ Transactions loaded and formatted:', formattedTransactions.length);
+      setTransactions(allTransactions);
+      console.log('✅ Transactions loaded:', allTransactions.length);
       
     } catch (error) {
       console.error('❌ Failed to load transactions:', error);
-      // Don't show error to user, just keep empty state
     }
   }, [user?.id]);
+
+  // Handle download slip
+  const handleDownloadSlip = useCallback((transaction: Transaction) => {
+    setSelectedSlipTransaction(transaction);
+    setShowTransactionSlip(true);
+  }, []);
+
+  // Handle slip close
+  const handleSlipClose = useCallback(() => {
+    setShowTransactionSlip(false);
+    setSelectedSlipTransaction(null);
+  }, []);
+
+  // Initialize data on mount
+  useEffect(() => {
+    refreshBalances?.();
+    loadTransactions();
+    loadDepositRequests();
+  }, [refreshBalances, loadTransactions, loadDepositRequests]);
 
   // Optimized click handlers
   const handleTransferClick = useCallback(() => {
@@ -966,7 +972,7 @@ export default function WalletPage() {
     setModal('send');
   }, [selectedAsset, portfolio]);
 
-  // Transfer handlers (simplified for v2)
+  // Transfer handlers
   const handleTransferToTrading = async (asset: string, amount: number) => {
     toast({
       title: "Coming Soon",
@@ -983,7 +989,7 @@ export default function WalletPage() {
     });
   };
 
-  // Handle deposit request submission using direct Supabase
+  // Handle deposit request submission
   const handleDepositRequest = async () => {
     if (!selectedAsset) return;
 
@@ -991,7 +997,6 @@ export default function WalletPage() {
     const network = modalState.depositNetwork;
     const proofFile = modalState.depositProof;
 
-    // Validation
     if (!amount || amount <= 0) {
       setModalState(s => ({ ...s, error: 'Please enter a valid amount' }));
       return;
@@ -1010,14 +1015,6 @@ export default function WalletPage() {
     setModalState(s => ({ ...s, isSubmitting: true, error: '' }));
 
     try {
-      console.log('🚀 [Wallet] Submitting deposit request via Supabase:', {
-        amount,
-        currency: selectedAsset.symbol,
-        network,
-        hasProof: !!proofFile
-      });
-
-      // Get the platform's deposit address for the selected network
       const platformAddress = NETWORKS[selectedAsset.symbol]?.find(n => n.name === network)?.address || '';
 
       const result = await depositService.createDepositRequest({
@@ -1035,18 +1032,13 @@ export default function WalletPage() {
         throw new Error(result.error || 'Failed to submit deposit request');
       }
 
-      console.log('✅ [Wallet] Deposit request created successfully:', result.data);
-
-      // Update local state
       setDepositRequests(prev => [result.data!, ...prev]);
 
-      // Show success message
       toast({
         title: "Deposit Request Submitted",
         description: `Your deposit request for ${amount} ${selectedAsset.symbol} has been submitted for review.`,
       });
 
-      // Reset and close modal
       setModal(null);
       resetModalState();
 
@@ -1109,9 +1101,6 @@ export default function WalletPage() {
       setModalState(s => ({ ...s, error: 'Insufficient balance' }));
       return;
     }
-
-    // Check if this swap should be profitable based on admin settings
-    const shouldWinSwap = await shouldWin('swap');
 
     try {
       setModalState(s => ({ ...s, isSubmitting: true, error: '' }));
@@ -1354,17 +1343,6 @@ export default function WalletPage() {
         if (sortBy === 'balance') return b.balance - a.balance;
         return a.name.localeCompare(b.name);
       });
-  }, [portfolio, searchQuery, sortBy]);
-
-  // Debug logging for filteredPortfolio
-  useEffect(() => {
-    console.log('🔍 Portfolio Debug:', {
-      portfolioLength: portfolio.length,
-      portfolioData: portfolio.map(p => ({ symbol: p.symbol, name: p.name, balance: p.balance })),
-      searchQuery,
-      sortBy,
-      filteredLength: filteredPortfolio.length
-    });
   }, [portfolio, searchQuery, sortBy]);
 
   // Navigation items
@@ -1748,43 +1726,43 @@ export default function WalletPage() {
           </Card>
         </motion.div>
 
-        {/* Quick Actions - Now 5 buttons with premium styling */}
+        {/* Quick Actions */}
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="grid grid-cols-5 gap-2"
+          className="grid grid-cols-5 gap-1 sm:gap-2"
         >
           <QuickAction 
-            icon={<ArrowDownLeft size={20} />}
+            icon={<ArrowDownLeft size={16} sm={20} />}
             label="Deposit"
             onClick={handleDepositClick}
             color="primary"
             tooltip="Deposit funds to your funding wallet"
           />
           <QuickAction 
-            icon={<ArrowUpRight size={20} />}
+            icon={<ArrowUpRight size={16} sm={20} />}
             label="Withdraw"
             onClick={handleWithdrawClick}
             disabled={getUnifiedBalance('USDT') <= 0}
             tooltip={getUnifiedBalance('USDT') <= 0 ? "No funds to withdraw" : "Withdraw from funding wallet"}
           />
           <QuickAction 
-            icon={<RefreshCw size={20} />}
+            icon={<RefreshCw size={16} sm={20} />}
             label="Swap"
             onClick={handleSwapClick}
             disabled={portfolio.length < 2}
             tooltip={portfolio.length < 2 ? "Need at least 2 assets to swap" : "Swap between assets"}
           />
           <QuickAction 
-            icon={<Send size={20} />}
+            icon={<Send size={16} sm={20} />}
             label="Send"
             onClick={handleSendClick}
             disabled={getUnifiedBalance('USDT') <= 0}
             tooltip={getUnifiedBalance('USDT') <= 0 ? "No funds to send" : "Send to another wallet"}
           />
           <QuickAction 
-            icon={<ArrowUpDown size={20} />}
+            icon={<ArrowUpDown size={16} sm={20} />}
             label="Transfer"
             onClick={handleTransferClick}
             tooltip="Transfer between funding and trading wallets"
@@ -1834,7 +1812,7 @@ export default function WalletPage() {
             <SlidersHorizontal size={18} className="text-[#848E9C]" />
           </Button>
           <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
-            <SelectTrigger className="w-32 h-10 bg-[#1E2329] border-[#2B3139] text-xs rounded-xl">
+            <SelectTrigger className="w-24 sm:w-32 h-10 bg-[#1E2329] border-[#2B3139] text-xs rounded-xl">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1855,27 +1833,31 @@ export default function WalletPage() {
             <TabsList className="grid grid-cols-4 w-full bg-[#1E2329]/50 p-1 rounded-2xl border border-[#2B3139]">
               <TabsTrigger 
                 value="crypto" 
-                className="text-xs md:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F0B90B] data-[state=active]:to-[#F0B90B]/90 data-[state=active]:text-[#181A20] rounded-xl transition-all"
+                className="text-[10px] sm:text-xs md:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F0B90B] data-[state=active]:to-[#F0B90B]/90 data-[state=active]:text-[#181A20] rounded-xl transition-all"
               >
-                Crypto ({portfolio.length})
+                <span className="hidden sm:inline">Crypto</span>
+                <span className="sm:hidden">₿</span> ({portfolio.length})
               </TabsTrigger>
               <TabsTrigger 
                 value="usstock" 
-                className="text-xs md:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F0B90B] data-[state=active]:to-[#F0B90B]/90 data-[state=active]:text-[#181A20] rounded-xl transition-all"
+                className="text-[10px] sm:text-xs md:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F0B90B] data-[state=active]:to-[#F0B90B]/90 data-[state=active]:text-[#181A20] rounded-xl transition-all"
               >
-                Stocks
+                <span className="hidden sm:inline">Stocks</span>
+                <span className="sm:hidden">📈</span>
               </TabsTrigger>
               <TabsTrigger 
                 value="futures" 
-                className="text-xs md:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F0B90B] data-[state=active]:to-[#F0B90B]/90 data-[state=active]:text-[#181A20] rounded-xl transition-all"
+                className="text-[10px] sm:text-xs md:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F0B90B] data-[state=active]:to-[#F0B90B]/90 data-[state=active]:text-[#181A20] rounded-xl transition-all"
               >
-                Futures
+                <span className="hidden sm:inline">Futures</span>
+                <span className="sm:hidden">⚡</span>
               </TabsTrigger>
               <TabsTrigger 
                 value="etf" 
-                className="text-xs md:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F0B90B] data-[state=active]:to-[#F0B90B]/90 data-[state=active]:text-[#181A20] rounded-xl transition-all"
+                className="text-[10px] sm:text-xs md:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#F0B90B] data-[state=active]:to-[#F0B90B]/90 data-[state=active]:text-[#181A20] rounded-xl transition-all"
               >
-                ETFs
+                <span className="hidden sm:inline">ETFs</span>
+                <span className="sm:hidden">📊</span>
               </TabsTrigger>
             </TabsList>
 
@@ -1893,7 +1875,7 @@ export default function WalletPage() {
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <Activity className="w-4 h-4 text-[#F0B90B]" />
-                          <h3 className="font-medium text-[#EAECEF]">Active Positions</h3>
+                          <h3 className="font-medium text-[#EAECEF] text-sm">Active Positions</h3>
                         </div>
                         <Badge className="bg-[#F0B90B]/15 text-[#F0B90B] border-[#F0B90B]/20">
                           {formatCurrency(totalLockedBalance)} Active
@@ -1901,7 +1883,6 @@ export default function WalletPage() {
                       </div>
                       <div className="space-y-2">
                         {(locks || []).slice(0, 3).map((lock: any) => {
-                          // Clean up the lock type display
                           const cleanType = lock.lockType || lock.type || 'Position';
                           const displayName = cleanType === 'options' ? 'Options Trade' : 
                                            cleanType === 'futures' ? 'Futures Trade' :
@@ -2043,7 +2024,12 @@ export default function WalletPage() {
             ) : (
               <div className="space-y-1 max-h-[350px] overflow-y-auto custom-scrollbar pr-2">
                 {transactions.slice(0, 8).map(tx => (
-                  <TransactionItem key={tx.id} transaction={tx} hideBalances={hideBalances} />
+                  <TransactionItem 
+                    key={tx.id} 
+                    transaction={tx} 
+                    hideBalances={hideBalances}
+                    onDownloadSlip={handleDownloadSlip}
+                  />
                 ))}
               </div>
             )}
@@ -2085,10 +2071,10 @@ export default function WalletPage() {
               whileHover={{ scale: 1.1, rotate: 90 }}
               whileTap={{ scale: 0.9 }}
               transition={{ type: "spring", stiffness: 400, damping: 17 }}
-              className="fixed bottom-24 right-4 z-40 bg-gradient-to-r from-[#F0B90B] to-[#F0B90B]/80 text-[#181A20] rounded-2xl shadow-2xl shadow-[#F0B90B]/20 w-14 h-14 flex items-center justify-center hover:shadow-xl transition-all"
+              className="fixed bottom-24 right-4 z-40 bg-gradient-to-r from-[#F0B90B] to-[#F0B90B]/80 text-[#181A20] rounded-2xl shadow-2xl shadow-[#F0B90B]/20 w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center hover:shadow-xl transition-all"
               onClick={() => setAddAssetModal(true)}
             >
-              <Plus size={24} />
+              <Plus size={20} sm={24} />
             </motion.button>
           </TooltipTrigger>
           <TooltipContent side="left">
@@ -2117,15 +2103,15 @@ export default function WalletPage() {
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: index * 0.05 }}
                 className={cn(
-                  "flex flex-col items-center px-3 py-1.5 rounded-xl transition-all relative",
+                  "flex flex-col items-center px-2 sm:px-3 py-1.5 rounded-xl transition-all relative",
                   isActive 
                     ? 'text-[#F0B90B]' 
                     : 'text-[#848E9C] hover:text-[#EAECEF]'
                 )}
                 onClick={() => navigate(item.path ? `/${item.path}` : '/')}
               >
-                {item.icon}
-                <span className="text-[10px] mt-1 font-medium">{item.label}</span>
+                <div className="scale-90 sm:scale-100">{item.icon}</div>
+                <span className="text-[8px] sm:text-[10px] mt-1 font-medium">{item.label}</span>
                 {isActive && (
                   <motion.div
                     layoutId="activeNav"
@@ -2275,21 +2261,22 @@ export default function WalletPage() {
         )}
       </AnimatePresence>
 
-      {/* Deposit Modal */}
+      {/* Deposit Modal - Mobile Responsive */}
       <AnimatePresence>
         {modal === 'deposit' && selectedAsset && (
           <Modal open={true} onClose={() => { setModal('assetDetail'); resetModalState(); }} title={`Deposit ${selectedAsset.symbol}`}>
-            <div className="space-y-5">
+            <div className="space-y-4 sm:space-y-5 pb-4">
               {/* QR Code Toggle */}
               <div className="flex justify-end">
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#23262F] rounded-xl"
+                  className="text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#23262F] rounded-xl text-xs sm:text-sm h-8 sm:h-9"
                   onClick={() => setModalState(s => ({ ...s, showQR: !s.showQR }))}
                 >
-                  <QrCode size={16} className="mr-2" />
-                  {modalState.showQR ? 'Hide QR' : 'Show QR'}
+                  <QrCode size={14} className="sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">{modalState.showQR ? 'Hide QR' : 'Show QR'}</span>
+                  <span className="sm:hidden">{modalState.showQR ? 'Hide' : 'QR'}</span>
                 </Button>
               </div>
 
@@ -2300,12 +2287,12 @@ export default function WalletPage() {
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
-                    className="flex items-center justify-center mb-4"
+                    className="flex items-center justify-center mb-2 sm:mb-4"
                   >
-                    <div className="bg-[#23262F] p-4 rounded-2xl shadow-xl">
+                    <div className="bg-[#23262F] p-2 sm:p-4 rounded-2xl shadow-xl">
                       <QRCodeCanvas 
                         value={NETWORKS[selectedAsset.symbol]?.find(n => n.name === modalState.depositNetwork)?.address || ''} 
-                        size={200} 
+                        size={typeof window !== 'undefined' && window.innerWidth < 640 ? 120 : 180} 
                         bgColor="#23262F" 
                         fgColor="#EAECEF" 
                         level="H"
@@ -2319,9 +2306,9 @@ export default function WalletPage() {
               {/* Network Selection */}
               {NETWORKS[selectedAsset.symbol] && (
                 <div>
-                  <Label className="block text-sm text-[#848E9C] mb-2">Network</Label>
+                  <Label className="block text-xs sm:text-sm text-[#848E9C] mb-1 sm:mb-2">Network</Label>
                   <select
-                    className="w-full bg-[#23262F] rounded-xl px-4 py-3 text-[#EAECEF] border border-[#2B3139] focus:border-[#F0B90B] transition-colors"
+                    className="w-full bg-[#23262F] rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-[#EAECEF] border border-[#2B3139] focus:border-[#F0B90B] transition-colors"
                     value={modalState.depositNetwork}
                     onChange={e => setModalState(s => ({ ...s, depositNetwork: e.target.value, copied: '' }))}
                   >
@@ -2336,20 +2323,20 @@ export default function WalletPage() {
               
               {/* Deposit Address */}
               <div>
-                <Label className="block text-sm text-[#848E9C] mb-2">Platform Deposit Address</Label>
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 mb-3">
+                <Label className="block text-xs sm:text-sm text-[#848E9C] mb-1 sm:mb-2">Platform Deposit Address</Label>
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-2 sm:p-3 mb-2">
                   <p className="text-xs text-blue-400 font-medium">
-                    💡 Copy this address and send your {selectedAsset.symbol} to deposit funds
+                    💡 Copy this address and send your {selectedAsset.symbol}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 bg-[#23262F] rounded-xl px-4 py-3 text-xs text-[#EAECEF] font-mono break-all border border-[#2B3139]">
+                  <code className="flex-1 bg-[#23262F] rounded-xl px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs text-[#EAECEF] font-mono break-all border border-[#2B3139]">
                     {NETWORKS[selectedAsset.symbol]?.find(n => n.name === modalState.depositNetwork)?.address || ''}
                   </code>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="w-10 h-10 bg-gradient-to-r from-[#F0B90B] to-[#F0B90B]/80 rounded-xl flex items-center justify-center shadow-lg shadow-[#F0B90B]/20"
+                    className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-[#F0B90B] to-[#F0B90B]/80 rounded-xl flex items-center justify-center shadow-lg shadow-[#F0B90B]/20 flex-shrink-0"
                     onClick={() => {
                       const address = NETWORKS[selectedAsset.symbol]?.find(n => n.name === modalState.depositNetwork)?.address || '';
                       navigator.clipboard.writeText(address);
@@ -2361,7 +2348,7 @@ export default function WalletPage() {
                       });
                     }}
                   >
-                    {modalState.copied === 'address' ? <CheckCircle size={16} className="text-[#181A20]" /> : <Copy size={16} className="text-[#181A20]" />}
+                    {modalState.copied === 'address' ? <CheckCircle size={12} className="sm:w-4 sm:h-4 text-[#181A20]" /> : <Copy size={12} className="sm:w-4 sm:h-4 text-[#181A20]" />}
                   </motion.button>
                 </div>
               </div>
@@ -2369,15 +2356,15 @@ export default function WalletPage() {
               {/* Memo/Tag if required */}
               {NETWORKS[selectedAsset.symbol]?.find(n => n.name === modalState.depositNetwork)?.requiresMemo && (
                 <div>
-                  <Label className="block text-sm text-[#848E9C] mb-2">Destination Tag / Memo</Label>
+                  <Label className="block text-xs sm:text-sm text-[#848E9C] mb-1 sm:mb-2">Destination Tag / Memo</Label>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 bg-[#23262F] rounded-xl px-4 py-3 text-xs text-[#EAECEF] font-mono border border-[#2B3139]">
+                    <code className="flex-1 bg-[#23262F] rounded-xl px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs text-[#EAECEF] font-mono border border-[#2B3139]">
                       {NETWORKS[selectedAsset.symbol]?.find(n => n.name === modalState.depositNetwork)?.memo || ''}
                     </code>
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="w-10 h-10 bg-gradient-to-r from-[#F0B90B] to-[#F0B90B]/80 rounded-xl flex items-center justify-center shadow-lg shadow-[#F0B90B]/20"
+                      className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-[#F0B90B] to-[#F0B90B]/80 rounded-xl flex items-center justify-center shadow-lg shadow-[#F0B90B]/20"
                       onClick={() => {
                         const memo = NETWORKS[selectedAsset.symbol]?.find(n => n.name === modalState.depositNetwork)?.memo || '';
                         navigator.clipboard.writeText(memo);
@@ -2387,7 +2374,7 @@ export default function WalletPage() {
                         });
                       }}
                     >
-                      <Copy size={16} className="text-[#181A20]" />
+                      <Copy size={12} className="sm:w-4 sm:h-4 text-[#181A20]" />
                     </motion.button>
                   </div>
                 </div>
@@ -2395,26 +2382,26 @@ export default function WalletPage() {
 
               {/* Amount */}
               <div>
-                <Label className="block text-sm text-[#848E9C] mb-2">Deposit Amount</Label>
+                <Label className="block text-xs sm:text-sm text-[#848E9C] mb-1 sm:mb-2">Deposit Amount</Label>
                 <Input
                   type="number"
                   placeholder="0.00"
                   value={modalState.depositAmount}
                   onChange={e => setModalState(s => ({ ...s, depositAmount: e.target.value, error: '' }))}
-                  className="bg-[#23262F] border-[#2B3139] text-[#EAECEF] h-12 rounded-xl focus:border-[#F0B90B]"
+                  className="bg-[#23262F] border-[#2B3139] text-[#EAECEF] h-10 sm:h-12 rounded-xl focus:border-[#F0B90B] text-sm"
                   min={NETWORKS[selectedAsset.symbol]?.find(n => n.name === modalState.depositNetwork)?.minDeposit || 0}
                   step={selectedAsset.symbol === 'USDT' ? '0.01' : '0.000001'}
                 />
-                <p className="text-xs text-[#848E9C] mt-1">
+                <p className="text-[10px] sm:text-xs text-[#848E9C] mt-1">
                   Min: {NETWORKS[selectedAsset.symbol]?.find(n => n.name === modalState.depositNetwork)?.minDeposit} {selectedAsset.symbol}
                 </p>
               </div>
 
               {/* Payment Proof Upload */}
               <div>
-                <Label className="block text-sm text-[#848E9C] mb-2">Payment Proof</Label>
-                <div className="space-y-3">
-                  <div className="border-2 border-dashed border-[#2B3139] rounded-xl p-4 hover:border-[#F0B90B]/50 transition-colors">
+                <Label className="block text-xs sm:text-sm text-[#848E9C] mb-1 sm:mb-2">Payment Proof</Label>
+                <div className="space-y-2 sm:space-y-3">
+                  <div className="border-2 border-dashed border-[#2B3139] rounded-xl p-3 sm:p-4 hover:border-[#F0B90B]/50 transition-colors">
                     <input
                       type="file"
                       id="deposit-proof"
@@ -2424,11 +2411,11 @@ export default function WalletPage() {
                     />
                     <label
                       htmlFor="deposit-proof"
-                      className="flex flex-col items-center justify-center cursor-pointer hover:bg-[#2B3139]/50 transition-colors rounded-xl p-4"
+                      className="flex flex-col items-center justify-center cursor-pointer hover:bg-[#2B3139]/50 transition-colors rounded-xl p-2 sm:p-4"
                     >
-                      <Upload className="w-8 h-8 text-[#848E9C] mb-2" />
-                      <span className="text-sm text-[#848E9C]">Click to upload payment proof</span>
-                      <span className="text-xs text-[#848E9C]/60">JPG, PNG, GIF up to 5MB</span>
+                      <Upload className="w-6 h-6 sm:w-8 sm:h-8 text-[#848E9C] mb-1 sm:mb-2" />
+                      <span className="text-xs sm:text-sm text-[#848E9C] text-center">Click to upload proof</span>
+                      <span className="text-[10px] sm:text-xs text-[#848E9C]/60 mt-1">JPG, PNG up to 5MB</span>
                     </label>
                   </div>
                   
@@ -2443,13 +2430,13 @@ export default function WalletPage() {
                         <img 
                           src={modalState.depositProofUrl} 
                           alt="Payment proof" 
-                          className="w-full h-48 object-cover rounded-xl"
+                          className="w-full h-32 sm:h-48 object-cover rounded-xl"
                         />
                         <Button
-                          className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-2 h-8 w-8 rounded-lg"
+                          className="absolute top-1 right-1 sm:top-2 sm:right-2 bg-red-500 hover:bg-red-600 text-white p-1 sm:p-2 h-6 w-6 sm:h-8 sm:w-8 rounded-lg"
                           onClick={() => setModalState(s => ({ ...s, depositProof: null, depositProofUrl: '' }))}
                         >
-                          <X size={16} />
+                          <X size={12} className="sm:w-4 sm:h-4" />
                         </Button>
                       </motion.div>
                     )}
@@ -2458,25 +2445,25 @@ export default function WalletPage() {
               </div>
               
               {/* Warnings */}
-              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3">
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-2 sm:p-3">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle size={16} className="text-yellow-400 shrink-0 mt-0.5" />
+                  <AlertTriangle size={14} className="sm:w-4 sm:h-4 text-yellow-400 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-xs text-yellow-400 font-medium">
-                      Send only {selectedAsset.symbol} via {modalState.depositNetwork} to this address.
+                    <p className="text-[10px] sm:text-xs text-yellow-400 font-medium">
+                      Send only {selectedAsset.symbol} via {modalState.depositNetwork}
                     </p>
-                    <p className="text-xs text-yellow-400/80 mt-1">
-                      Confirmation time: {NETWORKS[selectedAsset.symbol]?.find(n => n.name === modalState.depositNetwork)?.confirmationTime}
+                    <p className="text-[10px] sm:text-xs text-yellow-400/80 mt-1">
+                      Confirmation: {NETWORKS[selectedAsset.symbol]?.find(n => n.name === modalState.depositNetwork)?.confirmationTime}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-[#23262F] rounded-xl p-3">
+              <div className="bg-[#23262F] rounded-xl p-2 sm:p-3">
                 <div className="flex items-center gap-2">
-                  <Info size={14} className="text-[#848E9C]" />
-                  <p className="text-xs text-[#848E9C]">
-                    Deposit requests require admin approval. Funds will be added to your funding wallet once approved.
+                  <Info size={12} className="sm:w-3 sm:h-3 text-[#848E9C]" />
+                  <p className="text-[10px] sm:text-xs text-[#848E9C]">
+                    Requires admin approval. Funds added after approval.
                   </p>
                 </div>
               </div>
@@ -2487,27 +2474,30 @@ export default function WalletPage() {
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="bg-red-500/10 border border-red-500/20 rounded-xl p-3"
+                    className="bg-red-500/10 border border-red-500/20 rounded-xl p-2 sm:p-3"
                   >
-                    <p className="text-xs text-red-400">{modalState.error}</p>
+                    <p className="text-[10px] sm:text-xs text-red-400">{modalState.error}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
 
-              <Button
-                className="w-full bg-gradient-to-r from-[#F0B90B] to-[#F0B90B]/80 hover:from-[#F0B90B] hover:to-[#F0B90B] text-[#181A20] font-bold h-12 rounded-xl shadow-lg shadow-[#F0B90B]/20"
-                onClick={handleDepositRequest}
-                disabled={!modalState.depositAmount || !modalState.depositProof || modalState.isSubmitting}
-              >
-                {modalState.isSubmitting ? (
-                  <div className="flex items-center gap-2">
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Submitting...
-                  </div>
-                ) : (
-                  'Submit Deposit Request'
-                )}
-              </Button>
+              {/* Submit Button - Always visible */}
+              <div className="sticky bottom-0 pt-2 bg-gradient-to-t from-[#181A20] via-[#181A20] to-transparent">
+                <Button
+                  className="w-full bg-gradient-to-r from-[#F0B90B] to-[#F0B90B]/80 hover:from-[#F0B90B] hover:to-[#F0B90B] text-[#181A20] font-bold h-10 sm:h-12 rounded-xl shadow-lg shadow-[#F0B90B]/20 text-sm sm:text-base"
+                  onClick={handleDepositRequest}
+                  disabled={!modalState.depositAmount || !modalState.depositProof || modalState.isSubmitting}
+                >
+                  {modalState.isSubmitting ? (
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
+                      <span>Submitting...</span>
+                    </div>
+                  ) : (
+                    'Submit Deposit Request'
+                  )}
+                </Button>
+              </div>
             </div>
           </Modal>
         )}
@@ -2687,7 +2677,6 @@ export default function WalletPage() {
                       const amount = e.target.value;
                       setModalState(s => ({ ...s, swapAmount: amount, error: '' }));
                       
-                      // Calculate estimated output (mock rate)
                       const fromSymbol = s.swapFromSymbol || selectedAsset?.symbol || portfolio[0]?.symbol || '';
                       const toSymbol = s.swapToSymbol;
                       if (fromSymbol && toSymbol && amount) {
@@ -2727,7 +2716,6 @@ export default function WalletPage() {
                   onChange={e => {
                     setModalState(s => ({ ...s, swapToSymbol: e.target.value, error: '' }));
                     
-                    // Recalculate estimated output
                     const fromSymbol = s.swapFromSymbol || selectedAsset?.symbol || portfolio[0]?.symbol || '';
                     const toSymbol = e.target.value;
                     if (fromSymbol && toSymbol && s.swapAmount) {
@@ -2972,6 +2960,38 @@ export default function WalletPage() {
       {/* Records Modal */}
       <RecordsModal open={showRecordsModal} onClose={() => setShowRecordsModal(false)} />
 
+      {/* Transaction Slip Modal */}
+      <AnimatePresence>
+        {showTransactionSlip && selectedSlipTransaction && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-[#0B0E11]/95">
+            <div className="min-h-screen px-4 py-8">
+              <DepositSlip
+                data={{
+                  transactionId: selectedSlipTransaction.id,
+                  date: selectedSlipTransaction.date,
+                  time: selectedSlipTransaction.date,
+                  asset: selectedSlipTransaction.asset,
+                  status: 'Completed',
+                  amount: selectedSlipTransaction.amount,
+                  amountUsd: selectedSlipTransaction.metadata?.amountUsd || selectedSlipTransaction.amount,
+                  userName: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email : '',
+                  userEmail: user?.email || '',
+                  network: selectedSlipTransaction.metadata?.network,
+                  address: selectedSlipTransaction.metadata?.address,
+                  type: selectedSlipTransaction.type === 'Deposit' ? 'deposit' : 'withdrawal',
+                  fee: selectedSlipTransaction.metadata?.fee,
+                  txHash: selectedSlipTransaction.metadata?.txHash,
+                  reference: selectedSlipTransaction.metadata?.reference
+                }}
+                onClose={handleSlipClose}
+                showCloseButton={true}
+                theme="dark"
+              />
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Custom Scrollbar Styles */}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
@@ -2992,6 +3012,12 @@ export default function WalletPage() {
         @media (max-width: 640px) {
           input, select, button {
             font-size: 16px !important;
+          }
+          .text-xs {
+            font-size: 12px !important;
+          }
+          .text-sm {
+            font-size: 14px !important;
           }
         }
 

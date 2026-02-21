@@ -196,9 +196,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import apiService, { User } from '@/services/api';
+
+// Extended type for users with wallet balance
+interface UserWithBalance extends User {
+  walletBalance?: number;
+}
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import walletApiService from '@/services/wallet-api';
+import { walletApiService } from '@/services/wallet-api-new';
 
 // ==================== ANIMATION VARIANTS ====================
 const fadeInUp = {
@@ -1581,8 +1586,8 @@ export default function UserManagement() {
   const navigate = useNavigate();
 
   // State
-  const [users, setUsers] = useState<User[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserWithBalance[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<UserWithBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   
@@ -1621,7 +1626,9 @@ export default function UserManagement() {
         usersData.map(async (user) => {
           try {
             const walletBalances = await walletApiService.getUserBalances(user.id);
-            const totalBalance = walletBalances.reduce((sum, wallet) => sum + wallet.balance, 0);
+            console.log(`🔍 [UserManagement] Wallet balances for user ${user.id}:`, walletBalances);
+            const totalBalance = walletBalances.reduce((sum, wallet) => sum + (wallet.total || wallet.available || 0), 0);
+            console.log(`💰 [UserManagement] Total balance for user ${user.id}: $${totalBalance}`);
                 return {
               ...user,
               walletBalance: totalBalance
@@ -1654,7 +1661,7 @@ export default function UserManagement() {
   const refreshUserWalletBalance = async (userId: string) => {
     try {
       const walletBalances = await walletApiService.getUserBalances(userId);
-      const totalBalance = walletBalances.reduce((sum, wallet) => sum + wallet.balance, 0);
+      const totalBalance = walletBalances.reduce((sum, wallet) => sum + (wallet.total || wallet.available || 0), 0);
       
       setUsers(prev => prev.map(user => 
         user.id === userId 
@@ -1720,7 +1727,7 @@ export default function UserManagement() {
     const activeUsers = users.filter(u => u.status === 'Active').length;
     const pendingKyc = users.filter(u => u.kycStatus === 'Pending').length;
     const suspendedUsers = users.filter(u => u.status === 'Suspended').length;
-    const totalBalance = users.reduce((sum, u) => sum + (u.balance || 0), 0);
+    const totalBalance = users.reduce((sum, u) => sum + (u.walletBalance || 0), 0);
 
     return {
       totalUsers: users.length,
@@ -1926,7 +1933,7 @@ export default function UserManagement() {
       user.status || '',
       user.kycStatus || '',
       user.accountType || 'Standard',
-      user.balance || 0,
+      user.walletBalance || 0,
       user.creditScore || 0,
       user.registrationDate || '',
       user.lastLogin || ''
