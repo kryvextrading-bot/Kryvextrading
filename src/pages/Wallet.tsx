@@ -17,7 +17,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { useUnifiedWallet as useUnifiedWalletV2 } from '@/hooks/useUnifiedWallet-v2';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
 import { useTradingControl } from '@/hooks/useTradingControl';
 import RecordsModal from '@/components/RecordsModal';
 import WalletTransfer from '@/components/WalletTransfer';
@@ -629,17 +629,17 @@ export default function WalletPage() {
   const { toast } = useToast();
   const { user, logout } = useAuth();
   
-  // Use unified wallet v2 with default values
+  // Use unified wallet with default values
   const { 
-    balances = { funding: {}, trading: {}, locked: {} },
-    getFundingBalance = (asset: string) => 0,
-    getTradingBalance = (asset: string) => 0,
-    getLockedBalance = (asset: string) => 0,
-    getTotalBalance = (asset: string) => 0,
-    refreshBalances = async () => {},
-    loading: walletLoading = false,
-    locks = []
-  } = useUnifiedWalletV2() || {};
+    fundingBalances,
+    tradingBalances,
+    getFundingBalance,
+    getTradingBalance,
+    getLockedBalance,
+    getTotalBalance,
+    refreshBalances,
+    loading: walletLoading
+  } = useUnifiedWallet();
   
   const {
     userOutcome,
@@ -711,9 +711,9 @@ export default function WalletPage() {
   // Create portfolio from balances for display
   const portfolio = useMemo(() => {
     const safeBalances = {
-      funding: balances?.funding || {},
-      trading: balances?.trading || {},
-      locked: balances?.locked || {}
+      funding: fundingBalances || {},
+      trading: tradingBalances || {},
+      locked: getLockedBalance || {}
     };
     
     const assets: Asset[] = [];
@@ -785,19 +785,19 @@ export default function WalletPage() {
     assetsArray.sort((a, b) => b.value - a.value);
     
     return assetsArray;
-  }, [balances, prices, getAssetName]);
+  }, [fundingBalances, tradingBalances, getLockedBalance, prices, getAssetName]);
 
   // Update stats when locks change
   useEffect(() => {
-    const safeLocks = locks || [];
-    const totalLocked = Object.values(balances?.locked || {}).reduce((sum, val) => sum + (Number(val) || 0), 0);
+    const safeLocks = userOutcome?.locks || [];
+    const totalLocked = Object.values(getLockedBalance || {}).reduce((sum, val) => sum + (Number(val) || 0), 0);
     
     setStats({
       activeLocks: safeLocks.length,
       totalVolume: totalLocked,
       winRate: 0
     });
-  }, [locks, balances]);
+  }, [userOutcome?.locks, getLockedBalance]);
 
   // Safe version of unified balance
   const getUnifiedBalance = useCallback((asset: string = 'USDT'): number => {
@@ -806,34 +806,22 @@ export default function WalletPage() {
 
   // Total balance calculations
   const totalFundingBalance = useMemo(() => {
-    const funding = balances?.funding || {};
+    const funding = fundingBalances || {};
     const total = Object.values(funding).reduce((acc, val) => acc + (Number(val) || 0), 0);
     
-    // If no real funding balance, show demo value
-    if (total === 0 && !walletLoading) {
-      console.log('💰 [Wallet] No real funding balance found, showing demo value');
-      return 2500.00; // Default demo funding balance
-    }
-    
     return total;
-  }, [balances?.funding, walletLoading]);
+  }, [fundingBalances]);
 
   const totalTradingBalance = useMemo(() => {
-    const trading = balances?.trading || {};
+    const trading = tradingBalances || {};
     const total = Object.values(trading).reduce((acc, val) => acc + (Number(val) || 0), 0);
     
-    // If no real trading balance, show demo value
-    if (total === 0 && !walletLoading) {
-      console.log('💰 [Wallet] No real trading balance found, showing demo value');
-      return 750.00; // Default demo trading balance
-    }
-    
     return total;
-  }, [balances?.trading, walletLoading]);
+  }, [tradingBalances]);
 
   const totalLockedBalance = useMemo(() => {
-    return Object.values(balances?.locked || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
-  }, [balances?.locked]);
+    return Object.values(getLockedBalance || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  }, [getLockedBalance]);
 
   const displayBalance = useMemo(() => {
     const total = totalFundingBalance + totalTradingBalance + totalLockedBalance;
