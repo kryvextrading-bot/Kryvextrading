@@ -174,13 +174,40 @@ class SupabaseApiService {
           if (profileError) {
             console.error('❌ [SupabaseAPI] Profile creation error:', profileError);
             
-            // Cleanup auth user if profile creation fails
-            if (authData.user) {
-              await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+            // Handle specific database constraint errors
+            if (profileError.code === '23505') {
+              console.warn('⚠️ [SupabaseAPI] User already exists - continuing with existing profile');
+              // Don't fail signup if user already exists
+              const { data: existingProfile } = await supabaseAdmin
+                .from('users')
+                .select('*')
+                .eq('email', email)
+                .maybeSingle();
+              
+              if (existingProfile) {
+                console.log('✅ [SupabaseAPI] Using existing user profile');
+                return { user: authData.user, profile: existingProfile, requiresConfirmation: false };
+              }
+            } else if (profileError.code === '42501') {
+              console.error('❌ [SupabaseAPI] RLS policy violation - using admin client for all operations');
+              // This should be fixed by using supabaseAdmin, but if it still happens
+              throw new Error('Database permission error. Please contact support.');
+            } else if (profileError.code?.includes('users_email_change_confirm_status_check') ||
+                        profileError.code?.includes('users_phone_key') ||
+                        profileError.code?.includes('users_pkey') ||
+                        profileError.code?.includes('16494_16495_2_not_null') ||
+                        profileError.code?.includes('16494_16495_33_not_null') ||
+                        profileError.code?.includes('16494_16495_35_not_null')) {
+              console.error('❌ [SupabaseAPI] Database constraint violation:', profileError);
+              throw new Error('Database constraint violation. Please contact support with error code: ' + profileError.code);
+            } else {
+              console.error('❌ [SupabaseAPI] Unexpected database error:', profileError);
+              throw new Error('Failed to create user profile: ' + profileError.message);
             }
             
-            if (profileError.code === '42501') {
-              throw new Error('Database permission error. Please contact support.');
+            // Cleanup auth user if profile creation fails
+            if (authData.user && !profile) {
+              await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
             }
             
             throw new Error('Failed to create user profile. Please try again.');
