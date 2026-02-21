@@ -119,10 +119,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         userInsertData
       );
       
-      // Handle email confirmation requirement
+      // Handle email confirmation requirement (now always false due to auto-login)
       if (result.requiresConfirmation) {
-        // Return result instead of throwing error so Register component can handle it
-        return result;
+        // This should not happen with our new auto-login flow, but handle just in case
+        throw new Error('Email confirmation required but auto-login failed. Please try logging in manually.');
       }
       
       if (result.profile) {

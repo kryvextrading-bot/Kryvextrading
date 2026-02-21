@@ -143,12 +143,45 @@ class SupabaseApiService {
         
         // Check if email confirmation is required
         if (data.user && !data.session) {
-          // Email confirmation required
-          return { 
-            user: data.user, 
-            profile: null, 
-            requiresConfirmation: true 
-          };
+          // Email confirmation required - but we'll bypass it for immediate login
+          console.log('📧 Email confirmation would be required, but bypassing for immediate login');
+          
+          // Automatically sign in the user after successful signup
+          try {
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+              email,
+              password,
+            });
+            
+            if (signInError) {
+              console.error('Auto sign-in failed:', signInError);
+              return { 
+                user: data.user, 
+                profile: null, 
+                requiresConfirmation: false // Don't require confirmation since we're auto-logging
+              };
+            }
+            
+            // Get user profile
+            const { data: profile, error: profileError } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', signInData.user.id)
+              .maybeSingle()
+            
+            if (profileError && profileError.code !== 'PGRST116') {
+              console.error('Error fetching user profile after auto-login:', profileError);
+            }
+            
+            return { user: signInData.user, profile };
+          } catch (autoLoginError) {
+            console.error('Auto login failed:', autoLoginError);
+            return { 
+              user: data.user, 
+              profile: null, 
+              requiresConfirmation: false
+            };
+          }
         }
         
         // Create user profile using upsert to avoid conflicts

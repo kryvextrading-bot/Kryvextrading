@@ -130,8 +130,17 @@ export default function Register() {
         phone: '',
       });
       
-      // Check if email confirmation is required
-      if (result.requiresConfirmation) {
+      // With the new auto-login flow, users should be logged in immediately
+      if (result.profile) {
+        toast({
+          title: "✨ Account Created Successfully!",
+          description: "Welcome to Kryvex Trading! Please complete your KYC verification to start trading.",
+        });
+        
+        // Redirect to dashboard/home
+        navigate('/');
+      } else {
+        // Fallback in case something went wrong
         toast({
           title: "📧 Registration Successful!",
           description: "Please check your email to confirm your account. You'll be able to login after confirmation.",
@@ -139,15 +148,7 @@ export default function Register() {
         
         // Redirect to login page with a message
         navigate('/login?message=email-confirmation-required');
-        return;
       }
-      
-      toast({
-        title: "✨ Account Created Successfully!",
-        description: "Welcome to Kryvex Trading! Please complete your KYC verification to start trading.",
-      });
-      
-      navigate('/');
     } catch (error) {
       let errorMessage = "Failed to create account. Please try again.";
       
