@@ -250,15 +250,28 @@ class SupabaseApiService {
 
   async getCurrentUser() {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Authentication timeout')), 8000);
+      });
+
+      const userPromise = supabase.auth.getUser();
+      const { data: { user } } = await Promise.race([userPromise, timeoutPromise]) as any;
+      
       if (!user) return null
       
-      // Get profile by ID
-      const { data: profile, error: profileError } = await supabase
+      // Get profile by ID with timeout
+      const profilePromise = supabase
         .from('users')
         .select('*')
         .eq('id', user.id)
-        .maybeSingle()
+        .maybeSingle();
+      
+      const profileTimeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000);
+      });
+      
+      const { data: profile, error: profileError } = await Promise.race([profilePromise, profileTimeoutPromise]) as any;
       
       if (profileError) {
         console.error('Error fetching current user profile:', profileError)

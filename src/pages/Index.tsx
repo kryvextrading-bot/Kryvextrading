@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -298,27 +298,41 @@ export default function Index() {
   const [walletBalance, setWalletBalance] = useState<WalletBalance>({
     totalUSDT: usdtBalance,
     totalUSD: totalPortfolioValue,
+    totalFundingBalance,
+    totalTradingBalance,
+    totalLockedBalance,
     change24h: 5.67, // This would come from real data in production
     lastUpdated: new Date()
   });
 
-  // Update wallet balance when context changes
+  // Update wallet balance when context changes - use stable references
+  const prevPricesRef = useRef<Record<string, number>>({});
+  
   useEffect(() => {
-    setWalletBalance(prev => ({
-      ...prev,
-      totalUSDT: usdtBalance,
-      totalUSD: totalPortfolioValue,
-      lastUpdated: new Date()
-    }));
+    // Only update if prices actually changed
+    const pricesChanged = JSON.stringify(prices) !== JSON.stringify(prevPricesRef.current);
     
-    console.log('💰 [Index] Balance updated:', {
-      usdtBalance,
-      totalPortfolioValue,
-      totalFundingBalance,
-      totalTradingBalance,
-      totalLockedBalance
-    });
-  }, [usdtBalance, totalPortfolioValue, totalFundingBalance, totalTradingBalance, totalLockedBalance]);
+    if (pricesChanged) {
+      prevPricesRef.current = prices;
+      
+      setWalletBalance(prev => ({
+        ...prev,
+        totalUSDT: usdtBalance,
+        totalUSD: totalPortfolioValue,
+        totalFundingBalance,
+        totalTradingBalance,
+        totalLockedBalance
+      }));
+      
+      console.log('💰 [Index] Balance updated:', {
+        usdtBalance,
+        totalPortfolioValue,
+        totalFundingBalance,
+        totalTradingBalance,
+        totalLockedBalance
+      });
+    }
+  }, [prices]);
 
   // Trending assets from ALL_ASSETS
   const trendingAssets: TrendingAsset[] = useMemo(() => {

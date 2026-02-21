@@ -22,7 +22,7 @@ export const TradingTestPage: React.FC = () => {
         side: 'buy',
         type: 'market',
         amount: 0.001,
-        price: 67000,
+        price: 67668.18,
         total: 67
       });
 

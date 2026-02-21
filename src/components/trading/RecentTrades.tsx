@@ -1,4 +1,5 @@
 import React from 'react';
+import { useMarketData } from '@/contexts/MarketDataContext';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -66,20 +67,14 @@ const generateMockTrades = (basePrice: number) => {
   return mockTrades;
 };
 
-export const RecentTrades: React.FC<RecentTradesProps> = ({
-  trades,
-  loading,
-  baseAsset,
-  quoteAsset
-}) => {
+export function RecentTrades({ symbol, maxItems = 20 }: { symbol: string; maxItems?: number }) {
+  const { prices } = useMarketData();
+
   // Use mock data if no real data is available
   const displayTrades = React.useMemo(() => {
-    if (trades.length === 0 && !loading) {
-      // Generate mock data around current BTC price
-      return generateMockTrades(67000);
-    }
-    return trades;
-  }, [trades, loading]);
+    const btcPrice = prices.BTC || 67668.18;
+    return generateMockTrades(btcPrice);
+  }, [prices]);
 
   return (
     <Card className="bg-[#1E2329] border-[#2B3139] p-3">

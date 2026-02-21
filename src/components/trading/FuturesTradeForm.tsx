@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useMarketData } from '@/contexts/MarketDataContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -22,6 +23,7 @@ export const FuturesTradeForm: React.FC<FuturesTradeFormProps> = ({
   onTradeComplete
 }) => {
   const { user } = useAuth();
+  const { prices } = useMarketData();
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [positionType, setPositionType] = useState<'open' | 'close'>('open');
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop'>('market');
@@ -58,9 +60,11 @@ export const FuturesTradeForm: React.FC<FuturesTradeFormProps> = ({
     const fetchPrice = async () => {
       setLoading(true);
       try {
-        // Mock price for now - replace with actual Binance API
-        const mockPrice = symbol === 'BTCUSDT' ? 67000 : symbol === 'ETHUSDT' ? 3500 : 100;
-        if (mounted) setLivePrice(mockPrice);
+        // Get price from MarketDataContext
+        const baseAsset = symbol.replace('USDT', '');
+        const marketPrice = prices[baseAsset];
+        const priceToUse = marketPrice || (symbol === 'BTCUSDT' ? 67668.18 : symbol === 'ETHUSDT' ? 3492.89 : 100);
+        if (mounted) setLivePrice(priceToUse);
       } catch {
         if (mounted) setLivePrice(null);
       } finally {
@@ -70,7 +74,7 @@ export const FuturesTradeForm: React.FC<FuturesTradeFormProps> = ({
     fetchPrice();
     const interval = setInterval(fetchPrice, 30000);
     return () => { mounted = false; clearInterval(interval); };
-  }, [symbol]);
+  }, [symbol, prices]);
 
   const calculatePositionSize = () => {
     if (!livePrice || !balance) return 0;

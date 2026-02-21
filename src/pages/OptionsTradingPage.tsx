@@ -1,5 +1,5 @@
 // OptionsTradingPage.tsx - Fixed with proper wallet integration and admin controls
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -16,7 +16,11 @@ import {
   Eye,
   EyeOff,
   ChevronDown,
-  Activity
+  Activity,
+  Lock,
+  Unlock,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
@@ -26,7 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Chart imports
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip as ChartTooltip, Legend, TimeScale } from 'chart.js';
@@ -35,16 +39,16 @@ import { CandlestickController, CandlestickElement } from 'chartjs-chart-financi
 
 // Hooks
 import useBinanceStream from '@/hooks/useBinanceStream';
-import { useWallet } from '@/contexts/WalletContext';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTradingControl } from '@/hooks/useTradingControl';
+import { useNotification } from '@/contexts/NotificationContext';
 
 // Services
-import { tradingService } from '@/services/tradingService';
-import { walletService } from '@/services/wallet-service-new';
+import { unifiedTradingService } from '@/services/unified-trading-service';
 
 // Utils
-import { formatPrice, formatCurrency, validateOrder } from '@/utils/tradingCalculations';
+import { formatPrice, formatCurrency } from '@/utils/tradingCalculations';
 
 // Types
 import { Transaction } from '@/types/trading';
@@ -64,86 +68,213 @@ ChartJS.register(
   CandlestickElement
 );
 
-// Constants
+// ==================== CONSTANTS ====================
+
 const TIME_RANGES = ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'] as const;
 type TimeRange = typeof TIME_RANGES[number];
 
-const OPTION_TIMES = [60, 120, 300, 600, 1800, 3600] as const; // in seconds
-type OptionTime = typeof OPTION_TIMES[number];
+const ASSETS = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'DOGE', 'MATIC'];
+
+// Options Timeframes with correct payout calculations
+const OPTIONS_TIMEFRAMES = [
+  { value: 60, label: '60s', profitPercent: 18, payout: 1.18, minStake: 10, maxStake: 1000 },
+  { value: 120, label: '2m', profitPercent: 25, payout: 1.25, minStake: 20, maxStake: 2000 },
+  { value: 300, label: '5m', profitPercent: 45, payout: 1.45, minStake: 50, maxStake: 5000 },
+  { value: 600, label: '10m', profitPercent: 65, payout: 1.65, minStake: 100, maxStake: 10000 },
+  { value: 1800, label: '30m', profitPercent: 120, payout: 2.20, minStake: 200, maxStake: 20000 },
+  { value: 3600, label: '1h', profitPercent: 150, payout: 2.50, minStake: 500, maxStake: 50000 },
+] as const;
+
+type OptionTime = typeof OPTIONS_TIMEFRAMES[number]['value'];
 
 const CHART_TYPES = ['candlestick', 'line'] as const;
 type ChartType = typeof CHART_TYPES[number];
 
-const ASSETS = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP'];
-
-const PROFIT_RATES = {
-  60: { payout: 0.85, profit: 15 },
-  120: { payout: 0.82, profit: 18 },
-  300: { payout: 0.78, profit: 22 },
-  600: { payout: 0.75, profit: 25 },
-  1800: { payout: 0.70, profit: 30 },
-  3600: { payout: 0.65, profit: 35 }
-};
-
-// Mock chart data
-const generateMockData = (timeRange: TimeRange) => {
-  const points = timeRange === '1m' ? 60 : 
-                 timeRange === '5m' ? 48 : 
-                 timeRange === '15m' ? 32 : 
-                 timeRange === '30m' ? 30 : 
-                 timeRange === '1h' ? 24 : 
-                 timeRange === '4h' ? 18 : 
-                 timeRange === '1d' ? 14 : 30;
-
-  const basePrice = 67000;
-  const volatility = 0.02;
-  
-  const labels = [];
-  const candleData = [];
-  const lineData = [];
-  
-  let currentPrice = basePrice;
-  
-  for (let i = 0; i < points; i++) {
-    const time = new Date(Date.now() - (points - i) * 60000);
-    labels.push(time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    
-    // Generate random walk
-    const change = (Math.random() - 0.5) * volatility * currentPrice;
-    const open = currentPrice;
-    const close = currentPrice + change;
-    const high = Math.max(open, close) * (1 + Math.random() * 0.005);
-    const low = Math.min(open, close) * (1 - Math.random() * 0.005);
-    
-    candleData.push({ o: open, h: high, l: low, c: close });
-    lineData.push(close);
-    
-    currentPrice = close;
-  }
-  
-  return { labels, candleData, lineData };
-};
+// ==================== TYPES ====================
 
 interface OptionOrder {
   id: string;
-  pair: string;
-  direction: 'up' | 'down';
-  amount: number;
-  timeFrame: number;
+  symbol: string;
+  direction: 'UP' | 'DOWN';
+  stake: number;
   entryPrice: number;
+  exitPrice?: number;
+  duration: number;
   payout: number;
-  expiresAt: number;
-  status: 'active' | 'completed' | 'failed';
+  startTime: number;
+  endTime: number;
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
   pnl?: number;
+  fee?: number;
+  fluctuation?: number;
+  result?: 'win' | 'loss';
+  isLocked?: boolean;
 }
+
+// ==================== COMPONENTS ====================
+
+// Countdown Timer Component
+const CountdownTimer: React.FC<{ endTime: number; onExpire?: () => void }> = ({ endTime, onExpire }) => {
+  const [timeLeft, setTimeLeft] = useState(Math.max(0, endTime - Date.now()));
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, endTime - Date.now());
+      setTimeLeft(remaining);
+      
+      if (remaining <= 0 && onExpire) {
+        onExpire();
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [endTime, onExpire]);
+
+  const seconds = Math.floor(timeLeft / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+
+  if (timeLeft <= 0) return null;
+
+  return (
+    <span className={`font-mono font-bold ${
+      seconds < 10 ? 'text-[#F6465D] animate-pulse' : 'text-[#F0B90B]'
+    }`}>
+      {hours > 0 
+        ? `${hours}h ${minutes % 60}m`
+        : minutes > 0 
+          ? `${minutes}m ${seconds % 60}s`
+          : `${seconds}s`
+      }
+    </span>
+  );
+};
+
+// Active Option Card Component
+const ActiveOptionCard: React.FC<{ 
+  option: OptionOrder; 
+  currentPrice: number;
+  onExpire: (orderId: string) => void;
+}> = ({ option, currentPrice, onExpire }) => {
+  const isProfitable = (option.direction === 'UP' && currentPrice > option.entryPrice) ||
+                       (option.direction === 'DOWN' && currentPrice < option.entryPrice);
+  const potentialProfit = option.stake * (option.payout - 1);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="bg-[#1E2329] rounded-xl border border-[#2B3139] p-4 mb-3 hover:border-[#F0B90B]/30 transition-all"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Badge className={option.direction === 'UP' ? 'bg-[#0ECB81]/20 text-[#0ECB81]' : 'bg-[#F6465D]/20 text-[#F6465D]'}>
+            {option.direction}
+          </Badge>
+          <span className="text-sm font-medium text-[#EAECEF]">{option.symbol}</span>
+          <Lock className="w-3 h-3 text-[#F0B90B]" />
+        </div>
+        <CountdownTimer 
+          endTime={option.endTime} 
+          onExpire={() => onExpire(option.id)}
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-sm">
+        <div>
+          <div className="text-xs text-[#848E9C]">Stake</div>
+          <div className="font-mono text-[#EAECEF]">${option.stake.toFixed(2)}</div>
+        </div>
+        <div>
+          <div className="text-xs text-[#848E9C]">Entry</div>
+          <div className="font-mono text-[#EAECEF]">${option.entryPrice.toFixed(2)}</div>
+        </div>
+        <div>
+          <div className="text-xs text-[#848E9C]">Payout</div>
+          <div className={`font-mono ${isProfitable ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+            ${(option.stake * option.payout).toFixed(2)}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-2 pt-2 border-t border-[#2B3139]">
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Current Price</span>
+          <span className={`font-mono ${isProfitable ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+            ${currentPrice.toFixed(2)}
+          </span>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// Completed Option Card Component
+const CompletedOptionCard: React.FC<{ option: OptionOrder }> = ({ option }) => {
+  const isWin = option.result === 'win' || (option.pnl && option.pnl > 0);
+  const profitAmount = option.pnl ?? (isWin ? option.stake * (option.payout - 1) : -option.stake);
+
+  const formatDateTime = (timestamp: number) => {
+    return new Date(timestamp).toLocaleString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+  };
+
+  return (
+    <div className="bg-[#1E2329] rounded-lg p-3 mb-2 border border-[#2B3139]">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Badge className={option.direction === 'UP' ? 'bg-[#0ECB81]/20 text-[#0ECB81]' : 'bg-[#F6465D]/20 text-[#F6465D]'}>
+            {option.direction}
+          </Badge>
+          <span className="text-xs text-[#EAECEF]">{option.symbol}</span>
+          <Badge className={isWin ? 'bg-[#0ECB81]/20 text-[#0ECB81]' : 'bg-[#F6465D]/20 text-[#F6465D]'}>
+            {isWin ? 'WIN' : 'LOSS'}
+          </Badge>
+        </div>
+        <span className={`text-xs font-mono ${isWin ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+          {isWin ? '+' : ''}{profitAmount.toFixed(2)} USDT
+        </span>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div>
+          <span className="text-[#848E9C]">Stake:</span>
+          <span className="ml-1 text-[#EAECEF]">${option.stake.toFixed(2)}</span>
+        </div>
+        <div>
+          <span className="text-[#848E9C]">Entry:</span>
+          <span className="ml-1 text-[#EAECEF]">${option.entryPrice.toFixed(2)}</span>
+        </div>
+        <div>
+          <span className="text-[#848E9C]">Exit:</span>
+          <span className="ml-1 text-[#EAECEF]">${option.exitPrice?.toFixed(2) || option.entryPrice.toFixed(2)}</span>
+        </div>
+        <div>
+          <span className="text-[#848E9C]">Time:</span>
+          <span className="ml-1 text-[#EAECEF]">{formatDateTime(option.startTime)}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== MAIN COMPONENT ====================
 
 export default function OptionsTradingPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { addNotification } = useNotification();
   
   // Contexts
   const { user, isAuthenticated } = useAuth();
-  const { balances, getBalance, updateBalance } = useWallet();
+  const { getTradingBalance, refreshBalances } = useUnifiedWallet();
   const {
     userOutcome,
     activeWindows,
@@ -160,9 +291,10 @@ export default function OptionsTradingPage() {
   const [chartType, setChartType] = useState<ChartType>('candlestick');
   const [hideBalances, setHideBalances] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [processingOrder, setProcessingOrder] = useState<string | null>(null);
 
   // Trading state
-  const [direction, setDirection] = useState<'up' | 'down'>('up');
+  const [direction, setDirection] = useState<'UP' | 'DOWN'>('UP');
   const [optionTime, setOptionTime] = useState<OptionTime>(60);
   const [amount, setAmount] = useState('');
   const [percent, setPercent] = useState(0);
@@ -170,19 +302,23 @@ export default function OptionsTradingPage() {
   // Orders state
   const [activeOptions, setActiveOptions] = useState<OptionOrder[]>([]);
   const [completedOptions, setCompletedOptions] = useState<OptionOrder[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   // Live data
   const trade = useBinanceStream(symbol, 'trade');
   const kline = useBinanceStream(symbol, 'kline', timeRange);
 
   // Current price
-  const currentPrice = trade?.p ? parseFloat(trade.p) : 67000;
+  const currentPrice = trade?.p ? parseFloat(trade.p) : 67668.18;
   const priceChange = kline?.k ? ((parseFloat(kline.k.c) - parseFloat(kline.k.o)) / parseFloat(kline.k.o)) * 100 : 0;
 
   // Chart data
-  const [chartData, setChartData] = useState(() => generateMockData(timeRange));
+  const [chartData, setChartData] = useState<any>(null);
   const [chartHistory, setChartHistory] = useState<any[]>([]);
+
+  // Get current timeframe config
+  const timeframeConfig = useMemo(() => 
+    OPTIONS_TIMEFRAMES.find(tf => tf.value === optionTime) || OPTIONS_TIMEFRAMES[0],
+  [optionTime]);
 
   // Update chart with real data
   useEffect(() => {
@@ -208,61 +344,141 @@ export default function OptionsTradingPage() {
 
   useEffect(() => {
     setChartHistory([]);
-    setChartData(generateMockData(timeRange));
+    // Generate mock data for initial display
+    const mockData = generateMockData(timeRange);
+    setChartData(mockData);
   }, [symbol, timeRange]);
 
   // Load user data
   useEffect(() => {
     if (user?.id) {
-      loadTransactions();
+      loadUserOrders();
     }
   }, [user?.id]);
 
-  const loadTransactions = async () => {
+  const loadUserOrders = async () => {
     try {
-      const data = await tradingService.getUserTransactions(user!.id);
-      setTransactions(data);
+      setLoading(true);
       
-      // Separate active and completed options
-      const options = data.filter(tx => tx.type === 'option');
-      const active = options.filter(tx => 
-        tx.status === 'scheduled' && 
-        tx.metadata?.expiresAt && 
-        tx.metadata.expiresAt > Date.now()
-      );
-      const completed = options.filter(tx => 
-        tx.status === 'completed' || tx.status === 'failed'
-      );
-      
-      setActiveOptions(active.map(tx => ({
-        id: tx.id,
-        pair: tx.asset,
-        direction: tx.metadata?.direction,
-        amount: tx.amount,
-        timeFrame: tx.metadata?.timeFrame,
-        entryPrice: tx.price,
-        payout: tx.metadata?.payout,
-        expiresAt: tx.metadata?.expiresAt,
-        status: 'active',
-        pnl: tx.pnl
-      })));
-      
-      setCompletedOptions(completed.map(tx => ({
-        id: tx.id,
-        pair: tx.asset,
-        direction: tx.metadata?.direction,
-        amount: tx.amount,
-        timeFrame: tx.metadata?.timeFrame,
-        entryPrice: tx.price,
-        payout: tx.metadata?.payout,
-        expiresAt: tx.metadata?.expiresAt,
-        status: tx.status === 'completed' ? 'completed' : 'failed',
-        pnl: tx.pnl
-      })));
+      // Load active options
+      const active = await unifiedTradingService.getActiveOptionsOrders(user!.id);
+      const formattedActive: OptionOrder[] = active.map(order => ({
+        id: order.id,
+        symbol: order.symbol || symbol,
+        direction: order.direction,
+        stake: order.stake,
+        entryPrice: order.entryPrice,
+        duration: order.duration,
+        payout: order.payoutRate || timeframeConfig.payout,
+        startTime: new Date(order.startTime || order.createdAt).getTime(),
+        endTime: new Date(order.endTime).getTime(),
+        status: 'ACTIVE',
+        fluctuation: order.fluctuationRange || 0.01,
+        fee: order.fee || order.stake * 0.001,
+        isLocked: true
+      }));
+      setActiveOptions(formattedActive);
+
+      // Load completed options
+      const completed = await unifiedTradingService.getCompletedOptionsOrders(user!.id);
+      const formattedCompleted: OptionOrder[] = completed.map(order => {
+        const isWin = order.pnl && order.pnl > 0;
+        return {
+          id: order.id,
+          symbol: order.symbol || symbol,
+          direction: order.direction,
+          stake: order.stake,
+          entryPrice: order.entryPrice,
+          exitPrice: order.exitPrice,
+          duration: order.duration,
+          payout: order.payoutRate || timeframeConfig.payout,
+          startTime: new Date(order.startTime || order.createdAt).getTime(),
+          endTime: new Date(order.endTime).getTime(),
+          status: 'COMPLETED',
+          pnl: order.pnl,
+          fee: order.fee || order.stake * 0.001,
+          fluctuation: order.fluctuationRange || 0.01,
+          result: isWin ? 'win' : 'loss'
+        };
+      });
+      setCompletedOptions(formattedCompleted);
     } catch (error) {
-      console.error('Failed to load transactions:', error);
+      console.error('Failed to load orders:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load your orders',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Handle order expiration
+  const handleOrderExpire = useCallback(async (orderId: string) => {
+    if (processingOrder) return;
+    
+    setProcessingOrder(orderId);
+    try {
+      const result = await unifiedTradingService.expireOptionsTrade(orderId);
+      
+      if (result.success) {
+        // Find the expired order
+        const expiredOrder = activeOptions.find(o => o.id === orderId);
+        if (expiredOrder) {
+          // Remove from active
+          setActiveOptions(prev => prev.filter(o => o.id !== orderId));
+          
+          // Create completed order
+          const completedOrder: OptionOrder = {
+            ...expiredOrder,
+            status: 'COMPLETED',
+            exitPrice: result.exitPrice || currentPrice,
+            pnl: result.profit || 0,
+            result: result.result === 'win' ? 'win' : 'loss',
+            isLocked: false,
+            endTime: Date.now()
+          };
+          
+          // Add to completed (avoid duplicates)
+          setCompletedOptions(prev => {
+            const exists = prev.some(o => o.id === orderId);
+            if (exists) return prev;
+            return [completedOrder, ...prev];
+          });
+          
+          // Refresh balances to update locked funds
+          await refreshBalances();
+
+          // Add notification
+          if (result.result === 'win') {
+            addNotification({
+              type: 'success',
+              title: 'Option Won! 🎉',
+              message: `+$${result.profit?.toFixed(2)} USDT profit`,
+              duration: 5000
+            });
+          } else {
+            addNotification({
+              type: 'error',
+              title: 'Option Lost',
+              message: `-$${Math.abs(result.profit || 0).toFixed(2)} USDT`,
+              duration: 5000
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error expiring order:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to settle option',
+        variant: 'destructive'
+      });
+    } finally {
+      setProcessingOrder(null);
+    }
+  }, [activeOptions, currentPrice, refreshBalances, processingOrder, addNotification, toast]);
 
   // Handle asset change
   const handleAssetChange = (asset: string) => {
@@ -292,10 +508,20 @@ export default function OptionsTradingPage() {
       return;
     }
 
-    if (parsedAmount > getBalance('USDT')) {
+    if (parsedAmount < timeframeConfig.minStake || parsedAmount > timeframeConfig.maxStake) {
+      toast({
+        title: 'Invalid Stake',
+        description: `Amount must be between $${timeframeConfig.minStake} and $${timeframeConfig.maxStake}`,
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const balance = getTradingBalance('USDT');
+    if (parsedAmount > balance) {
       toast({
         title: 'Insufficient Balance',
-        description: `You need ${formatCurrency(parsedAmount)} USDT but have ${formatCurrency(getBalance('USDT'))} USDT`,
+        description: `You need $${parsedAmount.toFixed(2)} USDT but have $${balance.toFixed(2)} USDT`,
         variant: 'destructive'
       });
       return;
@@ -307,131 +533,76 @@ export default function OptionsTradingPage() {
       // Check if option should win based on admin settings
       const wins = await shouldWin('options');
       
-      const rate = PROFIT_RATES[optionTime]?.payout || 0.8;
-      const payout = parsedAmount * rate;
       const expiresAt = Date.now() + optionTime * 1000;
 
-      // Create option order
-      const option = await tradingService.createOption({
-        userId: user!.id,
-        pair: symbol,
-        direction,
-        amount: parsedAmount,
-        timeFrame: optionTime,
-        payout,
-        expiresAt,
-        metadata: {
-          shouldWin: wins,
-          outcome: wins ? 'win' : 'loss'
-        }
-      });
-
-      // Deduct premium
-      await walletService.deductBalance({
-        userId: user!.id,
-        asset: 'USDT',
-        amount: parsedAmount,
-        reference: option.id,
-        type: 'option_premium'
-      });
-
-      // Add to transactions
-      const transaction: Transaction = {
-        id: option.id,
-        userId: user!.id,
-        type: 'option',
-        asset: symbol,
-        amount: parsedAmount,
-        price: currentPrice,
-        total: parsedAmount,
-        side: direction === 'up' ? 'buy' : 'sell',
-        status: 'scheduled',
-        pnl: 0,
-        metadata: {
+      // Execute trade
+      const result = await unifiedTradingService.executeTrade({
+        type: 'options',
+        data: {
+          symbol,
           direction,
-          timeFrame: optionTime,
-          payout,
-          expiresAt,
-          shouldWin: wins,
-          outcome: wins ? 'win' : 'loss'
+          amount: parsedAmount,
+          duration: optionTime,
+          fluctuation: 0.01,
+          premium: parsedAmount
         },
-        createdAt: new Date().toISOString()
-      };
-
-      setTransactions(prev => [transaction, ...prev]);
-      updateBalance('USDT', -parsedAmount);
-
-      // Add to active options
-      const newOption: OptionOrder = {
-        id: option.id,
-        pair: symbol,
-        direction,
-        amount: parsedAmount,
-        timeFrame: optionTime,
-        entryPrice: currentPrice,
-        payout,
-        expiresAt,
-        status: 'active'
-      };
-      
-      setActiveOptions(prev => [newOption, ...prev]);
-
-      toast({
-        title: wins ? '🎯 Option Purchased (Win Forced)' : '📊 Option Purchased',
-        description: `${direction.toUpperCase()} option for ${formatCurrency(parsedAmount)} USDT, expires in ${optionTime}s`,
+        userId: user!.id
       });
 
-      // Schedule settlement
-      setTimeout(async () => {
-        const finalPnl = wins ? payout - parsedAmount : -parsedAmount;
+      if (result.success && result.trade) {
+        // Add to active options
+        const newOrder: OptionOrder = {
+          id: result.trade.id,
+          symbol,
+          direction,
+          stake: parsedAmount,
+          entryPrice: currentPrice,
+          duration: optionTime,
+          payout: timeframeConfig.payout,
+          startTime: Date.now(),
+          endTime: expiresAt,
+          status: 'ACTIVE',
+          fluctuation: 0.01,
+          fee: parsedAmount * 0.001,
+          isLocked: true
+        };
         
-        // Update transaction
-        setTransactions(prev =>
-          prev.map(tx =>
-            tx.id === option.id
-              ? { ...tx, status: 'completed', pnl: finalPnl }
-              : tx
-          )
-        );
-
-        // Update active options
-        setActiveOptions(prev => prev.filter(o => o.id !== option.id));
+        setActiveOptions(prev => {
+          const exists = prev.some(o => o.id === newOrder.id);
+          if (exists) return prev;
+          return [newOrder, ...prev];
+        });
         
-        // Add to completed options
-        setCompletedOptions(prev => [{
-          ...newOption,
-          status: wins ? 'completed' : 'failed',
-          pnl: finalPnl
-        }, ...prev]);
+        // Refresh balances to show locked funds
+        await refreshBalances();
 
-        if (wins) {
-          // Add payout to wallet
-          await walletService.addBalance({
-            userId: user!.id,
-            asset: 'USDT',
-            amount: payout,
-            reference: option.id,
-            type: 'option_settlement'
-          });
-          updateBalance('USDT', payout);
-          
-          toast({
-            title: '✅ Option Won!',
-            description: `You won ${formatCurrency(payout - parsedAmount)} USDT profit!`,
-          });
-        } else {
-          toast({
-            title: '❌ Option Lost',
-            description: `You lost ${formatCurrency(parsedAmount)} USDT`,
-            variant: 'destructive'
-          });
-        }
-      }, optionTime * 1000);
+        // Show success toast with win/loss info
+        toast({
+          title: wins ? '🎯 Option Purchased (Force Win)' : '📊 Option Purchased',
+          description: (
+            <div>
+              <div>${parsedAmount.toFixed(2)} USDT locked</div>
+              <div className="text-xs text-[#0ECB81] mt-1">
+                Potential profit: +${(parsedAmount * (timeframeConfig.payout - 1)).toFixed(2)}
+              </div>
+              {wins && (
+                <div className="text-xs text-[#F0B90B] mt-1">
+                  👑 Force win enabled
+                </div>
+              )}
+            </div>
+          ),
+        });
 
-      // Clear form
-      setAmount('');
-      setPercent(0);
+        // Schedule settlement
+        setTimeout(async () => {
+          await handleOrderExpire(result.trade.id);
+        }, optionTime * 1000);
 
+        // Clear form
+        setAmount('');
+        setPercent(0);
+      }
     } catch (error) {
       console.error('Option purchase failed:', error);
       toast({
@@ -442,25 +613,7 @@ export default function OptionsTradingPage() {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, amount, getBalance, shouldWin, optionTime, direction, symbol, user, currentPrice, updateBalance]);
-
-  // Format countdown for active options
-  const formatCountdown = (expiresAt: number) => {
-    const remaining = expiresAt - Date.now();
-    if (remaining <= 0) return 'Expired';
-    
-    const seconds = Math.floor(remaining / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds % 60}s`;
-    } else {
-      return `${seconds}s`;
-    }
-  };
+  }, [isAuthenticated, amount, timeframeConfig, getTradingBalance, shouldWin, optionTime, direction, symbol, user, currentPrice, refreshBalances, handleOrderExpire, toast]);
 
   // Render force win badge
   const renderForceWinBadge = () => {
@@ -491,15 +644,53 @@ export default function OptionsTradingPage() {
     return null;
   };
 
+  // Generate mock chart data
+  const generateMockData = (timeRange: TimeRange) => {
+    const points = timeRange === '1m' ? 60 : 
+                   timeRange === '5m' ? 48 : 
+                   timeRange === '15m' ? 32 : 
+                   timeRange === '30m' ? 30 : 
+                   timeRange === '1h' ? 24 : 
+                   timeRange === '4h' ? 18 : 
+                   timeRange === '1d' ? 14 : 30;
+
+    const basePrice = 67668.18;
+    const volatility = 0.02;
+    
+    const labels = [];
+    const candleData = [];
+    const lineData = [];
+    
+    let currentPrice = basePrice;
+    
+    for (let i = 0; i < points; i++) {
+      const time = new Date(Date.now() - (points - i) * 60000);
+      labels.push(time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      
+      const change = (Math.random() - 0.5) * volatility * currentPrice;
+      const open = currentPrice;
+      const close = currentPrice + change;
+      const high = Math.max(open, close) * (1 + Math.random() * 0.005);
+      const low = Math.min(open, close) * (1 - Math.random() * 0.005);
+      
+      candleData.push({ o: open, h: high, l: low, c: close });
+      lineData.push(close);
+      
+      currentPrice = close;
+    }
+    
+    return { labels, candleData, lineData };
+  };
+
   return (
     <motion.div 
-      className="min-h-screen bg-[#181A20] pb-20"
+      className="min-h-screen bg-[#0B0E11] text-[#EAECEF] pb-20"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
     >
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-[#181A20]/95 backdrop-blur border-b border-[#2B3139]">
+      <div className="sticky top-0 z-30 bg-[#1E2329]/95 backdrop-blur border-b border-[#2B3139]">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -522,7 +713,7 @@ export default function OptionsTradingPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setHideBalances(!hideBalances)}
-                className="p-2 hover:bg-[#23262F] rounded-lg transition-colors"
+                className="p-2 hover:bg-[#2B3139] rounded-lg transition-colors"
               >
                 {hideBalances ? <EyeOff size={18} className="text-[#848E9C]" /> : <Eye size={18} className="text-[#848E9C]" />}
               </button>
@@ -548,7 +739,7 @@ export default function OptionsTradingPage() {
               <div className="text-2xl font-bold text-[#EAECEF] font-mono">
                 ${formatPrice(currentPrice)}
               </div>
-              <div className={`text-sm ${priceChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              <div className={`text-sm ${priceChange >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
                 {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%
               </div>
             </div>
@@ -579,12 +770,12 @@ export default function OptionsTradingPage() {
       )}
 
       {/* Force Win Banner */}
-      {userOutcome?.enabled && (
+      {userOutcome?.enabled && userOutcome.outcome_type === 'win' && (
         <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg m-4 p-3">
           <div className="flex items-center gap-2">
             <Crown className="h-4 w-4 text-emerald-400" />
             <p className="text-sm text-emerald-400">
-              Force win enabled - all your options will win!
+              👑 Force win enabled - all your options will win!
             </p>
           </div>
         </div>
@@ -605,7 +796,7 @@ export default function OptionsTradingPage() {
                       variant={timeRange === range ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setTimeRange(range)}
-                      className={timeRange === range ? 'bg-[#F0B90B] text-[#181A20]' : ''}
+                      className={timeRange === range ? 'bg-[#F0B90B] text-[#0B0E11]' : 'border-[#2B3139] text-[#848E9C]'}
                     >
                       {range}
                     </Button>
@@ -613,7 +804,7 @@ export default function OptionsTradingPage() {
                 </div>
                 
                 <Select value={chartType} onValueChange={(v: any) => setChartType(v)}>
-                  <SelectTrigger className="w-32 bg-[#181A20] border-[#2B3139]">
+                  <SelectTrigger className="w-32 bg-[#1E2329] border-[#2B3139]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -634,28 +825,28 @@ export default function OptionsTradingPage() {
                     data={{
                       labels: chartHistory.length > 0 
                         ? chartHistory.map((_, i) => i.toString())
-                        : chartData.labels,
+                        : chartData?.labels || [],
                       datasets: [{
                         label: symbol,
                         data: chartHistory.length > 0 
                           ? chartHistory
                           : chartType === 'candlestick' 
-                            ? chartData.candleData 
-                            : chartData.lineData,
+                            ? chartData?.candleData || []
+                            : chartData?.lineData || [],
                         borderColor: '#F0B90B',
                         backgroundColor: chartType === 'candlestick' 
                           ? undefined 
                           : 'rgba(240, 185, 11, 0.1)',
                         ...(chartType === 'candlestick' && {
                           borderColor: {
-                            up: '#22c55e',
-                            down: '#ef4444',
-                            unchanged: '#888',
+                            up: '#0ECB81',
+                            down: '#F6465D',
+                            unchanged: '#848E9C',
                           },
                           color: {
-                            up: '#22c55e',
-                            down: '#ef4444',
-                            unchanged: '#888',
+                            up: '#0ECB81',
+                            down: '#F6465D',
+                            unchanged: '#848E9C',
                           },
                         })
                       }]
@@ -691,7 +882,7 @@ export default function OptionsTradingPage() {
             <Card className="bg-[#1E2329] border-[#2B3139] p-4">
               <h3 className="text-lg font-semibold text-[#EAECEF] mb-3 flex items-center gap-2">
                 <Clock className="h-5 w-5 text-[#F0B90B]" />
-                Active Options
+                Active Options ({activeOptions.length})
               </h3>
               
               {activeOptions.length === 0 ? (
@@ -699,37 +890,17 @@ export default function OptionsTradingPage() {
                   No active options. Purchase an option to get started.
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {activeOptions.map(option => (
-                    <div key={option.id} className="bg-[#181A20] rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Badge className={option.direction === 'up' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}>
-                            {option.direction.toUpperCase()}
-                          </Badge>
-                          <span className="text-sm font-medium text-[#EAECEF]">{option.pair}</span>
-                        </div>
-                        <Badge className="bg-yellow-500/20 text-yellow-400">
-                          {formatCountdown(option.expiresAt)}
-                        </Badge>
-                      </div>
-                      
-                      <div className="grid grid-cols-3 gap-2 text-sm">
-                        <div>
-                          <div className="text-xs text-[#848E9C]">Amount</div>
-                          <div className="font-mono text-[#EAECEF]">{formatCurrency(option.amount)} USDT</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-[#848E9C]">Entry</div>
-                          <div className="font-mono text-[#EAECEF]">${formatPrice(option.entryPrice)}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-[#848E9C]">Payout</div>
-                          <div className="font-mono text-green-400">{formatCurrency(option.payout)} USDT</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                  <AnimatePresence>
+                    {activeOptions.map(option => (
+                      <ActiveOptionCard
+                        key={option.id}
+                        option={option}
+                        currentPrice={currentPrice}
+                        onExpire={handleOrderExpire}
+                      />
+                    ))}
+                  </AnimatePresence>
                 </div>
               )}
             </Card>
@@ -747,22 +918,22 @@ export default function OptionsTradingPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       className={`flex items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                        direction === 'up' 
-                          ? 'bg-green-500/20 border-green-500 text-green-500' 
-                          : 'border-[#2B3139] text-[#848E9C] hover:border-green-500/50'
+                        direction === 'UP' 
+                          ? 'bg-[#0ECB81]/20 border-[#0ECB81] text-[#0ECB81]' 
+                          : 'border-[#2B3139] text-[#848E9C] hover:border-[#0ECB81]/50'
                       }`}
-                      onClick={() => setDirection('up')}
+                      onClick={() => setDirection('UP')}
                     >
                       <TrendingUp size={20} />
                       <span className="font-bold">UP</span>
                     </button>
                     <button
                       className={`flex items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                        direction === 'down' 
-                          ? 'bg-red-500/20 border-red-500 text-red-500' 
-                          : 'border-[#2B3139] text-[#848E9C] hover:border-red-500/50'
+                        direction === 'DOWN' 
+                          ? 'bg-[#F6465D]/20 border-[#F6465D] text-[#F6465D]' 
+                          : 'border-[#2B3139] text-[#848E9C] hover:border-[#F6465D]/50'
                       }`}
-                      onClick={() => setDirection('down')}
+                      onClick={() => setDirection('DOWN')}
                     >
                       <TrendingDown size={20} />
                       <span className="font-bold">DOWN</span>
@@ -774,36 +945,44 @@ export default function OptionsTradingPage() {
                 <div>
                   <label className="text-sm text-[#848E9C] mb-2 block">Expiry Time</label>
                   <div className="grid grid-cols-3 gap-2">
-                    {OPTION_TIMES.map(time => {
-                      const rate = PROFIT_RATES[time as keyof typeof PROFIT_RATES];
-                      return (
-                        <button
-                          key={time}
-                          className={`p-3 rounded-lg border transition-all ${
-                            optionTime === time
-                              ? 'bg-[#F0B90B] border-[#F0B90B] text-[#181A20]'
-                              : 'bg-[#181A20] border-[#2B3139] text-[#848E9C] hover:border-[#F0B90B]/50'
-                          }`}
-                          onClick={() => setOptionTime(time as OptionTime)}
-                        >
-                          <div className="font-bold">{time}s</div>
-                          <div className="text-xs opacity-80">{rate.profit}%</div>
-                        </button>
-                      );
-                    })}
+                    {OPTIONS_TIMEFRAMES.map(time => (
+                      <button
+                        key={time.value}
+                        className={`p-3 rounded-lg border transition-all ${
+                          optionTime === time.value
+                            ? 'bg-[#F0B90B] border-[#F0B90B] text-[#0B0E11]'
+                            : 'bg-[#2B3139] border-[#3A3F4A] text-[#848E9C] hover:border-[#F0B90B]/50'
+                        }`}
+                        onClick={() => setOptionTime(time.value as OptionTime)}
+                      >
+                        <div className="font-bold">{time.label}</div>
+                        <div className="text-xs opacity-80">{time.profitPercent}%</div>
+                      </button>
+                    ))}
                   </div>
+                </div>
+
+                {/* Stake Range Info */}
+                <div className="flex justify-between text-xs text-[#848E9C]">
+                  <span>Min: ${timeframeConfig.minStake}</span>
+                  <span>Max: ${timeframeConfig.maxStake}</span>
                 </div>
 
                 {/* Amount Input */}
                 <div>
-                  <label className="text-sm text-[#848E9C] mb-2 block">Amount (USDT)</label>
+                  <label className="text-sm text-[#848E9C] mb-2 block">Stake (USDT)</label>
                   <div className="relative">
                     <Input
                       type="number"
                       value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="Enter amount"
-                      className="bg-[#181A20] border-[#2B3139] pr-16"
+                      onChange={(e) => {
+                        setAmount(e.target.value);
+                        setPercent(0);
+                      }}
+                      placeholder={`Min $${timeframeConfig.minStake}`}
+                      className="bg-[#2B3139] border-[#3A3F4A] text-[#EAECEF] pr-16"
+                      min={timeframeConfig.minStake}
+                      max={timeframeConfig.maxStake}
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#848E9C] text-sm">
                       USDT
@@ -821,10 +1000,10 @@ export default function OptionsTradingPage() {
                     onChange={(e) => {
                       const val = parseInt(e.target.value);
                       setPercent(val);
-                      const maxAmount = getBalance('USDT');
+                      const maxAmount = timeframeConfig.maxStake;
                       setAmount((maxAmount * val / 100).toFixed(2));
                     }}
-                    className="w-full h-2 bg-[#2B3139] rounded-lg appearance-none cursor-pointer"
+                    className="w-full h-2 bg-[#2B3139] rounded-lg appearance-none cursor-pointer accent-[#F0B90B]"
                   />
                   <div className="flex justify-between mt-1 text-xs text-[#848E9C]">
                     <span>0%</span>
@@ -834,34 +1013,34 @@ export default function OptionsTradingPage() {
                 </div>
 
                 {/* Balance Info */}
-                <div className="bg-[#181A20] rounded-lg p-3 space-y-2">
+                <div className="bg-[#2B3139] rounded-lg p-3 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-[#848E9C]">Available Balance</span>
                     <span className="text-[#EAECEF] font-medium">
-                      {hideBalances ? '••••••' : formatCurrency(getBalance('USDT'))} USDT
+                      {hideBalances ? '••••••' : getTradingBalance('USDT').toFixed(2)} USDT
                     </span>
                   </div>
                   
-                  {amount && (
+                  {amount && parseFloat(amount) > 0 && (
                     <>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-[#848E9C]">Investment</span>
+                      <div className="flex justify-between text-sm pt-2 border-t border-[#3A3F4A]">
+                        <span className="text-[#848E9C]">Stake (Locked)</span>
                         <span className="text-[#EAECEF] font-medium">
-                          {formatCurrency(parseFloat(amount))} USDT
+                          ${parseFloat(amount).toFixed(2)} USDT
                         </span>
                       </div>
                       
                       <div className="flex justify-between text-sm">
-                        <span className="text-[#848E9C]">Potential Payout</span>
-                        <span className="text-green-400 font-medium">
-                          {formatCurrency(parseFloat(amount) * PROFIT_RATES[optionTime].payout)} USDT
+                        <span className="text-[#848E9C]">Potential Return</span>
+                        <span className="text-[#0ECB81] font-medium">
+                          ${(parseFloat(amount) * timeframeConfig.payout).toFixed(2)} USDT
                         </span>
                       </div>
                       
                       <div className="flex justify-between text-sm">
                         <span className="text-[#848E9C]">Potential Profit</span>
-                        <span className="text-green-400 font-medium">
-                          +{formatCurrency(parseFloat(amount) * (PROFIT_RATES[optionTime].profit / 100))} USDT
+                        <span className="text-[#0ECB81] font-medium">
+                          +${(parseFloat(amount) * (timeframeConfig.payout - 1)).toFixed(2)} USDT
                         </span>
                       </div>
                     </>
@@ -870,17 +1049,17 @@ export default function OptionsTradingPage() {
 
                 {/* Purchase Button */}
                 <Button
-                  className="w-full py-6 text-lg font-bold bg-[#F0B90B] hover:bg-yellow-400 text-[#181A20]"
+                  className="w-full py-6 text-lg font-bold bg-[#F0B90B] hover:bg-[#F0B90B]/90 text-[#0B0E11]"
                   onClick={handlePurchase}
-                  disabled={!amount || !isAuthenticated || loading || controlsLoading}
+                  disabled={!amount || !isAuthenticated || loading || controlsLoading || parseFloat(amount) < timeframeConfig.minStake}
                 >
                   {loading ? 'Processing...' : 'Purchase Option'}
                 </Button>
 
                 {/* Info Tooltip */}
                 <div className="flex items-center gap-2 text-xs text-[#848E9C]">
-                  <Info className="h-3 w-3" />
-                  <span>Options settle automatically at expiry. Payout includes your initial stake.</span>
+                  <Info className="h-3 w-3 flex-shrink-0" />
+                  <span>Funds are locked until option expiry. Payout includes your initial stake.</span>
                 </div>
               </div>
             </Card>
@@ -894,19 +1073,9 @@ export default function OptionsTradingPage() {
                   No completed options yet
                 </div>
               ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
                   {completedOptions.slice(0, 5).map(option => (
-                    <div key={option.id} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <Badge className={option.status === 'completed' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}>
-                          {option.status === 'completed' ? 'WIN' : 'LOSS'}
-                        </Badge>
-                        <span className="text-[#EAECEF]">{option.pair}</span>
-                      </div>
-                      <span className={option.pnl && option.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
-                        {option.pnl && option.pnl >= 0 ? '+' : ''}{formatCurrency(option.pnl || 0)} USDT
-                      </span>
-                    </div>
+                    <CompletedOptionCard key={option.id} option={option} />
                   ))}
                 </div>
               )}
@@ -916,7 +1085,7 @@ export default function OptionsTradingPage() {
       </div>
 
       {/* Custom Scrollbar Styles */}
-      <style jsx>{`
+      <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;
         }
@@ -929,6 +1098,19 @@ export default function OptionsTradingPage() {
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: #F0B90B;
+        }
+        
+        input[type="range"] {
+          -webkit-appearance: none;
+          background: #2B3139;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          width: 16px;
+          height: 16px;
+          background: #F0B90B;
+          border-radius: 50%;
+          cursor: pointer;
         }
         
         @media (max-width: 640px) {

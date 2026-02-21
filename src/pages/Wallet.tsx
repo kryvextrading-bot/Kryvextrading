@@ -891,8 +891,8 @@ export default function WalletPage() {
 
   // Optimized click handlers
   const handleTransferClick = useCallback(() => {
-    setShowTransferModal(true);
-  }, []);
+    navigate('/wallet-transfer');
+  }, [navigate]);
 
   const handleSwapClick = useCallback(() => {
     setModal('swap');

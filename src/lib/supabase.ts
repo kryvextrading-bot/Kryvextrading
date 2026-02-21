@@ -11,15 +11,50 @@ console.log('🔍 [Supabase] Environment variables:', {
   serviceKey: supabaseServiceKey ? '✅ Set' : '❌ Missing'
 })
 
+// Validate required environment variables
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ [Supabase] Missing required environment variables')
+  throw new Error('Missing Supabase configuration')
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce',
+    storage: window.localStorage,
+    storageKey: 'supabase.auth.token',
   },
   global: {
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
+    },
+    // Add fetch timeout with proper typing
+    fetch: async (url: RequestInfo | URL, options: RequestInit = {}) => {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
+      
+      try {
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal
+        })
+        clearTimeout(timeoutId)
+        return response
+      } catch (error) {
+        clearTimeout(timeoutId)
+        throw error
+      }
+    }
+  },
+  db: {
+    schema: 'public',
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
     },
   },
 })

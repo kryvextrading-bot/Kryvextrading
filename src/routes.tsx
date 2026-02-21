@@ -25,12 +25,14 @@ import LoanPage from './pages/Loan';
 import KycVerification from './pages/KycVerification';
 import LanguagePage from './pages/LanguagePage';
 import Settings from './pages/Settings';
+import SettingsNotifications from './pages/SettingsNotifications';
 import FAQ from './pages/FAQ';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Legal from './pages/Legal';
 import WhitePaper from './pages/WhitePaper';
 import Share from './pages/Share';
 import CreditScore from './pages/CreditScore';
+import More from './pages/More';
 import Security from './pages/Security';
 import PaymentMethods from './pages/PaymentMethods';
 import TransactionHistory from './pages/TransactionHistory';
@@ -64,6 +66,7 @@ export default function AppRoutes() {
       <Route path="/legal" element={<Legal />} />
       <Route path="/white-paper" element={<WhitePaper />} />
       <Route path="/share" element={<Share />} />
+      <Route path="/more" element={<More />} />
       <Route path="/trading" element={<AssetSelectorPage />} />
       <Route path="/trading/:symbol" element={<TradingPage />} />
       <Route path="/trading/:symbol/:tab" element={<TradingPage />} />
@@ -149,6 +152,11 @@ export default function AppRoutes() {
       <Route path="/settings" element={
         <ProtectedRoute>
           <Settings />
+        </ProtectedRoute>
+      } />
+      <Route path="/settings/notifications" element={
+        <ProtectedRoute>
+          <SettingsNotifications />
         </ProtectedRoute>
       } />
       <Route path="/credit-score" element={

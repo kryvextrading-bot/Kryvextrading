@@ -1,6 +1,4 @@
-// pages/UnifiedTradingPage.tsx - Updated with Binance Colors & Wallet Integration
-// FIXED: Completed orders display, wallet balance, and timer issues
-
+// pages/UnifiedTradingPage.tsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,10 +9,10 @@ import {
   RefreshCw,
   User,
   ChevronDown,
+  ChevronUp,
   TrendingUp,
   TrendingDown,
   Clock,
-  Calendar,
   X,
   Plus,
   Minus,
@@ -22,111 +20,48 @@ import {
   CheckCircle,
   XCircle,
   Info,
-  ChevronUp,
   Search,
   Star,
   Flame,
-  Sparkles,
   Filter,
   LayoutGrid,
-  Wallet,
+  Calendar,
+  DollarSign,
+  Activity,
   Zap,
-  Shield,
   Award,
-  Copy,
-  QrCode,
-  ArrowUpRight,
-  ArrowDownLeft
+  Sparkles,
+  LineChart,
+  CandlestickChart,
+  GanttChartSquare,
+  Maximize2,
+  Minimize2,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
-import { useUnifiedWallet as useUnifiedWalletV2 } from '@/hooks/useUnifiedWallet-v2';
-import { useBinanceStream } from '@/hooks/useBinanceStream';
-import { useOrderBook } from '@/hooks/useOrderBook';
-import { useRecentTrades } from '@/hooks/useRecentTrades';
+import { useMarketData } from '@/services/marketDataService';
+import { unifiedTradingService } from '@/services/unified-trading-service';
 import { toast } from 'react-hot-toast';
-import { formatCurrency, formatPrice } from '@/utils/tradingCalculations';
 import Countdown from 'react-countdown';
-import TradingCountdownBar from '@/components/TradingCountdownBar';
-import { supabase } from '@/lib/supabase';
 
-// ============================================
-// TYPES
-// ============================================
+// ==================== BINANCE COLOR PALETTE ====================
 
-type TabType = 'spot' | 'future' | 'option';
-type BottomTabType = 'active' | 'scheduled' | 'completed' | 'positions' | 'open' | 'closed' | 'assets';
-type CategoryType = 'futures' | 'usstock' | 'forex' | 'crypto' | 'etf';
-type FilterType = 'favourites' | 'all' | 'hot' | 'gainer' | 'loser';
-
-interface OrderBookLevel {
-  price: number;
-  quantity: number;
-  total?: number;
-}
-
-interface TradingPair {
-  symbol: string;
-  baseAsset: string;
-  quoteAsset: string;
-  name: string;
-  category: CategoryType;
-  price: number;
-  change: number;
-  changePercent: number;
-  volume: number;
-  volumeDisplay: string;
-  high24h?: number;
-  low24h?: number;
-  favorite?: boolean;
-  hot?: boolean;
-  leverage?: number;
-}
-
-interface Order {
-  id: string;
-  symbol: string;
-  side: 'buy' | 'sell' | 'long' | 'short' | 'UP' | 'DOWN';
-  amount: number;
-  price: number;
-  total?: number;
-  type: 'spot' | 'futures' | 'option';
-  status: 'pending' | 'active' | 'filled' | 'cancelled' | 'expired' | 'completed' | 'COMPLETED';
-  timestamp: string;
-  expiryTime?: string;
-  scheduledTime?: string;
-  leverage?: number;
-  margin?: number;
-  direction?: 'UP' | 'DOWN';
-  duration?: number;
-  payout?: number;
-  pnl?: number;
-  fee?: number;
-  move?: number;
-  durationLabel?: string;
-  startTime?: string;
-  endTime?: string;
-  stake?: number;
-  entryPrice?: number;
-  expiryPrice?: number;
-  result?: 'win' | 'loss';
-}
-
-// ============================================
-// CONSTANTS
-// ============================================
-
-// Binance Color Palette
 const COLORS = {
   binance: {
     yellow: '#F0B90B',
-    yellowDark: '#DBA40A',
+    yellowHover: '#F0B90BCC',
     yellowLight: '#FCD535',
-    black: '#0B0E11',
-    dark: '#1E2329',
+  },
+  bg: {
+    primary: '#0B0E11',
+    secondary: '#1E2329',
     card: '#2B3139',
-    cardHover: '#373B42',
+    cardHover: '#323A45',
     border: '#3A3F4A',
+    input: '#2B3139',
+    modal: '#1E2329',
   },
   text: {
     primary: '#EAECEF',
@@ -138,30 +73,251 @@ const COLORS = {
     primary: '#0ECB81',
     dark: '#0FB37E',
     bg: 'rgba(14, 203, 129, 0.1)',
+    border: 'rgba(14, 203, 129, 0.2)',
   },
   red: {
     primary: '#F6465D',
     dark: '#D63F53',
     bg: 'rgba(246, 70, 93, 0.1)',
+    border: 'rgba(246, 70, 93, 0.2)',
   },
   blue: {
     primary: '#5096FF',
     dark: '#4785E6',
     bg: 'rgba(80, 150, 255, 0.1)',
+    border: 'rgba(80, 150, 255, 0.2)',
   },
   purple: {
     primary: '#A66AE6',
-    dark: '#955FD1',
     bg: 'rgba(166, 106, 230, 0.1)',
+    border: 'rgba(166, 106, 230, 0.2)',
   },
   orange: {
     primary: '#F78D4B',
-    dark: '#E67F44',
     bg: 'rgba(247, 141, 75, 0.1)',
+    border: 'rgba(247, 141, 75, 0.2)',
   },
 };
 
-// Animation Variants
+// ==================== TYPES ====================
+
+type TabType = 'spot' | 'future' | 'option';
+type OrderSide = 'buy' | 'sell';
+type PositionSide = 'long' | 'short';
+type OptionDirection = 'UP' | 'DOWN';
+type BottomTabType = 'active' | 'scheduled' | 'completed' | 'positions' | 'open' | 'closed' | 'assets';
+type ChartType = 'line' | 'candle' | 'depth';
+
+interface TradingPair {
+  symbol: string;
+  baseAsset: string;
+  quoteAsset: string;
+  name: string;
+  price: number;
+  change: number;
+  volume: number;
+  high24h?: number;
+  low24h?: number;
+  favorite?: boolean;
+  hot?: boolean;
+  leverage?: number;
+}
+
+interface OptionOrder {
+  id: string;
+  userId: string;
+  symbol: string;
+  direction: 'UP' | 'DOWN';
+  stake: number;
+  entryPrice: number;
+  exitPrice?: number;
+  duration: number;
+  profit?: number;
+  startTime: number;
+  endTime: number;
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  pnl?: number;
+  fee?: number;
+  fluctuation?: number;
+  payout?: number;
+  result?: 'win' | 'loss';
+  isLocked?: boolean;
+}
+
+interface ScheduledOrder {
+  id: string;
+  userId: string;
+  symbol: string;
+  direction: 'UP' | 'DOWN';
+  stake: number;
+  scheduledTime: number;
+  duration: number;
+  fluctuation: number;
+  payout: number;
+}
+
+// ==================== TRADING CALCULATIONS ====================
+
+// Timeframes with proper profit percentages and stake ranges
+const OPTIONS_TIMEFRAMES = [
+  { 
+    label: '60s', 
+    value: 60, 
+    profitPercent: 18, // 18% profit
+    payout: 1.18, // Return 1.18x stake (stake + 18%)
+    move: 0.01, 
+    display: '1min',
+    minStake: 10,
+    maxStake: 1000
+  },
+  { 
+    label: '3m', 
+    value: 180, 
+    profitPercent: 30, // 30% profit
+    payout: 1.30, // Return 1.30x stake
+    move: 0.03, 
+    display: '3min',
+    minStake: 50,
+    maxStake: 5000
+  },
+  { 
+    label: '5m', 
+    value: 300, 
+    profitPercent: 45, // 45% profit
+    payout: 1.45, // Return 1.45x stake
+    move: 0.05, 
+    display: '5min',
+    minStake: 100,
+    maxStake: 10000
+  },
+  { 
+    label: '10m', 
+    value: 600, 
+    profitPercent: 65, // 65% profit
+    payout: 1.65, // Return 1.65x stake
+    move: 0.10, 
+    display: '10min',
+    minStake: 200,
+    maxStake: 20000
+  },
+  { 
+    label: '15m', 
+    value: 900, 
+    profitPercent: 85, // 85% profit
+    payout: 1.85, // Return 1.85x stake
+    move: 0.15, 
+    display: '15min',
+    minStake: 500,
+    maxStake: 50000
+  },
+  { 
+    label: '30m', 
+    value: 1800, 
+    profitPercent: 120, // 120% profit
+    payout: 2.20, // Return 2.20x stake (stake + 120%)
+    move: 0.30, 
+    display: '30min',
+    minStake: 1000,
+    maxStake: 100000
+  },
+  { 
+    label: '1h', 
+    value: 3600, 
+    profitPercent: 150, // 150% profit
+    payout: 2.50, // Return 2.50x stake
+    move: 0.50, 
+    display: '1hour',
+    minStake: 2000,
+    maxStake: 200000
+  },
+  { 
+    label: '2h', 
+    value: 7200, 
+    profitPercent: 180, // 180% profit
+    payout: 2.80, // Return 2.80x stake
+    move: 0.75, 
+    display: '2hour',
+    minStake: 5000,
+    maxStake: 500000
+  },
+  { 
+    label: '4h', 
+    value: 14400, 
+    profitPercent: 220, // 220% profit
+    payout: 3.20, // Return 3.20x stake
+    move: 1.00, 
+    display: '4hour',
+    minStake: 10000,
+    maxStake: 1000000
+  },
+];
+
+// Fluctuation ranges with proper payout multipliers
+const FLUCTUATION_RANGES: Record<number, { label: string; value: number; payout: number }[]> = {
+  60: [
+    { label: 'UP > 0.01%', value: 0.01, payout: 1.18 },
+    { label: 'UP > 0.02%', value: 0.02, payout: 1.22 },
+    { label: 'UP > 0.03%', value: 0.03, payout: 1.25 },
+  ],
+  180: [
+    { label: 'UP > 0.03%', value: 0.03, payout: 1.30 },
+    { label: 'UP > 0.05%', value: 0.05, payout: 1.35 },
+    { label: 'UP > 0.08%', value: 0.08, payout: 1.40 },
+  ],
+  300: [
+    { label: 'UP > 0.05%', value: 0.05, payout: 1.45 },
+    { label: 'UP > 0.08%', value: 0.08, payout: 1.50 },
+    { label: 'UP > 0.12%', value: 0.12, payout: 1.55 },
+  ],
+  600: [
+    { label: 'UP > 0.10%', value: 0.10, payout: 1.65 },
+    { label: 'UP > 0.15%', value: 0.15, payout: 1.70 },
+    { label: 'UP > 0.20%', value: 0.20, payout: 1.75 },
+  ],
+  900: [
+    { label: 'UP > 0.15%', value: 0.15, payout: 1.85 },
+    { label: 'UP > 0.20%', value: 0.20, payout: 1.90 },
+    { label: 'UP > 0.25%', value: 0.25, payout: 1.95 },
+  ],
+  1800: [
+    { label: 'UP > 0.30%', value: 0.30, payout: 2.20 },
+    { label: 'UP > 0.40%', value: 0.40, payout: 2.30 },
+    { label: 'UP > 0.50%', value: 0.50, payout: 2.40 },
+  ],
+  3600: [
+    { label: 'UP > 0.50%', value: 0.50, payout: 2.50 },
+    { label: 'UP > 0.75%', value: 0.75, payout: 2.60 },
+    { label: 'UP > 1.00%', value: 1.00, payout: 2.70 },
+  ],
+  7200: [
+    { label: 'UP > 0.75%', value: 0.75, payout: 2.80 },
+    { label: 'UP > 1.00%', value: 1.00, payout: 2.90 },
+    { label: 'UP > 1.50%', value: 1.50, payout: 3.00 },
+  ],
+  14400: [
+    { label: 'UP > 1.00%', value: 1.00, payout: 3.20 },
+    { label: 'UP > 1.50%', value: 1.50, payout: 3.40 },
+    { label: 'UP > 2.00%', value: 2.00, payout: 3.60 },
+  ],
+};
+
+// Purchase ranges for each timeframe
+const PURCHASE_RANGES: Record<number, { min: number; max: number }> = {
+  60: { min: 10, max: 1000 },
+  180: { min: 50, max: 5000 },
+  300: { min: 100, max: 10000 },
+  600: { min: 200, max: 20000 },
+  900: { min: 500, max: 50000 },
+  1800: { min: 1000, max: 100000 },
+  3600: { min: 2000, max: 200000 },
+  7200: { min: 5000, max: 500000 },
+  14400: { min: 10000, max: 1000000 },
+};
+
+const LEVERAGE_OPTIONS = [1, 2, 3, 5, 10, 20, 25, 33, 50, 100, 125];
+
+// ==================== ANIMATION VARIANTS ====================
+
 const pageVariants = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
@@ -187,165 +343,20 @@ const slideUp = {
   transition: { type: 'spring', damping: 25, stiffness: 300 }
 };
 
-const fadeIn = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  exit: { opacity: 0 },
-  transition: { duration: 0.2 }
-};
+// ==================== TRADING PAIRS ====================
 
-const scaleIn = {
-  initial: { scale: 0.95, opacity: 0 },
-  animate: { scale: 1, opacity: 1 },
-  exit: { scale: 0.95, opacity: 0 },
-  transition: { duration: 0.2 }
-};
-
-const staggerChildren = {
-  animate: {
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.2
-    }
-  }
-};
-
-const CATEGORIES = [
-  { id: 'futures', label: 'Futures', icon: TrendingUp },
-  { id: 'usstock', label: 'USStock', icon: BarChart3 },
-  { id: 'forex', label: 'Forex', icon: TrendingDown },
-  { id: 'crypto', label: 'Crypto', icon: Sparkles },
-  { id: 'etf', label: 'ETF', icon: Filter },
+const TRADING_PAIRS: TradingPair[] = [
+  { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', name: 'Bitcoin', price: 67668.18, change: 2.34, volume: 1250000000, hot: true, high24h: 68500, low24h: 66500 },
+  { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', name: 'Ethereum', price: 3492.89, change: 1.56, volume: 800000000, high24h: 3550, low24h: 3450 },
+  { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', name: 'Binance Coin', price: 603.60, change: 2.15, volume: 950000000, high24h: 615, low24h: 595 },
+  { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', name: 'Solana', price: 176.88, change: 3.21, volume: 150000000, hot: true, high24h: 180, low24h: 173 },
+  { symbol: 'XRPUSDT', baseAsset: 'XRP', quoteAsset: 'USDT', name: 'Ripple', price: 0.62, change: 1.83, volume: 840000000, high24h: 0.63, low24h: 0.61 },
+  { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', name: 'Cardano', price: 0.60, change: -2.07, volume: 720000000, high24h: 0.62, low24h: 0.59 },
 ];
 
-const FILTERS = [
-  { id: 'favourites', label: 'Favourites', icon: Star },
-  { id: 'all', label: 'All', icon: Filter },
-  { id: 'hot', label: 'Hot', icon: Flame },
-  { id: 'gainer', label: 'Gainer', icon: TrendingUp },
-  { id: 'loser', label: 'Loser', icon: TrendingDown },
-];
+const TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
 
-// Complete asset database
-const ALL_ASSETS: TradingPair[] = [
-  // Futures
-  { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', name: 'Bitcoin', category: 'futures', price: 66743.75, change: -1.06, changePercent: -1.06, volume: 560000, volumeDisplay: '0.56M', hot: true, leverage: 86 },
-  { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', name: 'Ethereum', category: 'futures', price: 3504.15, change: -1.60, changePercent: -1.60, volume: 450000, volumeDisplay: '0.45M', leverage: 37 },
-  { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', name: 'Binance Coin', category: 'futures', price: 706.47, change: 0.30, changePercent: 0.30, volume: 630000, volumeDisplay: '0.63M', leverage: 88 },
-  { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', name: 'Solana', category: 'futures', price: 151.44, change: 1.77, changePercent: 1.77, volume: 720000, volumeDisplay: '0.72M', leverage: 40 },
-  { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', name: 'Cardano', category: 'futures', price: 0.60, change: -2.07, changePercent: -2.07, volume: 720000, volumeDisplay: '0.72M', leverage: 32 },
-  { symbol: 'XRPUSDT', baseAsset: 'XRP', quoteAsset: 'USDT', name: 'Ripple', category: 'futures', price: 0.60, change: 1.83, changePercent: 1.83, volume: 840000, volumeDisplay: '0.84M', leverage: 30 },
-  { symbol: 'DOTUSDT', baseAsset: 'DOT', quoteAsset: 'USDT', name: 'Polkadot', category: 'futures', price: 7.96, change: -2.25, changePercent: -2.25, volume: 230000, volumeDisplay: '0.23M', leverage: 23 },
-  
-  // US Stocks
-  { symbol: 'AAPL', baseAsset: 'AAPL', quoteAsset: 'USD', name: 'Apple Inc.', category: 'usstock', price: 176.25, change: 1.80, changePercent: 1.80, volume: 6660000, volumeDisplay: '6.66M' },
-  { symbol: 'MSFT', baseAsset: 'MSFT', quoteAsset: 'USD', name: 'Microsoft', category: 'usstock', price: 345.09, change: -1.81, changePercent: -1.81, volume: 44540000, volumeDisplay: '44.54M' },
-  { symbol: 'GOOGL', baseAsset: 'GOOGL', quoteAsset: 'USD', name: 'Google', category: 'usstock', price: 158.16, change: -1.29, changePercent: -1.29, volume: 29890000, volumeDisplay: '29.89M' },
-  { symbol: 'AMZN', baseAsset: 'AMZN', quoteAsset: 'USD', name: 'Amazon', category: 'usstock', price: 168.07, change: -2.10, changePercent: -2.10, volume: 42880000, volumeDisplay: '42.88M' },
-  { symbol: 'TSLA', baseAsset: 'TSLA', quoteAsset: 'USD', name: 'Tesla', category: 'usstock', price: 297.02, change: -1.69, changePercent: -1.69, volume: 48910000, volumeDisplay: '48.91M' },
-  { symbol: 'NVDA', baseAsset: 'NVDA', quoteAsset: 'USD', name: 'NVIDIA', category: 'usstock', price: 430.64, change: 1.33, changePercent: 1.33, volume: 24620000, volumeDisplay: '24.62M' },
-  { symbol: 'META', baseAsset: 'META', quoteAsset: 'USD', name: 'Meta', category: 'usstock', price: 278.39, change: 3.26, changePercent: 3.26, volume: 10330000, volumeDisplay: '10.33M' },
-  { symbol: 'NFLX', baseAsset: 'NFLX', quoteAsset: 'USD', name: 'Netflix', category: 'usstock', price: 407.33, change: 1.54, changePercent: 1.54, volume: 27700000, volumeDisplay: '27.70M' },
-  
-  // Forex
-  { symbol: 'EURUSD', baseAsset: 'EUR', quoteAsset: 'USD', name: 'Euro/US Dollar', category: 'forex', price: 1.10, change: 0.42, changePercent: 0.42, volume: 78320000, volumeDisplay: '78.32M' },
-  { symbol: 'USDJPY', baseAsset: 'USD', quoteAsset: 'JPY', name: 'US Dollar/Japanese Yen', category: 'forex', price: 154.53, change: 0.20, changePercent: 0.20, volume: 30010000, volumeDisplay: '30.01M' },
-  { symbol: 'GBPUSD', baseAsset: 'GBP', quoteAsset: 'USD', name: 'British Pound/US Dollar', category: 'forex', price: 1.28, change: 0.95, changePercent: 0.95, volume: 42820000, volumeDisplay: '42.82M' },
-  { symbol: 'USDCHF', baseAsset: 'USD', quoteAsset: 'CHF', name: 'US Dollar/Swiss Franc', category: 'forex', price: 0.88, change: -0.22, changePercent: -0.22, volume: 6650000, volumeDisplay: '6.65M' },
-  { symbol: 'AUDUSD', baseAsset: 'AUD', quoteAsset: 'USD', name: 'Australian Dollar/US Dollar', category: 'forex', price: 0.67, change: 0.56, changePercent: 0.56, volume: 76750000, volumeDisplay: '76.75M' },
-  { symbol: 'USDCAD', baseAsset: 'USD', quoteAsset: 'CAD', name: 'US Dollar/Canadian Dollar', category: 'forex', price: 1.37, change: -0.63, changePercent: -0.63, volume: 82190000, volumeDisplay: '82.19M' },
-  { symbol: 'USDCNH', baseAsset: 'USD', quoteAsset: 'CNH', name: 'US Dollar/Chinese Yuan', category: 'forex', price: 7.10, change: 0.28, changePercent: 0.28, volume: 13970000, volumeDisplay: '13.97M' },
-  { symbol: 'USDHKD', baseAsset: 'USD', quoteAsset: 'HKD', name: 'US Dollar/Hong Kong Dollar', category: 'forex', price: 7.86, change: 0.96, changePercent: 0.96, volume: 94350000, volumeDisplay: '94.35M' },
-  
-  // Crypto
-  { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', name: 'Bitcoin', category: 'crypto', price: 67668.18, change: -2.48, changePercent: -2.48, volume: 580000, volumeDisplay: '0.58M' },
-  { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', name: 'Ethereum', category: 'crypto', price: 3492.89, change: -1.83, changePercent: -1.83, volume: 840000, volumeDisplay: '0.84M' },
-  { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', name: 'Binance Coin', category: 'crypto', price: 943.60, change: -2.14, changePercent: -2.14, volume: 630000, volumeDisplay: '0.63M' },
-  { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', name: 'Solana', category: 'crypto', price: 856.88, change: -0.70, changePercent: -0.70, volume: 310000, volumeDisplay: '0.31M' },
-  { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', name: 'Cardano', category: 'crypto', price: 757.05, change: 2.84, changePercent: 2.84, volume: 60000, volumeDisplay: '0.06M' },
-  { symbol: 'XRPUSDT', baseAsset: 'XRP', quoteAsset: 'USDT', name: 'Ripple', category: 'crypto', price: 99.42, change: -0.71, changePercent: -0.71, volume: 440000, volumeDisplay: '0.44M' },
-  { symbol: 'DOTUSDT', baseAsset: 'DOT', quoteAsset: 'USDT', name: 'Polkadot', category: 'crypto', price: 537.53, change: 1.17, changePercent: 1.17, volume: 710000, volumeDisplay: '0.71M' },
-  
-  // ETFs
-  { symbol: 'SPY', baseAsset: 'SPY', quoteAsset: 'USD', name: 'SPDR S&P 500 ETF', category: 'etf', price: 473.65, change: 0.01, changePercent: 0.01, volume: 5640000, volumeDisplay: '5.64M' },
-  { symbol: 'IVV', baseAsset: 'IVV', quoteAsset: 'USD', name: 'iShares Core S&P 500 ETF', category: 'etf', price: 514.98, change: 1.19, changePercent: 1.19, volume: 26230000, volumeDisplay: '26.23M' },
-  { symbol: 'VOO', baseAsset: 'VOO', quoteAsset: 'USD', name: 'Vanguard S&P 500 ETF', category: 'etf', price: 485.94, change: 0.63, changePercent: 0.63, volume: 39310000, volumeDisplay: '39.31M' },
-  { symbol: 'QQQ', baseAsset: 'QQQ', quoteAsset: 'USD', name: 'Invesco QQQ Trust', category: 'etf', price: 441.08, change: -0.06, changePercent: -0.06, volume: 31100000, volumeDisplay: '31.10M' },
-  { symbol: 'VTI', baseAsset: 'VTI', quoteAsset: 'USD', name: 'Vanguard Total Stock Market ETF', category: 'etf', price: 262.77, change: 0.72, changePercent: 0.72, volume: 31300000, volumeDisplay: '31.30M' },
-  { symbol: 'VEA', baseAsset: 'VEA', quoteAsset: 'USD', name: 'Vanguard FTSE Developed Markets ETF', category: 'etf', price: 66.71, change: -0.39, changePercent: -0.39, volume: 4980000, volumeDisplay: '4.98M' },
-  { symbol: 'VWO', baseAsset: 'VWO', quoteAsset: 'USD', name: 'Vanguard FTSE Emerging Markets ETF', category: 'etf', price: 50.53, change: -0.86, changePercent: -0.86, volume: 6070000, volumeDisplay: '6.07M' },
-  { symbol: 'BND', baseAsset: 'BND', quoteAsset: 'USD', name: 'Vanguard Total Bond Market ETF', category: 'etf', price: 80.42, change: -1.50, changePercent: -1.50, volume: 22020000, volumeDisplay: '22.02M' },
-];
-
-const TIMEFRAMES = ['1M', '5M', '15M', '30M', '1H'];
-
-// Options Timeframes
-const OPTIONS_TIMEFRAMES = [
-  { label: '60s', value: 60, profit: 15, move: 0.01, payout: 0.176, durationLabel: '1min' },
-  { label: '120s', value: 120, profit: 18, move: 0.01, payout: 0.176, durationLabel: '2min' },
-  { label: '240s', value: 240, profit: 22, move: 0.05, payout: 0.328, durationLabel: '4min' },
-  { label: '360s', value: 360, profit: 25, move: 0.1, payout: 0.439, durationLabel: '6min' },
-  { label: '600s', value: 600, profit: 30, move: 0.5, payout: 0.516, durationLabel: '10min' },
-];
-
-// Fluctuation Ranges
-const FLUCTUATION_RANGES = {
-  60: [
-    { label: 'UP > 0.01%', value: 0.01, payout: 0.176, move: 0.01 },
-  ],
-  120: [
-    { label: 'UP > 0.01%', value: 0.01, payout: 0.176, move: 0.01 },
-  ],
-  240: [
-    { label: 'UP > 0.05%', value: 0.05, payout: 0.328, move: 0.05 },
-  ],
-  360: [
-    { label: 'UP > 0.1%', value: 0.1, payout: 0.439, move: 0.1 },
-  ],
-  600: [
-    { label: 'UP > 0.5%', value: 0.5, payout: 0.516, move: 0.5 },
-    { label: 'UP > 0.8%', value: 0.8, payout: 0.75, move: 0.8 },
-  ],
-};
-
-// Purchase Ranges
-const PURCHASE_RANGES = {
-  60: { min: 100, max: 50000 },
-  120: { min: 10000, max: 300000 },
-  240: { min: 30000, max: 500000 },
-  360: { min: 50000, max: 1000000 },
-  600: { min: 100000, max: 9999999 },
-};
-
-// Leverage Options
-const LEVERAGE_OPTIONS = [1, 2, 3, 5, 10, 20, 25, 33, 50, 100];
-
-// ============================================
-// COMPONENTS
-// ============================================
-
-// Countdown Renderer with Binance styling
-const CountdownRenderer = ({ hours, minutes, seconds, completed }: any) => {
-  if (completed) return null;
-  
-  const totalSeconds = hours * 3600 + minutes * 60 + seconds;
-  
-  if (totalSeconds <= 0) return null;
-  
-  if (totalSeconds > 60) {
-    return (
-      <span className="text-xs font-mono font-bold text-[#5096FF]">
-        {minutes}:{seconds.toString().padStart(2, '0')}
-      </span>
-    );
-  }
-  
-  return (
-    <span className="text-xs font-mono font-bold text-[#F0B90B] animate-pulse">
-      {seconds}s
-    </span>
-  );
-};
+// ==================== COMPONENTS ====================
 
 // Binance-style Card Component
 const BinanceCard: React.FC<{ children: React.ReactNode; className?: string; onClick?: () => void }> = ({ 
@@ -366,28 +377,37 @@ const BinanceCard: React.FC<{ children: React.ReactNode; className?: string; onC
 // Binance-style Button
 const BinanceButton: React.FC<{
   children: React.ReactNode;
-  variant?: 'primary' | 'secondary' | 'success' | 'danger';
+  variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'outline';
   onClick?: () => void;
   disabled?: boolean;
   className?: string;
   fullWidth?: boolean;
+  size?: 'sm' | 'md' | 'lg';
 }> = ({ 
   children, 
   variant = 'primary', 
   onClick, 
   disabled = false, 
   className = '',
-  fullWidth = true 
+  fullWidth = true,
+  size = 'md'
 }) => {
-  const baseClasses = `py-3 rounded-lg font-medium text-base transition-all duration-200 ${
+  const sizeClasses = {
+    sm: 'py-2 text-xs',
+    md: 'py-3 text-sm',
+    lg: 'py-4 text-base'
+  };
+  
+  const baseClasses = `${sizeClasses[size]} rounded-lg font-medium transition-all duration-200 ${
     fullWidth ? 'w-full' : ''
   }`;
   
   const variantClasses = {
     primary: 'bg-[#F0B90B] hover:bg-[#F0B90B]/90 text-[#0B0E11]',
-    secondary: 'bg-[#2B3139] hover:bg-[#373B42] text-[#EAECEF] border border-[#3A3F4A]',
+    secondary: 'bg-[#2B3139] hover:bg-[#323A45] text-[#EAECEF] border border-[#3A3F4A]',
     success: 'bg-[#0ECB81] hover:bg-[#0ECB81]/90 text-[#0B0E11]',
     danger: 'bg-[#F6465D] hover:bg-[#F6465D]/90 text-white',
+    outline: 'bg-transparent hover:bg-[#2B3139] text-[#EAECEF] border border-[#3A3F4A]',
   };
   
   return (
@@ -405,65 +425,374 @@ const BinanceButton: React.FC<{
   );
 };
 
-// FIXED: DetailRow component must be defined before CompletedOrderCard
-const DetailRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div className="flex justify-between items-center py-1">
-    <span className="text-xs text-[#848E9C]">{label}</span>
-    <span className="text-xs text-[#EAECEF] font-mono">{value}</span>
+// Price Display Component
+const PriceDisplay: React.FC<{ price: number; change: number; high24h?: number; low24h?: number }> = ({ 
+  price, change, high24h, low24h 
+}) => (
+  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <div className="flex items-center gap-3">
+      <div className="flex items-baseline gap-2">
+        <span className="text-2xl sm:text-3xl font-bold text-[#EAECEF] font-mono">
+          ${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
+        <span className={`text-sm font-medium ${change >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+          {change >= 0 ? '+' : ''}{change.toFixed(2)}%
+        </span>
+      </div>
+      <span className={`text-xs px-2 py-1 rounded-full ${
+        change >= 0 ? 'bg-[#0ECB81]/10 text-[#0ECB81]' : 'bg-[#F6465D]/10 text-[#F6465D]'
+      }`}>
+        {change >= 0 ? '↑' : '↓'} 24h
+      </span>
+    </div>
+    
+    {(high24h || low24h) && (
+      <div className="flex items-center gap-3 text-xs text-[#848E9C]">
+        <span>H: ${high24h?.toFixed(2) || '0.00'}</span>
+        <span>L: ${low24h?.toFixed(2) || '0.00'}</span>
+      </div>
+    )}
   </div>
 );
 
-// FIXED: Completed Order Card Component with proper data handling
-const CompletedOrderCard: React.FC<{ order: any }> = ({ order }) => {
+// Mini Chart Component
+const MiniChart: React.FC<{ 
+  data: number[]; 
+  type?: ChartType;
+  height?: number;
+}> = ({ data, type = 'line', height = 32 }) => {
+  const maxValue = Math.max(...data);
+  const minValue = Math.min(...data);
+  const range = maxValue - minValue || 1;
+  
+  if (type === 'candle') {
+    return (
+      <div className={`h-${height} bg-[#1E2329] rounded-lg mb-4 flex items-end justify-between px-1`}>
+        <div className="flex items-end gap-0.5 h-full py-2 w-full">
+          {data.map((value, i) => {
+            const isGreen = i > 0 ? value >= data[i - 1] : true;
+            const open = data[Math.max(0, i - 1)] || value * 0.99;
+            const close = value;
+            const high = Math.max(open, close) * 1.01;
+            const low = Math.min(open, close) * 0.99;
+            
+            return (
+              <div key={i} className="flex-1 flex flex-col items-center justify-end h-full">
+                <div 
+                  className={`w-full ${isGreen ? 'bg-[#0ECB81]' : 'bg-[#F6465D]'}`}
+                  style={{ 
+                    height: `${((high - low) / range) * 70}%`,
+                    maxHeight: '70%'
+                  }}
+                />
+                <div 
+                  className={`w-full mt-0.5 ${isGreen ? 'bg-[#0ECB81]' : 'bg-[#F6465D]'}`}
+                  style={{ 
+                    height: `${(Math.abs(close - open) / range) * 30}%`,
+                    maxHeight: '30%'
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+  
+  if (type === 'depth') {
+    const midPoint = Math.floor(data.length / 2);
+    const bids = data.slice(0, midPoint);
+    const asks = data.slice(midPoint);
+    
+    return (
+      <div className={`h-${height} bg-[#1E2329] rounded-lg mb-4 flex items-end justify-between px-2`}>
+        <div className="flex items-end gap-0.5 h-full py-2 w-full">
+          {bids.map((value, i) => (
+            <div
+              key={`bid-${i}`}
+              className="flex-1 bg-[#0ECB81]/40"
+              style={{ height: `${(value / maxValue) * 100}%` }}
+            />
+          ))}
+          {asks.map((value, i) => (
+            <div
+              key={`ask-${i}`}
+              className="flex-1 bg-[#F6465D]/40"
+              style={{ height: `${(value / maxValue) * 100}%` }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+  
+  // Line chart (default)
+  return (
+    <div className={`h-${height} bg-[#1E2329] rounded-lg mb-4 flex items-end justify-between px-2`}>
+      <div className="flex items-end gap-1 h-full py-2 w-full">
+        {data.map((value, i) => {
+          const heightPercent = ((value - minValue) / range) * 100;
+          const isGreen = i > 0 ? value >= data[i - 1] : true;
+          
+          return (
+            <div
+              key={i}
+              className="flex-1 rounded-t transition-all duration-500 ease-in-out"
+              style={{
+                height: `${heightPercent}%`,
+                backgroundColor: isGreen ? 'rgba(14, 203, 129, 0.4)' : 'rgba(246, 70, 93, 0.4)'
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// Order Book Row Component
+const OrderBookRow: React.FC<{ price: number; quantity: number; type: 'bid' | 'ask'; showTotal?: boolean }> = ({ 
+  price, quantity, type, showTotal = false 
+}) => (
+  <div className="flex justify-between items-center text-xs py-1 px-2 hover:bg-[#2B3139] rounded transition-colors">
+    <span className={`font-mono font-medium ${type === 'ask' ? 'text-[#F6465D]' : 'text-[#0ECB81]'}`}>
+      {price.toFixed(2)}
+    </span>
+    <span className="text-[#EAECEF] font-mono">{quantity.toFixed(4)}</span>
+    {showTotal && (
+      <span className="text-[#848E9C] font-mono">
+        {(price * quantity).toFixed(2)}
+      </span>
+    )}
+  </div>
+);
+
+// Order Book Component
+const OrderBook: React.FC<{ 
+  bids: { price: number; quantity: number }[]; 
+  asks: { price: number; quantity: number }[];
+  currentPrice: number;
+  showTotal?: boolean;
+}> = ({ bids, asks, currentPrice, showTotal = false }) => (
+  <BinanceCard className="p-4">
+    <div className="flex justify-between items-center mb-3">
+      <h3 className="text-sm font-medium text-[#EAECEF]">Order Book</h3>
+      <span className="text-xs text-[#848E9C]">Price · Amount</span>
+    </div>
+    
+    {/* Asks (Sell orders) */}
+    <div className="space-y-1 mb-3">
+      {asks.slice(0, 8).map((ask, i) => (
+        <OrderBookRow key={i} price={ask.price} quantity={ask.quantity} type="ask" showTotal={showTotal} />
+      ))}
+    </div>
+
+    {/* Current Price */}
+    <div className="flex justify-between items-center py-2 border-y border-[#2B3139] my-2">
+      <span className="text-base font-bold text-[#F0B90B] font-mono">
+        {currentPrice.toFixed(2)}
+      </span>
+      <span className="text-xs text-[#848E9C]">≈ ${currentPrice.toFixed(2)}</span>
+    </div>
+
+    {/* Bids (Buy orders) */}
+    <div className="space-y-1 mt-3">
+      {bids.slice(0, 8).map((bid, i) => (
+        <OrderBookRow key={i} price={bid.price} quantity={bid.quantity} type="bid" showTotal={showTotal} />
+      ))}
+    </div>
+  </BinanceCard>
+);
+
+// Active Trade Card Component
+const ActiveTradeCard: React.FC<{ 
+  trade: OptionOrder; 
+  currentPrice: number;
+  onExpire: (orderId: string) => void;
+  onCancel?: (orderId: string) => void;
+}> = ({ trade, currentPrice, onExpire, onCancel }) => {
   const [expanded, setExpanded] = useState(false);
+  const timeLeft = Math.max(0, trade.endTime - Date.now() / 1000);
+  const isProfitable = (trade.direction === 'UP' && currentPrice > trade.entryPrice) ||
+                       (trade.direction === 'DOWN' && currentPrice < trade.entryPrice);
+  const profitAmount = trade.stake * ((trade.payout || 1.18) - 1);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="bg-gradient-to-r from-[#5096FF]/10 to-[#A66AE6]/10 border border-[#5096FF]/20 rounded-xl overflow-hidden mb-3"
+    >
+      {/* Header */}
+      <div 
+        className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-[#2B3139] transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <span className="text-sm font-medium text-[#EAECEF]">{trade.symbol}</span>
+          <span className="text-[#848E9C]">|</span>
+          <span className={`text-xs font-medium ${trade.direction === 'UP' ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+            {trade.direction}
+          </span>
+          <span className="text-[#848E9C]">{'>'}</span>
+          <span className="text-xs text-[#B7BDC6]">{trade.fluctuation || 0.01}%</span>
+          <span className="text-[#848E9C]">|</span>
+          <span className="text-xs text-[#B7BDC6]">{trade.duration}s</span>
+          {trade.isLocked && (
+            <>
+              <span className="text-[#848E9C]">|</span>
+              <Lock className="w-3 h-3 text-[#F0B90B]" />
+            </>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className={`text-xs ${timeLeft < 10 ? 'text-[#F6465D] animate-pulse' : 'text-[#848E9C]'}`}>
+              {Math.floor(timeLeft / 60)}:{Math.floor(timeLeft % 60).toString().padStart(2, '0')}
+            </div>
+            <div className={`text-sm font-medium ${isProfitable ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+              +${profitAmount.toFixed(2)}
+            </div>
+          </div>
+          {expanded ? (
+            <ChevronUp className="w-4 h-4 text-[#848E9C]" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-[#848E9C]" />
+          )}
+        </div>
+      </div>
+
+      {/* Expanded Details */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-t border-[#2B3139]"
+          >
+            <div className="p-4 space-y-4">
+              <Countdown
+                date={trade.endTime * 1000}
+                onComplete={() => {
+                  console.log('⏰ [Countdown] Timer completed for trade:', trade.id);
+                  onExpire(trade.id);
+                }}
+                renderer={({ hours, minutes, seconds, completed }) => {
+                  if (completed) return null;
+                  const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+                  const progress = 1 - (totalSeconds / trade.duration);
+                  
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-[#848E9C]">Time Remaining</span>
+                        <span className="text-sm font-mono font-bold text-[#F0B90B]">
+                          {totalSeconds > 60 
+                            ? `${minutes}:${seconds.toString().padStart(2, '0')}`
+                            : `${seconds}s`
+                          }
+                        </span>
+                      </div>
+                      
+                      <div className="h-1.5 bg-[#2B3139] rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[#F0B90B]"
+                          style={{ width: `${progress * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-xs text-[#848E9C]">Stake (Locked)</span>
+                    <span className="text-sm font-medium text-[#EAECEF]">
+                      ${trade.stake.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-xs text-[#848E9C]">Entry Price</span>
+                    <span className="text-sm font-mono text-[#EAECEF]">
+                      ${trade.entryPrice.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-xs text-[#848E9C]">Current Price</span>
+                    <span className={`text-sm font-mono ${isProfitable ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+                      ${currentPrice.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-xs text-[#848E9C]">Payout</span>
+                    <span className="text-sm font-medium text-[#0ECB81]">
+                      {((trade.payout || 1.18) * 100 - 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-xs text-[#848E9C]">Potential Return</span>
+                    <span className="text-sm font-medium text-[#0ECB81]">
+                      ${(trade.stake * (trade.payout || 1.18)).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-xs text-[#848E9C]">Potential Profit</span>
+                    <span className="text-sm font-medium text-[#0ECB81]">
+                      +${profitAmount.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {onCancel && (
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => onCancel(trade.id)}
+                    className="px-3 py-1.5 rounded-lg bg-[#F6465D]/10 text-[#F6465D] text-xs font-medium hover:bg-[#F6465D]/20 transition-colors"
+                  >
+                    Cancel Order
+                  </button>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
+// Completed Order Card Component
+const CompletedOrderCard: React.FC<{ order: OptionOrder }> = ({ order }) => {
+  const [expanded, setExpanded] = useState(false);
+  const isWin = order.result === 'win' || (order.pnl ?? 0) > 0;
+  const profitAmount = order.pnl ?? (isWin ? order.stake * ((order.payout || 1.18) - 1) : -order.stake);
   
-  // Debug log to see what we're receiving
-  console.log('🎯 CompletedOrderCard received:', order);
-  
-  // Safe data extraction with defaults
-  const safeOrder = {
-    id: order?.id || 'unknown',
-    symbol: order?.symbol || 'Unknown',
-    direction: order?.direction || (order?.side === 'buy' ? 'UP' : 'DOWN'),
-    amount: Number(order?.amount) || 0,
-    stake: Number(order?.stake || order?.amount) || 0,
-    entryPrice: Number(order?.entryPrice || order?.price) || 0,
-    expiryPrice: Number(order?.expiryPrice) || 0,
-    duration: order?.duration || 60,
-    durationLabel: order?.durationLabel || '60s',
-    move: Number(order?.move) || 0.01,
-    payout: Number(order?.payout) || 0,
-    fee: Number(order?.fee) || 0,
-    pnl: Number(order?.pnl) || 0,
-    result: order?.result || (Number(order?.pnl) > 0 ? 'win' : 'loss'),
-    startTime: order?.startTime || order?.timestamp,
-    endTime: order?.endTime,
-    metadata: order?.metadata || {}
+  const formatDateTime = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).replace(',', '');
   };
 
-  // Determine if win or loss
-  const isWin = safeOrder.pnl > 0 || safeOrder.result === 'win';
-  const resultLabel = isWin ? "Your Profit" : "Your Loss";
-  const resultValue = isWin ? safeOrder.pnl : -safeOrder.stake;
-  const resultColor = isWin ? "text-[#0ECB81]" : "text-[#F6465D]";
-  const resultIcon = isWin ? "✔" : "✖";
-
-  const formatDateTime = (dateStr: string) => {
-    if (!dateStr) return 'N/A';
-    try {
-      const date = new Date(dateStr);
-      return date.toLocaleString('en-US', {
-        month: '2-digit',
-        day: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      }).replace(',', '');
-    } catch {
-      return dateStr;
-    }
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}min ${seconds % 60}s`;
+    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}min`;
   };
 
   return (
@@ -478,20 +807,26 @@ const CompletedOrderCard: React.FC<{ order: any }> = ({ order }) => {
         className="px-4 py-3 flex items-center justify-between cursor-pointer transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium text-[#EAECEF]">{safeOrder.symbol}</span>
-          <span className="text-xs text-[#848E9C]">|</span>
-          <span className={`text-xs font-medium ${safeOrder.direction === 'UP' ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
-            {safeOrder.direction}
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <span className="text-sm font-medium text-[#EAECEF]">{order.symbol}</span>
+          <span className="text-[#848E9C]">|</span>
+          <span className={`text-xs font-medium ${order.direction === 'UP' ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+            {order.direction}
           </span>
-          <span className="text-xs text-[#848E9C]">&gt;</span>
-          <span className="text-xs text-[#B7BDC6]">{safeOrder.move}%</span>
-          <span className="text-xs text-[#848E9C]">|</span>
-          <span className="text-xs text-[#B7BDC6]">{safeOrder.durationLabel}</span>
+          <span className="text-[#848E9C]">{'>'}</span>
+          <span className="text-xs text-[#B7BDC6]">{order.fluctuation || 0.01}%</span>
+          <span className="text-[#848E9C]">|</span>
+          <span className="text-xs text-[#B7BDC6]">{order.duration}s</span>
+          <span className={`text-xs px-2 py-0.5 rounded-full ${
+            isWin ? 'bg-[#0ECB81]/20 text-[#0ECB81]' : 'bg-[#F6465D]/20 text-[#F6465D]'
+          }`}>
+            {isWin ? 'WIN' : 'LOSS'}
+          </span>
         </div>
+        
         <div className="flex items-center gap-3">
-          <span className={`text-xs font-medium ${resultColor}`}>
-            {isWin ? '+' : ''}{resultValue.toFixed(2)} USDT
+          <span className={`text-sm font-medium ${isWin ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+            {isWin ? '+' : ''}{profitAmount.toFixed(2)} USDT
           </span>
           {expanded ? (
             <ChevronUp className="w-4 h-4 text-[#848E9C]" />
@@ -510,23 +845,118 @@ const CompletedOrderCard: React.FC<{ order: any }> = ({ order }) => {
             exit={{ height: 0, opacity: 0 }}
             className="border-t border-[#2B3139]"
           >
-            <div className="p-4 space-y-4">
-              {/* Result Line */}
-              <div className={`text-base font-semibold ${resultColor}`}>
-                {resultIcon} {resultLabel}: {isWin ? '+' : ''}{resultValue.toFixed(2)} USDT
+            <div className="p-5 space-y-4">
+              {/* Result Banner */}
+              <div className={`flex items-center justify-between p-4 rounded-xl ${
+                isWin ? 'bg-[#0ECB81]/10 border border-[#0ECB81]/20' : 'bg-[#F6465D]/10 border border-[#F6465D]/20'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    isWin ? 'bg-[#0ECB81]/20' : 'bg-[#F6465D]/20'
+                  }`}>
+                    {isWin ? (
+                      <CheckCircle className="w-5 h-5 text-[#0ECB81]" />
+                    ) : (
+                      <XCircle className="w-5 h-5 text-[#F6465D]" />
+                    )}
+                  </div>
+                  <div>
+                    <div className={`text-base font-semibold ${isWin ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+                      {isWin ? '✔ Your Profit' : '✖ Your Loss'}
+                    </div>
+                    <div className={`text-lg font-bold mt-0.5 ${isWin ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+                      {isWin ? '+' : ''}{profitAmount.toFixed(2)} USDT
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Details Grid */}
-              <div className="space-y-3">
-                <DetailRow label="Direction" value={safeOrder.direction} />
-                <DetailRow label="Stake" value={`${safeOrder.stake.toFixed(2)} USDT`} />
-                <DetailRow label="Entry Price" value={`$${safeOrder.entryPrice.toFixed(2)}`} />
-                <DetailRow label="Closing Price" value={`$${safeOrder.expiryPrice.toFixed(2)}`} />
-                <DetailRow label="Duration" value={safeOrder.durationLabel} />
-                <DetailRow label="Fee" value={`${safeOrder.fee.toFixed(2)} USDT`} />
-                <DetailRow label="P&L" value={`${isWin ? '+' : ''}${safeOrder.pnl.toFixed(2)} USDT`} />
-                <DetailRow label="Start Time" value={formatDateTime(safeOrder.startTime)} />
-                <DetailRow label="End Time" value={formatDateTime(safeOrder.endTime)} />
+              {/* Trade Details Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b border-[#2B3139]/50">
+                    <span className="text-xs text-[#848E9C]">Direction</span>
+                    <span className={`text-sm font-medium ${order.direction === 'UP' ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+                      {order.direction}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-2 border-b border-[#2B3139]/50">
+                    <span className="text-xs text-[#848E9C]">Stake</span>
+                    <span className="text-sm font-medium text-[#EAECEF]">
+                      {order.stake.toFixed(2)} USDT
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-2 border-b border-[#2B3139]/50">
+                    <span className="text-xs text-[#848E9C]">Entry Price</span>
+                    <span className="text-sm font-medium text-[#EAECEF] font-mono">
+                      ${order.entryPrice.toFixed(2)}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-2 border-b border-[#2B3139]/50">
+                    <span className="text-xs text-[#848E9C]">Exit Price</span>
+                    <span className="text-sm font-medium text-[#EAECEF] font-mono">
+                      ${order.exitPrice?.toFixed(2) || order.entryPrice.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b border-[#2B3139]/50">
+                    <span className="text-xs text-[#848E9C]">Duration</span>
+                    <span className="text-sm font-medium text-[#EAECEF]">
+                      {formatDuration(order.duration)}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-2 border-b border-[#2B3139]/50">
+                    <span className="text-xs text-[#848E9C]">Fee</span>
+                    <span className="text-sm font-medium text-[#EAECEF]">
+                      {(order.fee || order.stake * 0.001).toFixed(2)} USDT
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-2 border-b border-[#2B3139]/50">
+                    <span className="text-xs text-[#848E9C]">P&L</span>
+                    <span className={`text-sm font-bold ${isWin ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+                      {isWin ? '+' : ''}{profitAmount.toFixed(2)} USDT
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-2 border-b border-[#2B3139]/50">
+                    <span className="text-xs text-[#848E9C]">ROI</span>
+                    <span className={`text-sm font-medium ${isWin ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+                      {isWin ? '+' : ''}{((profitAmount) / order.stake * 100).toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Timestamps */}
+              <div className="mt-3 pt-3 border-t border-[#2B3139]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs text-[#848E9C] mb-1">Start Time</div>
+                    <div className="text-xs font-mono text-[#B7BDC6]">
+                      {formatDateTime(order.startTime)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-[#848E9C] mb-1">End Time</div>
+                    <div className="text-xs font-mono text-[#B7BDC6]">
+                      {formatDateTime(order.endTime)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Order ID */}
+              <div className="mt-2 text-right">
+                <span className="text-[10px] text-[#5E6673] font-mono">
+                  Order ID: {order.id.slice(0, 8)}...{order.id.slice(-4)}
+                </span>
               </div>
             </div>
           </motion.div>
@@ -536,828 +966,266 @@ const CompletedOrderCard: React.FC<{ order: any }> = ({ order }) => {
   );
 };
 
-// Asset Selector Modal Component - Binance Style
-const AssetSelectorModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onSelect: (asset: TradingPair) => void;
-  currentCategory: CategoryType;
-}> = ({ isOpen, onClose, onSelect, currentCategory }) => {
-  const [selectedCategory, setSelectedCategory] = useState<CategoryType>(currentCategory);
-  const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [favorites, setFavorites] = useState<string[]>([]);
-
-  // Reset filters when category changes
-  useEffect(() => {
-    if (selectedCategory !== currentCategory) {
-      setSelectedCategory(currentCategory);
-      setSelectedFilter('all');
-      setSearchQuery('');
-    }
-  }, [currentCategory, selectedCategory]);
-
-  const toggleFavorite = (symbol: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setFavorites(prev => 
-      prev.includes(symbol) 
-        ? prev.filter(s => s !== symbol)
-        : [...prev, symbol]
-    );
+// Options Trading Form Component
+const OptionsTradingForm: React.FC<{
+  direction: OptionDirection;
+  onDirectionChange: (direction: OptionDirection) => void;
+  duration: number;
+  onDurationClick: () => void;
+  fluctuation: number;
+  onFluctuationClick: () => void;
+  amount: string;
+  onAmountChange: (amount: string) => void;
+  onTrade: () => void;
+  balance: number;
+  hideBalance: boolean;
+  isScheduled: boolean;
+  onScheduleClick: () => void;
+  disabled?: boolean;
+}> = ({ direction, onDirectionChange, duration, onDurationClick, fluctuation, onFluctuationClick, amount, onAmountChange, onTrade, balance, hideBalance, isScheduled, onScheduleClick, disabled }) => {
+  const [percentage, setPercentage] = useState(0);
+  const timeframe = OPTIONS_TIMEFRAMES.find(tf => tf.value === duration) || OPTIONS_TIMEFRAMES[0];
+  const currentFluctuation = FLUCTUATION_RANGES[duration]?.find(f => f.value === fluctuation);
+  const payout = currentFluctuation?.payout || timeframe.payout;
+  const profitPercent = (payout - 1) * 100;
+  const parsedAmount = parseFloat(amount) || 0;
+  const potentialReturn = parsedAmount * payout;
+  const potentialProfit = potentialReturn - parsedAmount;
+  
+  const handlePercentageClick = (p: number) => {
+    setPercentage(p);
+    const amount = (timeframe.maxStake * p / 100).toFixed(2);
+    onAmountChange(amount);
   };
 
-  // Filter assets based on category, search, and filter type
-  const filteredAssets = useMemo(() => {
-    let filtered = ALL_ASSETS.filter(asset => 
-      asset.category === selectedCategory
-    );
-
-    console.log('Asset filter debug:', {
-      selectedCategory,
-      totalAssets: ALL_ASSETS.length,
-      categoryFiltered: filtered.length,
-      searchQuery,
-      selectedFilter
-    });
-
-    // If no assets found for the selected category, show all assets as fallback
-    if (filtered.length === 0) {
-      console.log('No assets found for category, using fallback');
-      filtered = ALL_ASSETS;
-    }
-
-    // Apply search
-    if (searchQuery) {
-      filtered = filtered.filter(asset => 
-        asset.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        asset.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    // Apply filters
-    switch (selectedFilter) {
-      case 'favourites':
-        filtered = filtered.filter(asset => favorites.includes(asset.symbol));
-        break;
-      case 'hot':
-        filtered = filtered.filter(asset => asset.hot);
-        break;
-      case 'gainer':
-        filtered = filtered.filter(asset => asset.changePercent > 2);
-        break;
-      case 'loser':
-        filtered = filtered.filter(asset => asset.changePercent < -2);
-        break;
-      default:
-        break;
-    }
-
-    console.log('Final filtered count:', filtered.length);
-    
-    // Ultimate fallback - if somehow still no assets, show first few assets
-    if (filtered.length === 0) {
-      console.log('Still no assets after filtering, using ultimate fallback');
-      filtered = ALL_ASSETS.slice(0, 5);
-    }
-    
-    return filtered;
-  }, [selectedCategory, searchQuery, selectedFilter, favorites]);
-
-  // Calculate counts for each filter type
-  const filterCounts = useMemo(() => {
-    const categoryAssets = ALL_ASSETS.filter(asset => asset.category === selectedCategory);
-    
-    // Use fallback if no assets in category
-    const assetsToCount = categoryAssets.length > 0 ? categoryAssets : ALL_ASSETS;
-    
-    return {
-      all: assetsToCount.length,
-      favourites: assetsToCount.filter(asset => favorites.includes(asset.symbol)).length,
-      hot: assetsToCount.filter(asset => asset.hot).length,
-      gainer: assetsToCount.filter(asset => asset.changePercent > 2).length,
-      loser: assetsToCount.filter(asset => asset.changePercent < -2).length
-    };
-  }, [selectedCategory, favorites]);
-
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/90 z-50 flex items-end justify-center"
-          onClick={onClose}
+    <BinanceCard className="p-4">
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button
+          onClick={() => onDirectionChange('UP')}
+          className={`py-3 rounded-lg text-sm font-medium ${
+            direction === 'UP'
+              ? 'bg-[#0ECB81] text-[#0B0E11]'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
         >
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="bg-[#0B0E11] w-full max-w-2xl rounded-t-3xl border-t border-[#2B3139] max-h-[90vh] overflow-hidden"
-            onClick={e => e.stopPropagation()}
+          Up
+        </button>
+        <button
+          onClick={() => onDirectionChange('DOWN')}
+          className={`py-3 rounded-lg text-sm font-medium ${
+            direction === 'DOWN'
+              ? 'bg-[#F6465D] text-white'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
+        >
+          Down
+        </button>
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={onScheduleClick}
+          className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
+            isScheduled
+              ? 'bg-[#F0B90B] text-[#0B0E11]'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
+        >
+          <Clock className="w-3 h-3" />
+          {isScheduled ? 'Scheduled' : 'Schedule'}
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Stake Range</span>
+          <span className="text-[#EAECEF]">
+            ${timeframe.minStake} - ${timeframe.maxStake}
+          </span>
+        </div>
+
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Duration</span>
+          <button 
+            onClick={onDurationClick}
+            className="text-[#F0B90B] hover:text-[#F0B90B]/80 transition-colors flex items-center gap-1"
           >
-            {/* Header */}
-            <div className="p-6 border-b border-[#2B3139]">
-              <h2 className="text-2xl font-bold text-[#EAECEF] mb-2">Choose your trading pair</h2>
-              <p className="text-sm text-[#848E9C]">Real-time data from all markets • Auto-refresh every 30 seconds</p>
+            {timeframe.label}
+            <ChevronDown className="w-3 h-3" />
+          </button>
+        </div>
+
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Payout</span>
+          <button 
+            onClick={onFluctuationClick}
+            className="text-[#F0B90B] hover:text-[#F0B90B]/80 transition-colors flex items-center gap-1"
+          >
+            {currentFluctuation?.label || timeframe.label} ({profitPercent.toFixed(0)}%)
+            <ChevronDown className="w-3 h-3" />
+          </button>
+        </div>
+
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Available</span>
+          <span className="text-[#EAECEF]">
+            {hideBalance ? '••••' : balance.toFixed(2)} USDT
+          </span>
+        </div>
+
+        {amount && parsedAmount > 0 && (
+          <>
+            <div className="flex justify-between text-xs">
+              <span className="text-[#848E9C]">Potential Return</span>
+              <span className="text-[#0ECB81] font-mono">
+                ${potentialReturn.toFixed(2)} USDT
+              </span>
             </div>
-
-            {/* Categories */}
-            <div className="px-6 py-4 flex space-x-3 overflow-x-auto border-b border-[#2B3139]">
-              {CATEGORIES.map(cat => (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id as CategoryType)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${
-                    selectedCategory === cat.id
-                      ? 'bg-[#F0B90B] text-[#0B0E11]'
-                      : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
-                  }`}
-                >
-                  <cat.icon className="w-4 h-4" />
-                  {cat.label}
-                </button>
-              ))}
+            <div className="flex justify-between text-xs">
+              <span className="text-[#848E9C]">Potential Profit</span>
+              <span className="text-[#0ECB81] font-mono">
+                +${potentialProfit.toFixed(2)} USDT
+              </span>
             </div>
+          </>
+        )}
 
-            {/* Search */}
-            <div className="px-6 py-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#5E6673]" />
-                <input
-                  type="text"
-                  placeholder={`Search ${selectedCategory} pairs...`}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#1E2329] border border-[#2B3139] rounded-lg pl-10 pr-4 py-3 text-[#EAECEF] placeholder-[#5E6673] focus:outline-none focus:border-[#F0B90B] transition-colors"
-                />
-              </div>
-            </div>
+        <div className="relative">
+          <input
+            type="number"
+            value={amount}
+            onChange={(e) => {
+              onAmountChange(e.target.value);
+              setPercentage(0);
+            }}
+            placeholder="Enter stake amount"
+            className="w-full bg-[#2B3139] border border-[#3A3F4A] rounded-lg px-3 py-3 text-[#EAECEF] font-mono placeholder-[#5E6673] focus:outline-none focus:border-[#F0B90B] transition-colors"
+            min={timeframe.minStake}
+            max={timeframe.maxStake}
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848E9C]">
+            USDT
+          </span>
+        </div>
 
-            {/* Filters */}
-            <div className="px-6 flex space-x-2 overflow-x-auto pb-2">
-              {FILTERS.map(filter => {
-                const count = filterCounts[filter.id as keyof typeof filterCounts] || 0;
-                return (
-                  <button
-                    key={filter.id}
-                    onClick={() => setSelectedFilter(filter.id as FilterType)}
-                    className={`px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${
-                      selectedFilter === filter.id
-                        ? 'bg-[#F0B90B] text-[#0B0E11]'
-                        : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
-                    }`}
-                  >
-                    <filter.icon className="w-3 h-3" />
-                    {filter.label}
-                    <span className="text-xs opacity-75">({count})</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Table Header */}
-            <div className="px-6 py-3 grid grid-cols-4 text-xs text-[#848E9C] border-b border-[#2B3139]">
-              <div className="col-span-2">Pair</div>
-              <div className="text-right">Last Price</div>
-              <div className="text-right">Change %</div>
-              <div className="text-right hidden sm:block">Volume</div>
-            </div>
-
-            {/* Asset List */}
-            <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 300px)' }}>
-              {filteredAssets.length > 0 ? (
-                filteredAssets.map((asset) => (
-                  <motion.button
-                    key={asset.symbol}
-                    whileHover={{ backgroundColor: '#1E2329' }}
-                    onClick={() => {
-                      onSelect(asset);
-                      onClose();
-                    }}
-                    className="w-full px-6 py-4 grid grid-cols-4 items-center transition-colors border-b border-[#2B3139]/50"
-                  >
-                    <div className="col-span-2 flex items-center space-x-3">
-                      <button 
-                        onClick={(e) => toggleFavorite(asset.symbol, e)}
-                        className="text-[#5E6673] hover:text-[#F0B90B] transition-colors"
-                      >
-                        <Star className="w-4 h-4" fill={favorites.includes(asset.symbol) ? "#F0B90B" : "none"} />
-                      </button>
-                      <div className="text-left">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[#EAECEF] font-medium">{asset.symbol}</span>
-                          {asset.leverage && (
-                            <span className="text-xs bg-[#F0B90B]/10 text-[#F0B90B] px-1.5 py-0.5 rounded">
-                              {asset.leverage}x
-                            </span>
-                          )}
-                          {asset.hot && (
-                            <Flame className="w-3 h-3 text-[#F78D4B]" />
-                          )}
-                        </div>
-                        <div className="text-xs text-[#848E9C]">{asset.name}</div>
-                      </div>
-                    </div>
-                    
-                    <div className="text-right">
-                      <div className="text-[#EAECEF] font-mono">
-                        ${asset.price.toFixed(asset.price < 10 ? 4 : 2)}
-                      </div>
-                    </div>
-                    
-                    <div className="text-right">
-                      <div className={`text-sm font-medium ${
-                        asset.change >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'
-                      }`}>
-                        {asset.change >= 0 ? '+' : ''}{asset.changePercent.toFixed(2)}%
-                      </div>
-                    </div>
-
-                    <div className="text-right text-[#848E9C] text-sm hidden sm:block">
-                      {asset.volumeDisplay}
-                    </div>
-                  </motion.button>
-                ))
-              ) : (
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="py-16 text-center"
-                >
-                  <div className="text-5xl mb-4 inline-block">🔍</div>
-                  <div className="text-[#848E9C] text-sm mb-4">No matching pairs found</div>
-                  <div 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSearchQuery('');
-                      setSelectedFilter('all');
-                    }}
-                    className="mt-4 text-[#F0B90B] text-sm hover:underline relative group inline-flex items-center gap-1 cursor-pointer"
-                  >
-                    Clear filters
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-right w-3 h-3 group-hover:translate-x-0.5 transition-transform" aria-hidden="true">
-                      <path d="m9 18 6-6-6-6"></path>
-                    </svg>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-
-            {/* Footer Actions */}
-            <div className="p-6 border-t border-[#2B3139] flex justify-end space-x-3">
+        <div className="grid grid-cols-4 gap-1">
+          {[25, 50, 75, 100].map(p => {
+            const amount = (timeframe.maxStake * p / 100).toFixed(2);
+            return (
               <button
-                onClick={onClose}
-                className="px-6 py-2 rounded-lg text-[#848E9C] hover:text-[#EAECEF] transition-colors"
+                key={p}
+                onClick={() => handlePercentageClick(p)}
+                className={`py-2 rounded text-xs transition-colors ${
+                  percentage === p
+                    ? 'bg-[#F0B90B] text-[#0B0E11]'
+                    : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+                }`}
               >
-                Cancel
+                {p}%
               </button>
-              <button
-                onClick={() => {
-                  if (filteredAssets.length > 0) {
-                    onSelect(filteredAssets[0]);
-                    onClose();
-                  }
-                }}
-                className="px-6 py-2 bg-[#F0B90B] text-[#0B0E11] rounded-lg font-medium hover:bg-[#F0B90B]/90 transition-colors"
-              >
-                Select First Available
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={onTrade}
+          disabled={disabled || !amount || parsedAmount < timeframe.minStake || parsedAmount > timeframe.maxStake || parsedAmount > balance}
+          className="w-full bg-[#F0B90B] text-[#0B0E11] py-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#F0B90B]/90 transition-colors"
+        >
+          {isScheduled ? 'Schedule Trade' : 'Buy Option'}
+        </button>
+
+        {parsedAmount > balance && (
+          <p className="text-xs text-[#F6465D] mt-1">
+            Insufficient balance. Need ${parsedAmount.toFixed(2)} USDT
+          </p>
+        )}
+      </div>
+    </BinanceCard>
   );
 };
 
-// ============================================
-// MAIN COMPONENT
-// ============================================
+// ==================== MAIN COMPONENT ====================
 
 export default function UnifiedTradingPage() {
   const navigate = useNavigate();
   const { symbol, tab } = useParams();
   const { user, isAuthenticated } = useAuth();
-  const { 
-    getTradingBalance, 
-    getFundingBalance, 
-    getLockedBalance,
-    getTotalBalance,
-    balances,
-    locks,
-    transferToTrading,
-    transferToFunding,
-    lockFunds,
-    releaseFunds,
-    refreshBalances
-  } = useUnifiedWalletV2();
+  const { getTradingBalance, refreshData } = useUnifiedWallet();
 
-  // ============================================
-  // DEBUG LOGGING
-  // ============================================
-
-  useEffect(() => {
-    const balance = getTradingBalance('USDT');
-    console.log('💰 Trading balance from hook:', {
-      value: balance,
-      type: typeof balance,
-      isNumber: typeof balance === 'number',
-      formatted: formatCurrency(balance)
-    });
-    
-    // Also check raw balances state
-    console.log('📊 Raw balances state:', balances);
-  }, [getTradingBalance, balances]);
-
-  // ============================================
-  // ASSET SELECTOR STATE
-  // ============================================
-
-  const [showAssetSelector, setShowAssetSelector] = useState(false);
-
-  // ============================================
-  // SELECTED PAIR
-  // ============================================
-
+  // Find selected pair
   const selectedPair = useMemo(() => {
     if (symbol) {
-      const pair = ALL_ASSETS.find(p => p.baseAsset.toLowerCase() === symbol.toLowerCase());
-      return pair || ALL_ASSETS[0];
+      const pair = TRADING_PAIRS.find(p => p.baseAsset.toLowerCase() === symbol.toLowerCase());
+      return pair || TRADING_PAIRS[0];
     }
-    return ALL_ASSETS[0];
+    return TRADING_PAIRS[0];
   }, [symbol]);
 
-  // ============================================
-  // LIVE DATA HOOKS
-  // ============================================
-
-  // Live price data - Add memoization to prevent WebSocket spam
-  const safeSymbol = useMemo(() => {
-    return selectedPair?.symbol || 'BTCUSDT';
-  }, [selectedPair?.symbol]);
+  // Market data from WebSocket
+  const { orderBook, ticker, loading: marketLoading } = useMarketData(selectedPair?.symbol || 'BTCUSDT');
   
-  // Only log when symbol actually changes
-  useEffect(() => {
-    console.log('🔍 Using symbol for WebSocket:', safeSymbol);
-  }, [safeSymbol]);
-  
-  const { currentPrice, priceChange24h, isLoading: priceLoading } = useBinanceStream(safeSymbol);
-  
-  // Order book data
-  const { orderBook, loading: orderBookLoading } = useOrderBook(safeSymbol);
-  
-  // Recent trades
-  const { recentTrades, loading: tradesLoading } = useRecentTrades(safeSymbol);
+  // Use real-time data or fallback to static
+  const displayPrice = ticker?.lastPrice || selectedPair.price;
+  const displayChange = ticker?.priceChangePercent || selectedPair.change;
+  const high24h = ticker?.high24h || selectedPair.high24h;
+  const low24h = ticker?.low24h || selectedPair.low24h;
 
-  // Display price (use live or fallback to static)
-  const displayPrice = currentPrice || selectedPair.price;
-  const displayChange = priceChange24h || selectedPair.change;
+  // Chart state
+  const [chartType, setChartType] = useState<ChartType>('line');
+  const [chartData, setChartData] = useState([16, 24, 12, 20, 8, 28, 16, 22, 18, 26, 14, 30]);
+  const animationRef = useRef<NodeJS.Timeout>();
 
-  // ============================================
-  // DYNAMIC ORDER BOOK GENERATION
-  // ============================================
-
-  // Animated spot order book for fallback when no live data
-  const [animatedSpotOrderBookAsks, setAnimatedSpotOrderBookAsks] = useState(() => {
-    const basePrice = displayPrice;
-    return [
-      { price: basePrice + 2.5, quantity: 12500.45 },
-      { price: basePrice + 1.8, quantity: 34200.67 },
-      { price: basePrice + 1.2, quantity: 28750.89 }
-    ];
-  });
-
-  const [animatedSpotOrderBookBids, setAnimatedSpotOrderBookBids] = useState(() => {
-    const basePrice = displayPrice;
-    return [
-      { price: basePrice - 0.4, quantity: 45678.90 },
-      { price: basePrice - 1.1, quantity: 23456.78 },
-      { price: basePrice - 1.7, quantity: 12345.67 }
-    ];
-  });
-
-  // Animated futures order book for fallback when no live data
-  const [animatedFuturesOrderBookAsks, setAnimatedFuturesOrderBookAsks] = useState(() => {
-    const basePrice = displayPrice;
-    return [
-      { price: basePrice + 2.5, quantity: 15200.35 },
-      { price: basePrice + 1.8, quantity: 38400.67 },
-      { price: basePrice + 1.2, quantity: 25600.89 }
-    ];
-  });
-
-  const [animatedFuturesOrderBookBids, setAnimatedFuturesOrderBookBids] = useState(() => {
-    const basePrice = displayPrice;
-    return [
-      { price: basePrice - 0.4, quantity: 0.85 },
-      { price: basePrice - 1.1, quantity: 2.34 },
-      { price: basePrice - 1.7, quantity: 5.67 }
-    ];
-  });
-
-  // Generate spot order book from live data or create realistic mock
-  const spotOrderBookAsks = useMemo(() => {
-    if (orderBook?.asks && orderBook.asks.length > 0) {
-      return orderBook.asks.slice(0, 5).map(ask => ({
-        price: ask.price,
-        quantity: ask.amount
-      }));
-    }
-    
-    // Use animated fallback when no live data
-    return animatedSpotOrderBookAsks;
-  }, [orderBook, animatedSpotOrderBookAsks]);
-
-  const spotOrderBookBids = useMemo(() => {
-    if (orderBook?.bids && orderBook.bids.length > 0) {
-      return orderBook.bids.slice(0, 5).map(bid => ({
-        price: bid.price,
-        quantity: bid.amount
-      }));
-    }
-    
-    // Use animated fallback when no live data
-    return animatedSpotOrderBookBids;
-  }, [orderBook, animatedSpotOrderBookBids]);
-
-  // Futures order book - using real-time data
-  const futuresOrderBookAsks = useMemo(() => {
-    if (orderBook?.asks && orderBook.asks.length > 0) {
-      return orderBook.asks.slice(0, 5).map(ask => ({
-        price: ask.price,
-        quantity: ask.amount
-      }));
-    }
-    
-    // Use animated fallback when no live data
-    return animatedFuturesOrderBookAsks;
-  }, [orderBook, animatedFuturesOrderBookAsks]);
-
-  const futuresOrderBookBids = useMemo(() => {
-    if (orderBook?.bids && orderBook.bids.length > 0) {
-      return orderBook.bids.slice(0, 5).map(bid => ({
-        price: bid.price,
-        quantity: bid.amount
-      }));
-    }
-    
-    // Use animated fallback when no live data
-    return animatedFuturesOrderBookBids;
-  }, [orderBook, animatedFuturesOrderBookBids]);
-
-  // Options order book - Dynamic with real-time movements
-  const [optionsOrderBookAsks, setOptionsOrderBookAsks] = useState(() => {
-    // Use a fixed entry price instead of current market price
-    const fixedEntryPrice = 67000; // Fixed entry price for demo
-    return [
-      { price: fixedEntryPrice + 2.5, quantity: 0.45 },
-      { price: fixedEntryPrice + 1.8, quantity: 34567.89 },
-      { price: fixedEntryPrice + 1.2, quantity: 28750.89 },
-      { price: fixedEntryPrice + 0.6, quantity: 45600.23 },
-      { price: fixedEntryPrice - 0.6, quantity: 23456.78 },
-      { price: fixedEntryPrice - 1.2, quantity: 12345.67 },
-      { price: fixedEntryPrice - 1.8, quantity: 5678.90 },
-      { price: fixedEntryPrice - 2.5, quantity: 234.56 }
-    ];
-  });
-
-  const [optionsOrderBookBids, setOptionsOrderBookBids] = useState(() => {
-    // Use a fixed entry price instead of current market price
-    const fixedEntryPrice = 67000; // Fixed entry price for demo
-    return [
-      { price: fixedEntryPrice - 0.4, quantity: 0.95 },
-      { price: fixedEntryPrice - 1.1, quantity: 7890.12 },
-      { price: fixedEntryPrice - 1.7, quantity: 45678.90 },
-      { price: fixedEntryPrice - 2.3, quantity: 23456.78 },
-      { price: fixedEntryPrice - 2.9, quantity: 12345.67 }
-    ];
-  });
-
-  // Real-time price indicator
-  const [priceDirection, setPriceDirection] = useState<'up' | 'down' | 'stable'>('stable');
-  const [lastPrice, setLastPrice] = useState(displayPrice);
-
-  // ============================================
-  // UI STATE
-  // ============================================
-
+  // UI State
   const [activeTab, setActiveTab] = useState<TabType>(
     tab === 'future' ? 'future' : tab === 'option' ? 'option' : 'spot'
   );
-  const [selectedTimeframe, setSelectedTimeframe] = useState('1H');
+  const [selectedTimeframe, setSelectedTimeframe] = useState('1h');
   const [hideBalances, setHideBalances] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [chartExpanded, setChartExpanded] = useState(false);
   
-  // Spot State
+  // Spot State (simplified for brevity)
   const [spotSide, setSpotSide] = useState<'buy' | 'sell'>('buy');
   const [spotAmount, setSpotAmount] = useState('');
   
-  // Futures State
-  const [futuresTradeType, setFuturesTradeType] = useState<'open' | 'close'>('open');
+  // Futures State (simplified for brevity)
   const [futuresSide, setFuturesSide] = useState<'long' | 'short'>('long');
   const [futuresLeverage, setFuturesLeverage] = useState(100);
   const [futuresAmount, setFuturesAmount] = useState('');
-  const [futuresPercentage, setFuturesPercentage] = useState(0);
-  const [tpSlEnabled, setTpSlEnabled] = useState(false);
   const [showLeverageModal, setShowLeverageModal] = useState(false);
+  const [futuresBalance, setFuturesBalance] = useState(0);
 
   // Options State
-  const [optionDirection, setOptionDirection] = useState<'up' | 'down'>('up');
+  const [optionDirection, setOptionDirection] = useState<OptionDirection>('UP');
   const [optionDuration, setOptionDuration] = useState(60);
   const [optionFluctuation, setOptionFluctuation] = useState(0.01);
-  const [optionPayout, setOptionPayout] = useState(0.176);
-  const [optionMove, setOptionMove] = useState(0.01);
   const [optionAmount, setOptionAmount] = useState('');
-  const [optionPercentage, setOptionPercentage] = useState(0);
   const [isScheduled, setIsScheduled] = useState(false);
   const [showDurationModal, setShowDurationModal] = useState(false);
   const [showFluctuationModal, setShowFluctuationModal] = useState(false);
   const [showScheduledModal, setShowScheduledModal] = useState(false);
   const [scheduledTime, setScheduledTime] = useState({ hours: 0, minutes: 0, seconds: 30 });
 
+  // Orders State
+  const [activeOrders, setActiveOrders] = useState<OptionOrder[]>([]);
+  const [scheduledOrders, setScheduledOrders] = useState<ScheduledOrder[]>([]);
+  const [completedOrders, setCompletedOrders] = useState<OptionOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [processingOrder, setProcessingOrder] = useState<string | null>(null);
+
   // Bottom Tabs
   const [activeBottomTab, setActiveBottomTab] = useState<BottomTabType>('active');
-  
-  // Order State Management
-  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
-  const [scheduledOrders, setScheduledOrders] = useState<Order[]>([]);
-  const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
-  const [ordersLoaded, setOrdersLoaded] = useState(false);
-  const [executing, setExecuting] = useState(false);
-  
-  // Update price direction when displayPrice changes
+  const [orderHistoryHeight, setOrderHistoryHeight] = useState(320);
+  const resizeRef = useRef<HTMLDivElement>(null);
+  const isResizing = useRef(false);
+
+  // Update futures balance from wallet
   useEffect(() => {
-    if (displayPrice > lastPrice) {
-      setPriceDirection('up');
-    } else if (displayPrice < lastPrice) {
-      setPriceDirection('down');
-    } else {
-      setPriceDirection('stable');
-    }
-    setLastPrice(displayPrice);
-  }, [displayPrice, lastPrice]);
-
-  // Animate order book prices - moved after state declarations
-  useEffect(() => {
-    if (!ordersLoaded) return;
-
-    const animatePrices = () => {
-      // Animate options asks
-      setOptionsOrderBookAsks(prev => {
-        return prev.map(ask => {
-          const change = (Math.random() - 0.5) * 0.1; // +/- 5% change
-          const newPrice = ask.price * (1 + change);
-          const quantityChange = (Math.random() - 0.5) * 0.2; // +/- 10% quantity change
-          const newQuantity = Math.max(0.1, ask.quantity * (1 + quantityChange));
-          return {
-            ...ask,
-            price: newPrice,
-            quantity: newQuantity
-          };
-        });
-      });
-
-      // Animate options bids
-      setOptionsOrderBookBids(prev => {
-        return prev.map(bid => {
-          const change = (Math.random() - 0.5) * 0.1; // +/- 5% change
-          const newPrice = bid.price * (1 + change);
-          const quantityChange = (Math.random() - 0.5) * 0.2; // +/- 10% quantity change
-          const newQuantity = Math.max(0.1, bid.quantity * (1 + quantityChange));
-          return {
-            ...bid,
-            price: newPrice,
-            quantity: newQuantity
-          };
-        });
-      });
-
-      // Animate spot asks (only when no live data)
-      if (!orderBook?.asks || orderBook.asks.length === 0) {
-        setAnimatedSpotOrderBookAsks(prev => {
-          return prev.map(ask => {
-            const change = (Math.random() - 0.5) * 0.05; // +/- 2.5% change
-            const newPrice = ask.price * (1 + change);
-            const quantityChange = (Math.random() - 0.5) * 0.15; // +/- 7.5% quantity change
-            const newQuantity = Math.max(0.1, ask.quantity * (1 + quantityChange));
-            return {
-              ...ask,
-              price: newPrice,
-              quantity: newQuantity
-            };
-          });
-        });
-      }
-
-      // Animate spot bids (only when no live data)
-      if (!orderBook?.bids || orderBook.bids.length === 0) {
-        setAnimatedSpotOrderBookBids(prev => {
-          return prev.map(bid => {
-            const change = (Math.random() - 0.5) * 0.05; // +/- 2.5% change
-            const newPrice = bid.price * (1 + change);
-            const quantityChange = (Math.random() - 0.5) * 0.15; // +/- 7.5% quantity change
-            const newQuantity = Math.max(0.1, bid.quantity * (1 + quantityChange));
-            return {
-              ...bid,
-              price: newPrice,
-              quantity: newQuantity
-            };
-          });
-        });
-      }
-
-      // Animate futures asks (only when no live data)
-      if (!orderBook?.asks || orderBook.asks.length === 0) {
-        setAnimatedFuturesOrderBookAsks(prev => {
-          return prev.map(ask => {
-            const change = (Math.random() - 0.5) * 0.04; // +/- 2% change
-            const newPrice = ask.price * (1 + change);
-            const quantityChange = (Math.random() - 0.5) * 0.1; // +/- 5% quantity change
-            const newQuantity = Math.max(0.1, ask.quantity * (1 + quantityChange));
-            return {
-              ...ask,
-              price: newPrice,
-              quantity: newQuantity
-            };
-          });
-        });
-      }
-
-      // Animate futures bids (only when no live data)
-      if (!orderBook?.bids || orderBook.bids.length === 0) {
-        setAnimatedFuturesOrderBookBids(prev => {
-          return prev.map(bid => {
-            const change = (Math.random() - 0.5) * 0.04; // +/- 2% change
-            const newPrice = bid.price * (1 + change);
-            const quantityChange = (Math.random() - 0.5) * 0.1; // +/- 5% quantity change
-            const newQuantity = Math.max(0.1, bid.quantity * (1 + quantityChange));
-            return {
-              ...bid,
-              price: newPrice,
-              quantity: newQuantity
-            };
-          });
-        });
-      }
-    };
-
-    const interval = setInterval(animatePrices, 2000);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [displayPrice, ordersLoaded, orderBook]);
-  
-  // Spot and Futures Orders
-  const [spotOrders, setSpotOrders] = useState<Order[]>([]);
-  const [futuresOrders, setFuturesOrders] = useState<Order[]>([]);
-  const [spotPositions, setSpotPositions] = useState<Order[]>([]);
-  const [futuresPositions, setFuturesPositions] = useState<Order[]>([]);
-
-  // Chart animation
-  const [chartData, setChartData] = useState([16, 24, 12, 20, 8, 28, 16, 22]);
-  const animationRef = useRef<NodeJS.Timeout>();
-
-  // ============================================
-  // ORDER LOADING FUNCTIONS - FIXED
-  // ============================================
-
-  const loadActiveOrders = useCallback(async () => {
-    if (!user?.id) return;
-    
-    try {
-      const { supabaseTradingService } = await import('@/services/supabaseTradingService');
-      const active = await supabaseTradingService.getActiveOptions(user.id);
-      
-      console.log('📊 Raw active orders:', active);
-      
-      const formattedOrders = active.map(order => {
-        const metadata = order.metadata || {};
-        
-        return {
-          id: order.id,
-          symbol: metadata.symbol || 'BTCUSDT',
-          side: metadata.direction === 'UP' ? 'buy' : 'sell',
-          amount: Math.abs(Number(order.amount) || 0),
-          price: Number(order.price || metadata.entryPrice) || 0,
-          type: 'option' as const,
-          status: 'active' as const,
-          timestamp: order.created_at,
-          expiryTime: metadata.endTime,
-          direction: metadata.direction,
-          duration: Number(metadata.duration) || 0,
-          payout: Number(metadata.payout) || 0,
-          move: Number(metadata.fluctuation) || 0,
-          fee: Number(order.fee) || 0,
-          entryPrice: Number(metadata.entryPrice) || 0,
-          startTime: metadata.startTime || order.created_at,
-          endTime: metadata.endTime,
-          stake: Math.abs(Number(order.amount) || 0),
-          pnl: Number(order.pnl) || 0,
-          durationLabel: `${Number(metadata.duration) || 0}s`
-        };
-      });
-      
-      // Filter out expired orders
-      const nonExpiredOrders = formattedOrders.filter(order => {
-        const isExpired = order.expiryTime ? new Date(order.expiryTime) <= new Date() : false;
-        return !isExpired;
-      });
-      
-      console.log('✅ Formatted active orders:', nonExpiredOrders.length);
-      setActiveOrders(nonExpiredOrders);
-    } catch (error) {
-      console.error('Error loading active orders:', error);
-    }
-  }, [user?.id]);
-
-  // FIXED: loadCompletedOrders function with proper data formatting
-  const loadCompletedOrders = useCallback(async () => {
-    if (!user?.id) return;
-    
-    try {
-      const { supabaseTradingService } = await import('@/services/supabaseTradingService');
-      const completed = await supabaseTradingService.getCompletedOptions(user.id);
-      
-      console.log('📊 Raw completed orders from DB:', completed);
-      
-      if (!completed || completed.length === 0) {
-        console.log('No completed orders found');
-        setCompletedOrders([]);
-        return;
-      }
-      
-      const formattedOrders = completed.map(order => {
-        const metadata = order.metadata || {};
-        const amount = Math.abs(Number(order.amount) || 0);
-        const pnl = Number(order.pnl) || 0;
-        
-        return {
-          id: order.id,
-          symbol: metadata.symbol || 'BTCUSDT',
-          side: metadata.direction === 'UP' ? 'buy' : 'sell',
-          direction: metadata.direction || (metadata.direction === 'UP' ? 'UP' : 'DOWN'),
-          amount: amount,
-          stake: amount,
-          price: Number(order.price || metadata.entryPrice) || 0,
-          entryPrice: Number(metadata.entryPrice || order.price) || 0,
-          expiryPrice: Number(metadata.expiryPrice || order.price) || 0,
-          type: 'option',
-          status: 'COMPLETED',
-          timestamp: order.created_at,
-          duration: Number(metadata.duration) || 60,
-          durationLabel: `${Number(metadata.duration) || 60}s`,
-          payout: Number(metadata.payout) || 0,
-          move: Number(metadata.fluctuation) || 0.01,
-          fee: Number(order.fee) || 0,
-          pnl: pnl,
-          result: pnl > 0 ? 'win' : 'loss',
-          startTime: metadata.startTime || order.created_at,
-          endTime: metadata.endTime || metadata.settledAt || order.updated_at,
-          metadata: metadata
-        };
-      });
-      
-      console.log('✅ Formatted completed orders:', formattedOrders.length);
-      setCompletedOrders(formattedOrders);
-    } catch (error) {
-      console.error('Error loading completed orders:', error);
-      setCompletedOrders([]);
-    }
-  }, [user?.id]);
-
-  const loadScheduledTrades = useCallback(async () => {
-    if (!user?.id) return;
-    
-    try {
-      const { supabaseTradingService } = await import('@/services/supabaseTradingService');
-      const scheduled = await supabaseTradingService.getScheduledOptions(user.id);
-      
-      const formattedScheduled = scheduled.map(trade => ({
-        id: trade.id,
-        symbol: trade.trading_pairs?.symbol || 'XAUUSDT',
-        side: trade.direction === 'UP' ? 'buy' : 'sell',
-        amount: trade.stake,
-        price: 0, // Will be determined at execution time
-        type: 'option' as const,
-        status: 'scheduled' as const,
-        timestamp: trade.created_at,
-        scheduledTime: trade.scheduled_time,
-        direction: trade.direction,
-        duration: trade.duration,
-        payout: trade.payout_rate,
-        move: trade.fluctuation_range,
-        stake: trade.stake,
-        durationLabel: `${trade.duration}s`
-      }));
-      
-      setScheduledOrders(formattedScheduled);
-    } catch (error) {
-      console.error('Error loading scheduled trades:', error);
-    }
-  }, [user?.id]);
+    const balance = getTradingBalance('USDT');
+    setFuturesBalance(balance);
+  }, [getTradingBalance]);
 
   // Animate chart data
   useEffect(() => {
@@ -1366,7 +1234,7 @@ export default function UnifiedTradingPage() {
         const newData = [...prev.slice(1)];
         const lastValue = prev[prev.length - 1];
         const change = (Math.random() - 0.5) * 8;
-        const newValue = Math.max(4, Math.min(32, lastValue + change));
+        const newValue = Math.max(4, Math.min(48, lastValue + change));
         newData.push(newValue);
         return newData;
       });
@@ -1381,249 +1249,180 @@ export default function UnifiedTradingPage() {
     };
   }, []);
 
-  // Load orders from database on component mount
+  // Load user's orders
   useEffect(() => {
-    const loadOrdersFromDatabase = async () => {
-      if (!isAuthenticated || !user?.id) return;
-      
+    if (!user?.id) return;
+
+    const loadOrders = async () => {
+      setLoading(true);
       try {
-        // Load active, completed, and scheduled orders
-        await loadActiveOrders();
-        await loadCompletedOrders();
-        await loadScheduledTrades();
+        console.log('🔄 [LoadOrders] Starting to load orders for user:', user.id);
         
-        setOrdersLoaded(true);
-      } catch (error) {
-        console.error('Error loading orders:', error);
-        setOrdersLoaded(true);
-      }
-    };
-
-    loadOrdersFromDatabase();
-    
-    // Set up periodic refresh to check for expired orders
-    const refreshInterval = setInterval(async () => {
-      console.log('🔄 Refreshing orders to check for expired ones...');
-      await loadActiveOrders();
-      await loadCompletedOrders();
-    }, 5000); // Check every 5 seconds
-
-    return () => {
-      clearInterval(refreshInterval);
-    };
-  }, [isAuthenticated, user?.id, loadActiveOrders, loadCompletedOrders, loadScheduledTrades]);
-
-  // Monitor active orders and move expired ones to completed
-  useEffect(() => {
-    if (!ordersLoaded) return;
-    
-    const checkExpiredOrders = async () => {
-      const now = new Date();
-      
-      for (const order of activeOrders) {
-        if (order.expiryTime && new Date(order.expiryTime) <= now) {
-          console.log('⏰ Auto-settling expired order:', order.id);
-          
-          try {
-            const { supabaseTradingService } = await import('@/services/supabaseTradingService');
-            const result = await supabaseTradingService.settleOption(order.id, displayPrice);
-            
-            if (result.success) {
-              // Funds are automatically released by the settlement service
-              console.log('💸 Funds released by settlement:', result.isWin ? 'WIN' : 'LOSS');
-              
-              // Refresh balances to see updated trading wallet
-              await refreshBalances();
-              
-              if (result.isWin) {
-                toast.success(`🎉 You won $${result.pnl?.toFixed(2)} USDT!`);
-              } else {
-                toast.error(`Trade lost: -$${result.stake?.toFixed(2)} USDT`);
-              }
-            }
-          } catch (error) {
-            console.error('Error settling expired order:', error);
-          }
-        }
-      }
-      
-      // Refresh orders
-      await loadActiveOrders();
-      await loadCompletedOrders();
-    };
-    
-    // Check every second for precision
-    const interval = setInterval(checkExpiredOrders, 1000);
-    
-    return () => clearInterval(interval);
-  }, [activeOrders, displayPrice, refreshBalances, loadActiveOrders, loadCompletedOrders]);
-
-  // Monitor scheduled orders and activate them when scheduled time arrives
-  useEffect(() => {
-    const checkScheduledOrders = async () => {
-      const now = new Date();
-      
-      const readyOrders = scheduledOrders.filter(order => 
-        order.scheduledTime && new Date(order.scheduledTime) <= now
-      );
-      
-      if (readyOrders.length > 0) {
-        // Move ready orders to active orders
-        const activeOrdersData = readyOrders.map(order => ({
-          ...order,
-          status: 'active' as const,
-          expiryTime: new Date(now.getTime() + (order.duration || 0) * 1000).toISOString()
+        // Load active options
+        const active = await unifiedTradingService.getActiveOptionsOrders(user.id);
+        console.log('📋 [LoadOrders] Raw active orders from service:', active);
+        
+        const formattedActive: OptionOrder[] = active.map(order => ({
+          id: order.id,
+          userId: order.userId,
+          symbol: order.symbol || 'BTCUSDT',
+          direction: order.direction,
+          stake: order.stake,
+          entryPrice: order.entryPrice,
+          duration: order.duration,
+          startTime: new Date(order.startTime || order.createdAt).getTime() / 1000,
+          endTime: new Date(order.endTime).getTime() / 1000,
+          status: 'ACTIVE',
+          fluctuation: order.fluctuationRange || 0.01,
+          payout: order.payoutRate || 1.18,
+          fee: order.fee || order.stake * 0.001,
+          isLocked: true
         }));
         
-        // Add to active orders
-        setActiveOrders(prev => [...prev, ...activeOrdersData]);
+        console.log('📋 [LoadOrders] Formatted active orders:', formattedActive);
+        console.log('📋 [LoadOrders] Setting active orders count:', formattedActive.length);
+        setActiveOrders(formattedActive);
+
+        // Load completed options
+        const completed = await unifiedTradingService.getCompletedOptionsOrders(user.id);
+        console.log('📋 [LoadOrders] Raw completed orders from service:', completed);
         
-        // Remove from scheduled
-        setScheduledOrders(prev => 
-          prev.filter(o => !readyOrders.some(ro => ro.id === o.id))
-        );
-        
-        // Release trading locks for these orders
-        for (const order of readyOrders) {
-          try {
-            await supabase
-              .from('trading_locks')
-              .update({ status: 'released' })
-              .eq('reference_id', order.id)
-              .eq('status', 'locked');
-            console.log('Released trading lock for order:', order.id);
-          } catch (error) {
-            console.error('Error releasing trading lock:', error);
-          }
-        }
-        
-        // Show notifications for activated orders
-        readyOrders.forEach(order => {
-          toast.success(`📅 Scheduled order activated: ${order.symbol}`);
+        const formattedCompleted: OptionOrder[] = completed.map(order => {
+          const isWin = order.pnl && order.pnl > 0;
+          return {
+            id: order.id,
+            userId: order.userId,
+            symbol: order.symbol || 'BTCUSDT',
+            direction: order.direction,
+            stake: order.stake,
+            entryPrice: order.entryPrice,
+            exitPrice: order.exitPrice,
+            duration: order.duration,
+            startTime: new Date(order.startTime || order.createdAt).getTime() / 1000,
+            endTime: new Date(order.endTime).getTime() / 1000,
+            status: 'COMPLETED',
+            pnl: order.pnl,
+            fee: order.fee || order.stake * 0.001,
+            fluctuation: order.fluctuationRange || 0.01,
+            payout: order.payoutRate || 1.18,
+            result: isWin ? 'win' : 'loss'
+          };
         });
+        
+        console.log('📋 [LoadOrders] Formatted completed orders:', formattedCompleted);
+        console.log('📋 [LoadOrders] Setting completed orders count:', formattedCompleted.length);
+        setCompletedOrders(formattedCompleted);
+      } catch (error) {
+        console.error('❌ [LoadOrders] Error loading orders:', error);
+      } finally {
+        setLoading(false);
       }
     };
-    
-    // Check every 5 seconds for scheduled orders
-    const interval = setInterval(checkScheduledOrders, 5000);
-    
-    return () => clearInterval(interval);
-  }, [scheduledOrders]);
 
-  // ============================================
-  // HANDLERS
-  // ============================================
+    loadOrders();
+  }, [user?.id]);
 
-  const handleAssetSelect = (asset: TradingPair) => {
-    navigate(`/trading/${asset.baseAsset.toLowerCase()}${activeTab === 'spot' ? '' : '/' + activeTab}`);
-  };
-
-  const handleSpotTrade = async () => {
-    console.log('handleSpotTrade called');
-    console.log('isAuthenticated:', isAuthenticated);
-    console.log('spotAmount:', spotAmount);
+  // Handle order expiration
+  const handleOrderExpire = useCallback(async (orderId: string) => {
+    console.log('🕐 [handleOrderExpire] Called with orderId:', orderId);
     
-    if (!isAuthenticated) {
-      toast.error('Please login to trade');
+    if (processingOrder) {
+      console.log('🚫 [handleOrderExpire] Blocked by processingOrder state');
       return;
     }
-
-    const parsedAmount = parseFloat(spotAmount);
-    if (!parsedAmount || parsedAmount <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
-
+    
+    setProcessingOrder(orderId);
+    
     try {
-      // Import the Supabase trading service
-      const { supabaseTradingService } = await import('@/services/supabaseTradingService');
+      console.log('🔄 [handleOrderExpire] Calling expireOptionsTrade for:', orderId);
+      const result = await unifiedTradingService.expireOptionsTrade(orderId);
       
-      // Execute spot trade with admin outcome control
-      const response = await supabaseTradingService.executeSpotTrade({
-        pair: selectedPair.symbol,
-        side: spotSide,
-        type: 'market',
-        amount: parsedAmount,
-        price: displayPrice,
-        total: parsedAmount * displayPrice
-      });
-
-      if (response.success) {
-        const { trade } = response;
+      console.log('✅ [handleOrderExpire] Result from service:', result);
+      
+      if (result.success) {
+        // Find the expired order in active orders
+        const expiredOrder = activeOrders.find(o => o.id === orderId);
+        console.log('🔍 [handleOrderExpire] Found expired order:', expiredOrder);
         
-        // Show appropriate message based on outcome
-        if (trade.outcome === 'win') {
-          toast.success(`Trade Won! +$${trade.pnl.toFixed(2)} profit`);
+        if (expiredOrder) {
+          // Remove from active orders
+          setActiveOrders(prev => {
+            console.log('📋 [Active] Before removal:', prev.length);
+            const filtered = prev.filter(o => o.id !== orderId);
+            console.log('📋 [Active] After removal:', filtered.length);
+            return filtered;
+          });
+          
+          // Create completed order
+          const completedOrder: OptionOrder = {
+            ...expiredOrder,
+            status: 'COMPLETED',
+            exitPrice: result.exitPrice || displayPrice,
+            pnl: result.profit || 0,
+            result: result.result === 'win' ? 'win' : 'loss',
+            isLocked: false,
+            endTime: Date.now() / 1000
+          };
+          
+          console.log('📋 [Completed] New completed order:', completedOrder);
+          
+          // Add to completed orders (avoid duplicates)
+          setCompletedOrders(prev => {
+            console.log('📋 [Completed] Before addition:', prev.length);
+            
+            // Check if order already exists
+            const exists = prev.some(o => o.id === orderId);
+            if (exists) {
+              console.log('📋 [Completed] Order already exists, skipping');
+              return prev;
+            }
+            
+            const newCompleted = [completedOrder, ...prev];
+            console.log('📋 [Completed] After addition:', newCompleted.length);
+            return newCompleted;
+          });
+          
+          // Refresh balances to update locked funds
+          if (typeof refreshData === 'function') {
+            await refreshData();
+          }
+
+          // Show toast notification
+          if (result.result === 'win') {
+            const profitAmount = result.profit || 0;
+            toast.success(
+              <div>
+                <div className="font-bold">🎉 You Won!</div>
+                <div className="text-sm">+${profitAmount.toFixed(2)} USDT Profit</div>
+              </div>,
+              { duration: 5000 }
+            );
+          } else {
+            const lossAmount = Math.abs(result.profit || 0);
+            toast.error(
+              <div>
+                <div className="font-bold">Trade Lost</div>
+                <div className="text-sm">-${lossAmount.toFixed(2)} USDT</div>
+              </div>,
+              { duration: 5000 }
+            );
+          }
         } else {
-          toast.error(`Trade Lost -$${Math.abs(trade.pnl).toFixed(2)}`);
+          console.warn('⚠️ [handleOrderExpire] Expired order not found in active orders:', orderId);
         }
-        
-        // Clear form
-        setSpotAmount('');
-        
-        console.log('✅ Spot trade executed successfully:', trade);
+      } else {
+        console.error('❌ [handleOrderExpire] Service returned failure:', result.error);
       }
-      
     } catch (error) {
-      console.error('❌ Spot trade failed:', error);
-      toast.error('Failed to execute trade. Please try again.');
+      console.error('❌ [handleOrderExpire] Error expiring order:', error);
+      toast.error('Failed to settle trade');
+    } finally {
+      console.log('🔄 [handleOrderExpire] Clearing processingOrder');
+      setProcessingOrder(null);
     }
-  };
+  }, [activeOrders, displayPrice, refreshData, processingOrder]);
 
-  const handleFuturesTrade = async () => {
-    console.log('handleFuturesTrade called');
-    console.log('isAuthenticated:', isAuthenticated);
-    console.log('futuresAmount:', futuresAmount);
-    
-    if (!isAuthenticated) {
-      toast.error('Please login to trade');
-      return;
-    }
-
-    const parsedAmount = parseFloat(futuresAmount);
-    if (!parsedAmount || parsedAmount <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
-
-    try {
-      // Import the trading API service
-      const { tradingApiService } = await import('@/services/tradingApiService');
-      
-      // Execute futures trade with admin outcome control
-      const response = await tradingApiService.executeFuturesTrade({
-        pair: selectedPair.symbol,
-        side: futuresSide === 'long' ? 'buy' : 'sell',
-        positionType: futuresTradeType,
-        orderType: 'market',
-        amount: parsedAmount,
-        price: displayPrice,
-        leverage: futuresLeverage,
-        margin: parsedAmount / futuresLeverage
-      });
-
-      if (response.success) {
-        const { trade } = response;
-        
-        // Show appropriate message based on outcome
-        if (trade.outcome === 'win') {
-          toast.success(`Position Won! +$${trade.pnl.toFixed(2)} profit`);
-        } else {
-          toast.error(`Position Lost -$${Math.abs(trade.pnl).toFixed(2)}`);
-        }
-        
-        // Clear form
-        setFuturesAmount('');
-        
-        console.log('✅ Futures trade executed successfully:', trade);
-      }
-      
-    } catch (error) {
-      console.error('❌ Futures trade failed:', error);
-      toast.error('Failed to execute position. Please try again.');
-    }
-  };
-
+  // Handle option trade
   const handleOptionTrade = async () => {
     if (!isAuthenticated || !user?.id) {
       toast.error('Please login to trade');
@@ -1636,9 +1435,11 @@ export default function UnifiedTradingPage() {
       return;
     }
 
-    const purchaseRange = PURCHASE_RANGES[optionDuration as keyof typeof PURCHASE_RANGES];
-    if (parsedAmount < purchaseRange.min || parsedAmount > purchaseRange.max) {
-      toast.error(`Amount must be between ${purchaseRange.min} and ${purchaseRange.max} USDT`);
+    const timeframe = OPTIONS_TIMEFRAMES.find(tf => tf.value === optionDuration);
+    if (!timeframe) return;
+
+    if (parsedAmount < timeframe.minStake || parsedAmount > timeframe.maxStake) {
+      toast.error(`Amount must be between $${timeframe.minStake} and $${timeframe.maxStake}`);
       return;
     }
 
@@ -1648,252 +1449,235 @@ export default function UnifiedTradingPage() {
       return;
     }
 
-    setExecuting(true);
+    const currentFluctuation = FLUCTUATION_RANGES[optionDuration]?.find(f => f.value === optionFluctuation);
+    const payout = currentFluctuation?.payout || timeframe.payout;
 
     try {
-      const { supabaseTradingService } = await import('@/services/supabaseTradingService');
-
       if (isScheduled) {
         // Handle scheduled trade
         const scheduledTimeStr = new Date(Date.now() + 
           (scheduledTime.hours * 3600 + scheduledTime.minutes * 60 + scheduledTime.seconds) * 1000
         ).toISOString();
 
-        const result = await supabaseTradingService.scheduleOptionsTrade(
-          user.id,
-          {
-            symbol: selectedPair.symbol,
-            direction: optionDirection === 'up' ? 'UP' : 'DOWN',
-            amount: parsedAmount,
-            duration: optionDuration,
-            fluctuation: optionFluctuation,
-            payout: optionPayout,
-            entryPrice: displayPrice,
-            scheduledTime: scheduledTimeStr
-          }
-        );
-
-        if (result.success) {
-          toast.success(`Trade scheduled for ${scheduledTime.hours}:${scheduledTime.minutes}:${scheduledTime.seconds} UTC`);
-          await loadScheduledTrades();
-          setIsScheduled(false);
-        } else {
-          throw new Error(result.error || 'Scheduling failed');
-        }
+        const newScheduled: ScheduledOrder = {
+          id: `sched_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          userId: user.id,
+          symbol: selectedPair.symbol,
+          direction: optionDirection,
+          stake: parsedAmount,
+          scheduledTime: new Date(scheduledTimeStr).getTime() / 1000,
+          duration: optionDuration,
+          fluctuation: optionFluctuation,
+          payout
+        };
+        
+        setScheduledOrders(prev => [...prev, newScheduled]);
+        toast.success(`Trade scheduled for ${scheduledTime.hours}:${scheduledTime.minutes}:${scheduledTime.seconds} UTC`);
+        setIsScheduled(false);
       } else {
-        // Handle immediate trade - admin force win/loss is checked inside the service
-        const result = await supabaseTradingService.executeOptionsTrade(
-          user.id,
-          {
+        // Execute immediate trade
+        const result = await unifiedTradingService.executeTrade({
+          type: 'options',
+          data: {
             symbol: selectedPair.symbol,
-            direction: optionDirection === 'up' ? 'UP' : 'DOWN',
+            direction: optionDirection,
             amount: parsedAmount,
             duration: optionDuration,
             fluctuation: optionFluctuation,
-            payout: optionPayout,
+            premium: parsedAmount,
+            payoutRate: payout,
             entryPrice: displayPrice
           },
-          user.email // Pass user email
-        );
+          userId: user.id
+        });
 
-        if (result.success) {
-          console.log('✅ Order created successfully:', result);
+        if (result.success && result.trade) {
+          console.log('✅ [TradeCreation] Trade created successfully:', result.trade);
           
-          // Funds are automatically locked by the trading service
-          console.log('🔒 Funds locked automatically by trading service');
+          // Add to active orders
+          const newOrder: OptionOrder = {
+            id: result.trade.id,
+            userId: user.id,
+            symbol: selectedPair.symbol,
+            direction: optionDirection,
+            stake: parsedAmount,
+            entryPrice: displayPrice,
+            duration: optionDuration,
+            startTime: Date.now() / 1000,
+            endTime: Date.now() / 1000 + optionDuration,
+            status: 'ACTIVE',
+            fluctuation: optionFluctuation,
+            payout,
+            fee: parsedAmount * 0.001,
+            isLocked: true
+          };
           
-          // Refresh balances to see locked funds
-          await refreshBalances();
+          console.log('📋 [TradeCreation] New order object:', newOrder);
           
-          // Show toast based on admin outcome
-          if (result.shouldWin) {
-            toast.success(`✨ Option purchased with FORCE WIN enabled!`, {
-              icon: '👑',
-              duration: 5000
-            });
-          } else {
-            toast.success(`Option purchased: ${optionDirection.toUpperCase()} - ${optionDuration}s (Default: LOSS)`);
-          }
+          setActiveOrders(prev => {
+            const updated = [...prev, newOrder];
+            console.log('📋 [TradeCreation] Active orders after adding:', updated.length);
+            return updated;
+          });
           
-          await loadActiveOrders();
+          // Refresh balances to show locked funds
+          await refreshData();
           
-          // Schedule settlement
-          setTimeout(async () => {
-            // In production, get actual price at expiry
-            const settleResult = await supabaseTradingService.settleOption(
-              result.orderId!,
-              displayPrice // Replace with actual price at expiry
-            );
-            
-            if (settleResult.isWin) {
-              toast.success(`🎉 You won $${settleResult.pnl?.toFixed(2)} USDT!`, {
-                icon: settleResult.source !== 'default_loss' ? '👑' : '🎉'
-              });
-            } else {
-              toast.error(`Trade lost: -$${parsedAmount.toFixed(2)} USDT (Default behavior)`);
-            }
-            
-            await loadActiveOrders();
-            await loadCompletedOrders();
-            await refreshBalances();
-          }, optionDuration * 1000);
-        } else {
-          throw new Error(result.error || 'Trade failed');
+          toast.success(
+            <div>
+              <div className="font-bold">Option Purchased!</div>
+              <div className="text-sm">${parsedAmount.toFixed(2)} USDT locked</div>
+              <div className="text-xs text-[#0ECB81]">Potential profit: +${(parsedAmount * (payout - 1)).toFixed(2)}</div>
+            </div>,
+            { duration: 5000 }
+          );
         }
       }
 
       setOptionAmount('');
-      setOptionPercentage(0);
-
     } catch (error) {
-      console.error('Option trade error:', error);
-      toast.error(error instanceof Error ? error.message : 'Trade execution failed');
-    } finally {
-      setExecuting(false);
+      console.error('❌ [TradeCreation] Trade execution failed:', error);
+      toast.error('Trade execution failed');
     }
   };
 
-  const handleSaveScheduled = () => {
-    setIsScheduled(true);
-    setShowScheduledModal(false);
-    toast.success(`Trade scheduled for ${scheduledTime.hours}:${scheduledTime.minutes}:${scheduledTime.seconds} UTC`);
-  };
+  // Handle resize for order history
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.addEventListener('mousemove', handleResize);
+    document.addEventListener('mouseup', handleResizeEnd);
+  }, []);
+
+  const handleResize = useCallback((e: MouseEvent) => {
+    if (!isResizing.current || !resizeRef.current) return;
+    
+    const container = resizeRef.current.parentElement;
+    if (!container) return;
+    
+    const newHeight = window.innerHeight - e.clientY - 60;
+    const maxHeight = window.innerHeight * 0.7;
+    const minHeight = 200;
+    
+    setOrderHistoryHeight(Math.min(maxHeight, Math.max(minHeight, newHeight)));
+  }, []);
+
+  const handleResizeEnd = useCallback(() => {
+    isResizing.current = false;
+    document.removeEventListener('mousemove', handleResize);
+    document.removeEventListener('mouseup', handleResizeEnd);
+  }, []);
 
   // Get current UTC time
   const currentUTC = new Date().toISOString().split('T')[1].split('.')[0];
 
-  // Add debug logging for completed orders
-  useEffect(() => {
-    console.log('📊 Completed orders state:', {
-      count: completedOrders.length,
-      orders: completedOrders.map(o => ({
-        id: o.id,
-        symbol: o.symbol,
-        direction: o.direction,
-        pnl: o.pnl,
-        result: o.result
-      }))
+  // Filter out duplicate completed orders
+  const uniqueCompletedOrders = useMemo(() => {
+    const seen = new Set();
+    return completedOrders.filter(order => {
+      const duplicate = seen.has(order.id);
+      seen.add(order.id);
+      return !duplicate;
     });
   }, [completedOrders]);
 
-  // ============================================
-  // RENDER
-  // ============================================
-
   return (
     <motion.div 
-      className="min-h-screen bg-[#0B0E11] text-[#EAECEF] pb-[35vh]" // Increased padding to prevent content from being hidden behind bottom tabs
+      className="min-h-screen bg-[#0B0E11] text-[#EAECEF]"
       initial="initial"
       animate="animate"
       exit="exit"
       variants={pageVariants}
     >
-      {/* ===== HEADER ===== */}
-      <div className="sticky top-0 z-50 bg-[#1E2329]/95 backdrop-blur-xl border-b border-[#2B3139]/50">
+      {/* Header */}
+      <div className="sticky top-0 z-50 bg-[#1E2329]/95 backdrop-blur-xl border-b border-[#2B3139]">
         <div className="px-4 py-3">
-          {/* Top Row */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <motion.button 
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
+              <button 
                 onClick={() => navigate('/trading')} 
-                className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
+                className="p-2 hover:bg-[#2B3139] rounded-lg transition-colors"
               >
-                <ArrowLeft className="h-5 w-5" />
-              </motion.button>
-              <motion.button
-                whileHover={{ backgroundColor: '#2B3139' }}
-                onClick={() => setShowAssetSelector(true)}
-                className="flex items-center space-x-2 px-3 py-1 rounded-lg transition-colors"
-              >
+                <ArrowLeft className="h-5 w-5 text-[#848E9C]" />
+              </button>
+              <div className="flex items-center space-x-2">
                 <h1 className="text-xl font-semibold text-[#EAECEF]">{selectedPair.baseAsset}</h1>
-                <ChevronDown className="w-4 h-4 text-[#848E9C]" />
-              </motion.button>
-              <span className={`text-sm ${displayChange >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
-                {displayChange >= 0 ? '+' : ''}{displayChange.toFixed(2)}%
-              </span>
+                <span className={`text-sm ${displayChange >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+                  {displayChange >= 0 ? '+' : ''}{displayChange.toFixed(2)}%
+                </span>
+              </div>
             </div>
             
-            <div className="flex items-center space-x-3">
-              <motion.button 
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
+            <div className="flex items-center space-x-1">
+              <button 
                 onClick={() => setHideBalances(!hideBalances)}
-                className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
+                className="p-2 hover:bg-[#2B3139] rounded-lg transition-colors"
               >
-                <Eye className="h-5 w-5" />
-              </motion.button>
-              <motion.button 
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => navigate(`/trading/${symbol}/chart`)}
-                className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
+                <Eye className="h-5 w-5 text-[#848E9C]" />
+              </button>
+              <button 
+                onClick={() => setChartExpanded(!chartExpanded)}
+                className="p-2 hover:bg-[#2B3139] rounded-lg transition-colors"
               >
-                <BarChart3 className="h-5 w-5" />
-              </motion.button>
-              <motion.button 
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => navigate('/trading')}
-                className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
-                title="Asset Selector"
+                {chartExpanded ? (
+                  <Minimize2 className="h-5 w-5 text-[#848E9C]" />
+                ) : (
+                  <Maximize2 className="h-5 w-5 text-[#848E9C]" />
+                )}
+              </button>
+              <button 
+                onClick={() => refreshData()}
+                className="p-2 hover:bg-[#2B3139] rounded-lg transition-colors"
               >
-                <LayoutGrid className="h-5 w-5" />
-              </motion.button>
-              <motion.button 
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => window.location.reload()}
-                className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
-              >
-                <RefreshCw className="h-5 w-5" />
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
+                <RefreshCw className="h-5 w-5 text-[#848E9C]" />
+              </button>
+              <button
                 onClick={() => setProfileOpen(!profileOpen)}
-                className="w-8 h-8 bg-[#F0B90B] rounded-lg flex items-center justify-center hover:bg-[#F0B90B]/90 transition-colors"
+                className="w-8 h-8 bg-[#F0B90B] rounded-lg flex items-center justify-center ml-1 hover:bg-[#F0B90B]/90 transition-colors"
               >
                 <span className="text-sm font-bold text-[#0B0E11]">
                   {user?.email?.[0] || 'U'}
                 </span>
-              </motion.button>
+              </button>
             </div>
           </div>
 
           {/* Market Tabs */}
-          <div className="flex space-x-6 mt-4">
+          <div className="flex space-x-4 mt-3 overflow-x-auto pb-1">
             {['Spot', 'Future', 'Option'].map((tabName) => (
-              <motion.button
+              <button
                 key={tabName}
-                whileHover={{ y: -1 }}
                 onClick={() => {
                   const newTab = tabName.toLowerCase() as TabType;
                   setActiveTab(newTab);
                   navigate(`/trading/${symbol}${newTab === 'spot' ? '' : '/' + newTab}`);
                 }}
-                className={`pb-1 text-sm font-medium border-b-2 transition-colors ${
+                className={`pb-1 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                   activeTab === tabName.toLowerCase()
                     ? 'border-[#F0B90B] text-[#F0B90B]'
                     : 'border-transparent text-[#848E9C] hover:text-[#EAECEF]'
                 }`}
               >
                 {tabName}
-              </motion.button>
+              </button>
             ))}
           </div>
+
+          {/* Price Info */}
+          <PriceDisplay price={displayPrice} change={displayChange} high24h={high24h} low24h={low24h} />
         </div>
       </div>
 
-      {/* ===== TIMEFRAMES ===== */}
-      <div className="px-4 py-3 flex space-x-4 border-b border-[#2B3139]">
+      {/* Timeframes */}
+      <div className="px-4 py-2 flex space-x-4 border-b border-[#2B3139] overflow-x-auto">
         {TIMEFRAMES.map(tf => (
           <button
             key={tf}
             onClick={() => setSelectedTimeframe(tf)}
-            className={`text-sm font-medium ${
-              selectedTimeframe === tf ? 'text-[#F0B90B]' : 'text-[#848E9C] hover:text-[#EAECEF]'
+            className={`text-sm font-medium whitespace-nowrap transition-colors ${
+              selectedTimeframe === tf 
+                ? 'text-[#F0B90B]' 
+                : 'text-[#848E9C] hover:text-[#EAECEF]'
             }`}
           >
             {tf}
@@ -1901,1249 +1685,308 @@ export default function UnifiedTradingPage() {
         ))}
       </div>
 
-      {/* ===== PRICE INFO ===== */}
-      <div className="px-4 py-2 flex items-center justify-between border-b border-[#2B3139]">
-        <div className="flex items-center space-x-2">
-          <span className="text-xl font-bold text-[#EAECEF]">
-            ${displayPrice.toFixed(2)} {priceChange24h && priceChange24h >= 0 ? '↑' : '↓'}
-          </span>
-          <span className={`text-sm ${displayChange >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
-            {displayChange >= 0 ? '+' : ''}{displayChange.toFixed(2)}%
-          </span>
-        </div>
-        <span className="text-xs text-[#848E9C]">
-          ≈${displayPrice.toFixed(2)}
-        </span>
-      </div>
-
-      {/* ===== MAIN CONTENT ===== */}
+      {/* Main Content */}
       <div className="px-4 py-4">
         {/* Mini Chart */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="h-24 bg-[#1E2329] rounded-lg mb-6 flex items-end justify-between px-2"
-        >
-          <div className="flex items-end gap-1 h-full py-2">
-            {chartData.map((height, i) => (
-              <motion.div
-                key={i}
-                initial={{ height: 0 }}
-                animate={{ height: height * 3 }}
-                transition={{ duration: 0.5, delay: i * 0.05 }}
-                className={`w-8 rounded-t transition-all duration-500 ease-in-out ${
-                  i > 0 && height > chartData[i - 1] ? 'bg-[#0ECB81]/40' : 'bg-[#F6465D]/40'
-                }`}
-                style={{ height: `${height * 3}px` }}
-              />
-            ))}
+        <div className="flex justify-between items-center mb-2">
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setChartType('line')}
+              className={`p-1.5 rounded transition-colors ${
+                chartType === 'line' ? 'bg-[#F0B90B]/20 text-[#F0B90B]' : 'text-[#848E9C] hover:text-[#EAECEF]'
+              }`}
+            >
+              <LineChart className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setChartType('candle')}
+              className={`p-1.5 rounded transition-colors ${
+                chartType === 'candle' ? 'bg-[#F0B90B]/20 text-[#F0B90B]' : 'text-[#848E9C] hover:text-[#EAECEF]'
+              }`}
+            >
+              <CandlestickChart className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setChartType('depth')}
+              className={`p-1.5 rounded transition-colors ${
+                chartType === 'depth' ? 'bg-[#F0B90B]/20 text-[#F0B90B]' : 'text-[#848E9C] hover:text-[#EAECEF]'
+              }`}
+            >
+              <GanttChartSquare className="w-4 h-4" />
+            </button>
           </div>
-        </motion.div>
+        </div>
+        
+        <MiniChart 
+          data={chartData} 
+          type={chartType} 
+          height={chartExpanded ? 64 : 32}
+        />
 
-        {/* ===== SPOT TAB ===== */}
-        {activeTab === 'spot' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            {/* Buy/Sell/BorrowRepay */}
-            <div className="grid grid-cols-3 gap-2 mb-6">
-              <button
-                onClick={() => setSpotSide('buy')}
-                className={`py-3 rounded-lg text-sm font-medium ${
-                  spotSide === 'buy'
-                    ? 'bg-[#0ECB81] text-[#0B0E11]'
-                    : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
-                }`}
-              >
-                Buy
-              </button>
-              <button
-                onClick={() => setSpotSide('sell')}
-                className={`py-3 rounded-lg text-sm font-medium ${
-                  spotSide === 'sell'
-                    ? 'bg-[#F6465D] text-white'
-                    : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
-                }`}
-              >
-                Sell
-              </button>
-              <button 
-                onClick={() => navigate('/loan')}
-                className="py-3 rounded-lg text-sm font-medium bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]"
-              >
-                Borrow/Repay
-              </button>
-            </div>
-
-            {/* Market Price */}
-            <div className="mb-4">
-              <div className="text-xs text-[#848E9C] mb-1">Market</div>
-              <div className="text-lg font-mono text-[#EAECEF]">{displayPrice.toFixed(2)}</div>
-            </div>
-
-            {/* Order Book - Two Column */}
-            <div className="grid grid-cols-2 gap-6 mb-6">
-              {/* Price Column */}
-              <div>
-                <div className="text-xs text-[#848E9C] mb-2">Price (USDT)</div>
-                <div className="space-y-1">
-                  {spotOrderBookAsks.map((ask, i) => (
-                    <div key={i} className="text-sm font-mono text-[#F6465D]">{ask.price.toFixed(2)}</div>
-                  ))}
-                  <div className="text-sm font-mono text-[#EAECEF] font-bold border-t border-b border-[#2B3139] py-1 my-1">
-                    {displayPrice.toFixed(2)}
-                  </div>
-                  {spotOrderBookBids.map((bid, i) => (
-                    <div key={i} className="text-sm font-mono text-[#0ECB81]">{bid.price.toFixed(2)}</div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Available Column */}
-              <div>
-                <div className="text-xs text-[#848E9C] mb-2">Available ({selectedPair.baseAsset})</div>
-                <div className="space-y-1">
-                  {spotOrderBookAsks.map((ask, i) => (
-                    <div key={i} className="text-sm font-mono text-[#B7BDC6] text-right">{ask.quantity.toFixed(3)}</div>
-                  ))}
-                  <div className="text-sm font-mono text-[#EAECEF] font-bold border-t border-b border-[#2B3139] py-1 my-1 text-right">
-                    0.00000
-                  </div>
-                  {spotOrderBookBids.map((bid, i) => (
-                    <div key={i} className="text-sm font-mono text-[#B7BDC6] text-right">{bid.quantity.toFixed(3)}</div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Trading Form */}
-            <div className="space-y-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-[#848E9C]">Available</span>
-                <span className="text-[#EAECEF]">
-                  {hideBalances ? '••••' : formatCurrency(Number(getTradingBalance('USDT')) || 0)} USDT
-                </span>
-              </div>
-
-              <div className="flex justify-between text-sm">
-                <span className="text-[#848E9C]">Est. fee</span>
-                <span className="text-[#EAECEF]">-- USDT</span>
-              </div>
-
-              <input
-                type="number"
-                value={spotAmount}
-                onChange={(e) => setSpotAmount(e.target.value)}
-                placeholder="0.00"
-                className="w-full bg-[#1E2329] border border-[#2B3139] rounded-lg px-4 py-3 text-[#EAECEF] font-mono placeholder-[#5E6673] focus:outline-none focus:border-[#F0B90B] transition-colors"
+        {/* Trading Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Left Column - Order Book */}
+          <div className="order-2 lg:order-1">
+            {orderBook && (
+              <OrderBook 
+                bids={orderBook.bids} 
+                asks={orderBook.asks} 
+                currentPrice={displayPrice}
+                showTotal={true}
               />
+            )}
+          </div>
 
-              <div className="space-y-1">
-                {spotOrderBookBids.map((bid, i) => (
-                  <div key={i} className="flex justify-between text-xs">
-                    <span className="text-[#0ECB81] font-mono">{bid.price.toFixed(2)}</span>
-                    <span className="text-[#B7BDC6]">{bid.quantity.toFixed(3)}</span>
-                  </div>
-                ))}
-              </div>
+          {/* Right Column - Trading Form */}
+          <div className="order-1 lg:order-2">
+            {activeTab === 'option' && (
+              <OptionsTradingForm
+                direction={optionDirection}
+                onDirectionChange={setOptionDirection}
+                duration={optionDuration}
+                onDurationClick={() => setShowDurationModal(true)}
+                fluctuation={optionFluctuation}
+                onFluctuationClick={() => setShowFluctuationModal(true)}
+                amount={optionAmount}
+                onAmountChange={setOptionAmount}
+                onTrade={handleOptionTrade}
+                balance={getTradingBalance('USDT')}
+                hideBalance={hideBalances}
+                isScheduled={isScheduled}
+                onScheduleClick={() => setShowScheduledModal(true)}
+                disabled={marketLoading || !!processingOrder}
+              />
+            )}
+          </div>
+        </div>
+      </div>
 
-              <BinanceButton
-                variant={spotSide === 'buy' ? 'success' : 'danger'}
-                onClick={handleSpotTrade}
-                disabled={!spotAmount || parseFloat(spotAmount) <= 0}
-              >
-                {spotSide === 'buy' ? 'Buy' : 'Sell'} {selectedPair.baseAsset}
-              </BinanceButton>
-            </div>
-          </motion.div>
-        )}
-
-        {/* ===== FUTURES TAB ===== */}
-        {activeTab === 'future' && (
+      {/* Duration Modal */}
+      <AnimatePresence>
+        {showDurationModal && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 flex items-end justify-center z-50 p-4"
+            onClick={() => setShowDurationModal(false)}
           >
-            {/* Open/Close/BorrowRepay */}
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <button
-                onClick={() => setFuturesTradeType('open')}
-                className={`py-3 rounded-lg text-sm font-medium ${
-                  futuresTradeType === 'open'
-                    ? 'bg-[#F0B90B] text-[#0B0E11]'
-                    : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
-                }`}
-              >
-                Open
-              </button>
-              <button
-                onClick={() => setFuturesTradeType('close')}
-                className={`py-3 rounded-lg text-sm font-medium ${
-                  futuresTradeType === 'close'
-                    ? 'bg-[#F0B90B] text-[#0B0E11]'
-                    : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
-                }`}
-              >
-                Close
-              </button>
-              <button className="py-3 rounded-lg text-sm font-medium bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]">
-                Borrow/Repay
-              </button>
-            </div>
-
-            {/* Leverage */}
-            <div className="flex items-center justify-end mb-4">
-              <button
-                onClick={() => setShowLeverageModal(true)}
-                className="flex items-center space-x-1 bg-[#1E2329] px-3 py-1 rounded-lg hover:bg-[#2B3139] transition-colors"
-              >
-                <span className="text-[#F0B90B] font-medium">{futuresLeverage}x</span>
-                <ChevronDown className="h-4 w-4 text-[#848E9C]" />
-              </button>
-            </div>
-
-            {/* Market Price */}
-            <div className="mb-4">
-              <div className="text-xs text-[#848E9C] mb-1">Market</div>
-              <div className="text-lg font-mono text-[#EAECEF]">{displayPrice.toFixed(2)}</div>
-            </div>
-
-            {/* Order Book - Two Column */}
-            <div className="grid grid-cols-2 gap-6 mb-6">
-              {/* Price Column */}
-              <div>
-                <div className="text-xs text-[#848E9C] mb-2">Price (USDT)</div>
-                <div className="space-y-1">
-                  {futuresOrderBookAsks.map((ask, i) => (
-                    <div key={i} className="text-sm font-mono text-[#F6465D]">{ask.price.toFixed(2)}</div>
-                  ))}
-                  <div className="text-sm font-mono text-[#EAECEF] font-bold border-t border-b border-[#2B3139] py-1 my-1">
-                    {displayPrice.toFixed(2)}
-                  </div>
-                  {futuresOrderBookBids.map((bid, i) => (
-                    <div key={i} className="text-sm font-mono text-[#0ECB81]">{bid.price.toFixed(2)}</div>
-                  ))}
-                </div>
+            <motion.div
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              transition={slideUp.transition}
+              className="bg-[#1E2329] border border-[#2B3139] rounded-t-2xl w-full max-w-md"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-[#2B3139]">
+                <h3 className="text-lg font-semibold text-[#EAECEF]">Select Duration</h3>
               </div>
-
-              {/* Available Column */}
-              <div>
-                <div className="text-xs text-[#848E9C] mb-2">Available ({selectedPair.baseAsset})</div>
-                <div className="space-y-1">
-                  {futuresOrderBookAsks.map((ask, i) => (
-                    <div key={i} className="text-sm font-mono text-[#B7BDC6] text-right">{ask.quantity.toFixed(3)}</div>
-                  ))}
-                  <div className="text-sm font-mono text-[#EAECEF] font-bold border-t border-b border-[#2B3139] py-1 my-1 text-right">
-                    0.000
-                  </div>
-                  {futuresOrderBookBids.map((bid, i) => (
-                    <div key={i} className="text-sm font-mono text-[#B7BDC6] text-right">{bid.quantity.toFixed(3)}</div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Trading Form */}
-            <div className="space-y-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-[#848E9C]">Buy Hands</span>
-                <span className="text-[#EAECEF]">{selectedPair.baseAsset}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#848E9C]">≈${displayPrice.toFixed(2)}</span>
-              </div>
-
-              <div className="grid grid-cols-4 gap-2">
-                {[0, 25, 50, 75].map(p => (
+              <div className="p-4 space-y-2 max-h-96 overflow-y-auto">
+                {OPTIONS_TIMEFRAMES.map(option => (
                   <button
-                    key={p}
+                    key={option.value}
                     onClick={() => {
-                      setFuturesPercentage(p);
-                      if (p > 0) {
-                        const balance = getTradingBalance('USDT');
-                        setFuturesAmount(((balance * p) / 100).toFixed(3));
-                      } else {
-                        setFuturesAmount('');
-                      }
+                      setOptionDuration(option.value);
+                      setOptionFluctuation(option.move);
+                      setShowDurationModal(false);
                     }}
-                    className={`py-3 rounded text-sm ${
-                      futuresPercentage === p
-                        ? 'bg-[#F0B90B] text-[#0B0E11]'
-                        : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
+                    className={`w-full flex items-center justify-between p-4 rounded-lg ${
+                      optionDuration === option.value
+                        ? 'bg-[#F0B90B]/20 border border-[#F0B90B]'
+                        : 'bg-[#2B3139] hover:bg-[#323A45]'
                     }`}
                   >
-                    {p}%
+                    <div>
+                      <span className="text-[#EAECEF] font-medium">{option.label}</span>
+                      <span className="text-xs text-[#848E9C] block mt-1">
+                        Payout: {option.profitPercent}% • Min: ${option.minStake} • Max: ${option.maxStake}
+                      </span>
+                    </div>
+                    {optionDuration === option.value && (
+                      <CheckCircle className="w-5 h-5 text-[#F0B90B]" />
+                    )}
                   </button>
                 ))}
               </div>
-
-              <input
-                type="number"
-                value={futuresAmount}
-                onChange={(e) => {
-                  setFuturesAmount(e.target.value);
-                  setFuturesPercentage(0);
-                }}
-                placeholder="0.000"
-                className="w-full bg-[#1E2329] border border-[#2B3139] rounded-lg px-4 py-3 text-[#EAECEF] font-mono placeholder-[#5E6673] focus:outline-none focus:border-[#F0B90B] transition-colors"
-              />
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="tpSl"
-                  checked={tpSlEnabled}
-                  onChange={(e) => setTpSlEnabled(e.target.checked)}
-                  className="rounded bg-[#1E2329] border-[#2B3139] accent-[#F0B90B]"
-                />
-                <label htmlFor="tpSl" className="text-sm text-[#848E9C]">
-                  Take Profit / Stop Lose
-                </label>
-              </div>
-
-              <div className="flex justify-between text-sm">
-                <span className="text-[#848E9C]">Available</span>
-                <span className="text-[#EAECEF]">{getTradingBalance('USDT').toFixed(2)} USDT</span>
-              </div>
-
-              <div className="flex justify-between text-sm">
-                <span className="text-[#848E9C]">Max open</span>
-                <span className="text-[#EAECEF]">{((getTradingBalance('USDT') * futuresLeverage) / displayPrice).toFixed(2)}</span>
-              </div>
-
-              <BinanceButton
-                variant="primary"
-                onClick={handleFuturesTrade}
-                disabled={!futuresAmount || parseFloat(futuresAmount) <= 0}
-              >
-                Buy
-              </BinanceButton>
-            </div>
+            </motion.div>
           </motion.div>
         )}
+      </AnimatePresence>
 
-        {/* ===== OPTIONS TAB ===== */}
-        {activeTab === 'option' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            {/* Up/Down/BorrowRepay */}
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <button
-                onClick={() => setOptionDirection('up')}
-                className={`py-3 rounded-lg text-sm font-medium ${
-                  optionDirection === 'up'
-                    ? 'bg-[#0ECB81] text-[#0B0E11]'
-                    : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
-                }`}
-              >
-                Up
-              </button>
-              <button
-                onClick={() => setOptionDirection('down')}
-                className={`py-3 rounded-lg text-sm font-medium ${
-                  optionDirection === 'down'
-                    ? 'bg-[#F6465D] text-white'
-                    : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
-                }`}
-              >
-                Down
-              </button>
-              <button className="py-3 rounded-lg text-sm font-medium bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]">
-                Borrow/Repay
-              </button>
-            </div>
+      {/* Resizable Order History */}
+      <div 
+        ref={resizeRef}
+        className="fixed bottom-0 left-0 right-0 z-40 bg-[#1E2329] border-t border-[#2B3139]"
+        style={{ height: orderHistoryHeight }}
+      >
+        {/* Resize Handle */}
+        <div
+          className="absolute top-0 left-0 right-0 h-1 cursor-ns-resize hover:bg-[#F0B90B]/50 transition-colors"
+          onMouseDown={handleResizeStart}
+        />
 
-            {/* Open Position Now / Scheduled Time */}
-            <div className="flex gap-2 mb-4">
-              <button
-                onClick={() => setIsScheduled(false)}
-                className={`flex-1 py-3 rounded-lg text-sm font-medium transition-colors ${
-                  !isScheduled
-                    ? 'bg-[#F0B90B] text-[#0B0E11]'
-                    : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
-                }`}
-              >
-                Open Position Now
-              </button>
-              <button
-                onClick={() => setShowScheduledModal(true)}
-                className={`flex-1 py-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1 ${
-                  isScheduled
-                    ? 'bg-[#F0B90B] text-[#0B0E11]'
-                    : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
-                }`}
-              >
-                <Clock className="w-4 h-4" />
-                Scheduled Time
-              </button>
-            </div>
-
-            {/* Options Order Book - Clean Layout */}
-            <div className="space-y-4 mb-6">
-              {/* Header */}
-              <div className="grid grid-cols-3 gap-4 text-xs text-[#848E9C]">
-                <span>Price (USDT)</span>
-                <span className="text-center">Available ({selectedPair.baseAsset})</span>
-                <span className="text-right">Total</span>
-              </div>
-
-              {/* Asks */}
-              <div className="space-y-1">
-                {optionsOrderBookAsks.map((ask, i) => {
-                  const priceChange = ask.price > displayPrice ? 'text-[#F6465D]' : 'text-[#0ECB81]';
-                  return (
-                    <div key={i} className="grid grid-cols-3 gap-4 text-sm">
-                      <span className={`font-mono ${priceChange}`}>{ask.price.toFixed(2)}</span>
-                      <span className="text-[#B7BDC6] font-mono text-center">{ask.quantity.toFixed(3)}</span>
-                      <span className="text-[#848E9C] font-mono text-right">
-                        {(ask.price * ask.quantity).toFixed(2)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Current Price */}
-              <div className="grid grid-cols-3 gap-4 items-center py-2 border-y border-[#2B3139]">
-                <span className={`font-bold font-mono ${
-                  priceDirection === 'up' ? 'text-[#0ECB81]' : 
-                  priceDirection === 'down' ? 'text-[#F6465D]' : 'text-[#EAECEF]'
-                }`}>
-                  {displayPrice.toFixed(2)} {priceDirection === 'up' ? '↑' : priceDirection === 'down' ? '↓' : '→'}
-                </span>
-                <span className="text-xs text-[#848E9C] text-center">≈${displayPrice.toFixed(2)}</span>
-                <span className="text-[#848E9C] text-right">0.000</span>
-              </div>
-
-              {/* Bids */}
-              <div className="space-y-1">
-                {optionsOrderBookBids.map((bid, i) => {
-                  const priceChange = bid.price > displayPrice ? 'text-[#F6465D]' : 'text-[#0ECB81]';
-                  return (
-                    <div key={i} className="grid grid-cols-3 gap-4 text-sm">
-                      <span className={`font-mono ${priceChange}`}>{bid.price.toFixed(2)}</span>
-                      <span className="text-[#B7BDC6] font-mono text-center">{bid.quantity.toFixed(3)}</span>
-                      <span className="text-[#848E9C] font-mono text-right">
-                        {(bid.price * bid.quantity).toFixed(2)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Options Trading Form */}
-            <div className="space-y-4">
-              {/* Purchase Range */}
-              <div className="flex justify-between text-sm">
-                <span className="text-[#848E9C]">Purchase Range</span>
-                <span className="text-[#EAECEF]">
-                  {PURCHASE_RANGES[optionDuration as keyof typeof PURCHASE_RANGES].min}-
-                  {PURCHASE_RANGES[optionDuration as keyof typeof PURCHASE_RANGES].max}
-                </span>
-              </div>
-
-              {/* Duration Selection */}
-              <div className="flex justify-between text-sm">
-                <span className="text-[#848E9C]">Duration</span>
-                <button 
-                  onClick={() => setShowDurationModal(true)}
-                  className="text-[#F0B90B] hover:text-[#F0B90B]/80 transition-colors flex items-center gap-1"
-                >
-                  {OPTIONS_TIMEFRAMES.find(tf => tf.value === optionDuration)?.label || '60s'}
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Fluctuation Range */}
-              <div className="flex justify-between text-sm">
-                <span className="text-[#848E9C]">Fluctuation</span>
-                <button 
-                  onClick={() => setShowFluctuationModal(true)}
-                  className="text-[#F0B90B] hover:text-[#F0B90B]/80 transition-colors flex items-center gap-1"
-                >
-                  {FLUCTUATION_RANGES[optionDuration as keyof typeof FLUCTUATION_RANGES]?.find(
-                    f => f.value === optionFluctuation
-                  )?.label || 'UP > 0.01%'}
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Available */}
-              <div className="flex justify-between text-sm">
-                <span className="text-[#848E9C]">Available</span>
-                <span className="text-[#EAECEF]">
-                  {hideBalances ? '••••' : formatCurrency(Number(getTradingBalance('USDT')) || 0)} USDT
-                </span>
-              </div>
-
-              {/* Expected Profit */}
-              {optionAmount && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-[#848E9C]">Expected Profit</span>
-                  <span className="text-[#0ECB81] font-mono">
-                    +${(parseFloat(optionAmount) * optionPayout).toFixed(2)} USDT
-                  </span>
-                </div>
-              )}
-
-              {/* Amount Input */}
-              <input
-                type="number"
-                value={optionAmount}
-                onChange={(e) => {
-                  setOptionAmount(e.target.value);
-                  setOptionPercentage(0);
-                }}
-                placeholder="Enter amount"
-                className="w-full bg-[#1E2329] border border-[#2B3139] rounded-lg px-4 py-3 text-[#EAECEF] font-mono placeholder-[#5E6673] focus:outline-none focus:border-[#F0B90B] transition-colors"
-              />
-
-              {/* Percentage Buttons */}
-              <div className="grid grid-cols-4 gap-2">
-                {[25, 50, 75, 100].map(p => {
-                  const max = PURCHASE_RANGES[optionDuration as keyof typeof PURCHASE_RANGES].max;
-                  const amount = Math.floor(max * (p / 100));
-                  return (
-                    <button
-                      key={p}
-                      onClick={() => {
-                        setOptionAmount(amount.toString());
-                        setOptionPercentage(p);
-                      }}
-                      className={`py-3 rounded text-sm ${
-                        optionPercentage === p
-                          ? 'bg-[#F0B90B] text-[#0B0E11]'
-                          : 'bg-[#1E2329] text-[#848E9C] hover:text-[#EAECEF]'
-                      }`}
-                    >
-                      {p}%
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Buy Button */}
-              <BinanceButton
-                variant="primary"
-                onClick={handleOptionTrade}
-                disabled={!optionAmount || parseFloat(optionAmount) <= 0}
-              >
-                {isScheduled ? 'Schedule Trade' : 'Buy'}
-              </BinanceButton>
-            </div>
-          </motion.div>
-        )}
-      </div>
-
-      {/* ===== BOTTOM TABS ===== */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#1E2329] border-t border-[#2B3139] flex flex-col" style={{ maxHeight: '50vh' }}>
-        {/* Tabs Header - Fixed */}
-        <div className="flex border-b border-[#2B3139] flex-shrink-0">
+        {/* Tab Headers */}
+        <div className="flex border-b border-[#2B3139] overflow-x-auto">
           {activeTab === 'option' ? (
-            // Options Tabs
             <>
               <button
                 onClick={() => setActiveBottomTab('active')}
-                className={`flex-1 py-3 text-sm ${
+                className={`flex-1 py-3 text-sm border-b-2 whitespace-nowrap transition-colors ${
                   activeBottomTab === 'active'
-                    ? 'text-[#F0B90B] border-b-2 border-[#F0B90B]'
-                    : 'text-[#848E9C]'
+                    ? 'border-[#F0B90B] text-[#F0B90B]'
+                    : 'border-transparent text-[#848E9C] hover:text-[#EAECEF]'
                 }`}
               >
                 Active ({activeOrders.length})
               </button>
               <button
                 onClick={() => setActiveBottomTab('scheduled')}
-                className={`flex-1 py-3 text-sm ${
+                className={`flex-1 py-3 text-sm border-b-2 whitespace-nowrap transition-colors ${
                   activeBottomTab === 'scheduled'
-                    ? 'text-[#F0B90B] border-b-2 border-[#F0B90B]'
-                    : 'text-[#848E9C]'
+                    ? 'border-[#F0B90B] text-[#F0B90B]'
+                    : 'border-transparent text-[#848E9C] hover:text-[#EAECEF]'
                 }`}
               >
                 Scheduled ({scheduledOrders.length})
               </button>
               <button
                 onClick={() => setActiveBottomTab('completed')}
-                className={`flex-1 py-3 text-sm ${
+                className={`flex-1 py-3 text-sm border-b-2 whitespace-nowrap transition-colors ${
                   activeBottomTab === 'completed'
-                    ? 'text-[#F0B90B] border-b-2 border-[#F0B90B]'
-                    : 'text-[#848E9C]'
+                    ? 'border-[#F0B90B] text-[#F0B90B]'
+                    : 'border-transparent text-[#848E9C] hover:text-[#EAECEF]'
                 }`}
               >
-                Completed ({completedOrders.length})
-              </button>
-            </>
-          ) : activeTab === 'future' ? (
-            // Futures Tabs
-            <>
-              <button
-                onClick={() => setActiveBottomTab('positions')}
-                className={`flex-1 py-3 text-sm ${
-                  activeBottomTab === 'positions'
-                    ? 'text-[#F0B90B] border-b-2 border-[#F0B90B]'
-                    : 'text-[#848E9C]'
-                }`}
-              >
-                Positions
-              </button>
-              <button
-                onClick={() => setActiveBottomTab('open')}
-                className={`flex-1 py-3 text-sm ${
-                  activeBottomTab === 'open'
-                    ? 'text-[#F0B90B] border-b-2 border-[#F0B90B]'
-                    : 'text-[#848E9C]'
-                }`}
-              >
-                Open orders
-              </button>
-              <button
-                onClick={() => setActiveBottomTab('closed')}
-                className={`flex-1 py-3 text-sm ${
-                  activeBottomTab === 'closed'
-                    ? 'text-[#F0B90B] border-b-2 border-[#F0B90B]'
-                    : 'text-[#848E9C]'
-                }`}
-              >
-                Closed Orders
+                Completed ({uniqueCompletedOrders.length})
               </button>
             </>
           ) : (
-            // Spot Tabs
-            <>
-              <button
-                onClick={() => setActiveBottomTab('open')}
-                className={`flex-1 py-3 text-sm ${
-                  activeBottomTab === 'open'
-                    ? 'text-[#F0B90B] border-b-2 border-[#F0B90B]'
-                    : 'text-[#848E9C]'
-                }`}
-              >
-                Open orders
-              </button>
-              <button
-                onClick={() => setActiveBottomTab('completed')}
-                className={`flex-1 py-3 text-sm ${
-                  activeBottomTab === 'completed'
-                    ? 'text-[#F0B90B] border-b-2 border-[#F0B90B]'
-                    : 'text-[#848E9C]'
-                }`}
-              >
-                Completed
-              </button>
-              <button
-                onClick={() => setActiveBottomTab('assets')}
-                className={`flex-1 py-3 text-sm ${
-                  activeBottomTab === 'assets'
-                    ? 'text-[#F0B90B] border-b-2 border-[#F0B90B]'
-                    : 'text-[#848E9C]'
-                }`}
-              >
-                Assets
-              </button>
-            </>
+            <div className="p-4 text-[#848E9C]">Other trading modes coming soon...</div>
           )}
         </div>
 
-        {/* Scrollable Content */}
-        <div className="overflow-y-auto flex-1 min-h-0" style={{ maxHeight: 'calc(50vh - 48px)' }}>
-          {activeTab === 'option' ? (
-            // Options Tab Content
-            <>
-              {activeBottomTab === 'active' && (
-                <div className="px-4 py-4 space-y-3">
-                  <h3 className="text-[#EAECEF] font-medium mb-3">Active Options</h3>
-                  {activeOrders.length > 0 ? (
-                    activeOrders.map((order) => (
-                      <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
-                        <div className="flex justify-between items-center mb-3">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs text-[#848E9C] font-mono">#{order.id.slice(0,8)}</span>
-                            <div className="flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-[#0ECB81]/20 text-[#0ECB81] border border-[#0ECB81]/30">
-                              <div className="w-2 h-2 bg-[#0ECB81] rounded-full animate-pulse" />
-                              active
-                            </div>
-                          </div>
-                          
-                          {/* Countdown Timer */}
-                          {order.expiryTime && new Date(order.expiryTime) > new Date() ? (
-                            <div className="flex items-center space-x-1">
-                              <Clock className="w-3 h-3 text-[#848E9C]" />
-                              <Countdown
-                                date={new Date(order.expiryTime)}
-                                renderer={CountdownRenderer}
-                              />
-                            </div>
-                          ) : (
-                            <div className="flex items-center space-x-1">
-                              <Clock className="w-3 h-3 text-[#848E9C]" />
-                              <span className="text-xs text-[#848E9C]">
-                                {order.expiryTime ? `Expires: ${new Date(order.expiryTime).toLocaleTimeString()}` : 'No expiry'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Main Trade Info */}
-                        <div className="grid grid-cols-2 gap-3 mb-3">
-                          <div className="flex items-center space-x-2">
-                            <div className={`p-1.5 rounded-lg ${
-                              order.direction === 'UP' 
-                                ? 'bg-[#0ECB81]/20 text-[#0ECB81]' 
-                                : 'bg-[#F6465D]/20 text-[#F6465D]'
-                            }`}>
-                              {order.direction === 'UP' ? (
-                                <TrendingUp className="w-4 h-4" />
-                              ) : (
-                                <TrendingDown className="w-4 h-4" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-[#EAECEF]">
-                                {order.symbol}
-                              </div>
-                              <div className="text-sm text-[#B7BDC6] font-mono">
-                                ${typeof order.entryPrice === 'number' ? order.entryPrice.toFixed(2) : displayPrice.toFixed(2)}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="text-right">
-                            <div className="text-sm font-medium text-[#EAECEF]">
-                              ${order.amount}
-                            </div>
-                            <div className="text-xs text-[#848E9C]">
-                              {order.duration}s
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Price Details */}
-                        <div className="flex justify-between items-center pt-3 border-t border-[#3A3F4A]">
-                          <div className="flex items-center space-x-4">
-                            <div>
-                              <div className="text-xs text-[#848E9C]">Entry</div>
-                              <div className="text-sm text-[#B7BDC6] font-mono">
-                                ${typeof order.entryPrice === 'number' ? order.entryPrice.toFixed(2) : order.entryPrice}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-xs text-[#848E9C]">Current</div>
-                              <div className={`text-sm font-mono ${
-                                (order.direction === 'UP' && displayPrice > (order.entryPrice || 0)) ||
-                                (order.direction === 'DOWN' && displayPrice < (order.entryPrice || 0))
-                                  ? 'text-[#0ECB81]'
-                                  : 'text-[#F6465D]'
-                              }`}>
-                                ${displayPrice.toFixed(2)}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="text-sm font-medium text-[#F0B90B]">
-                            +${order.payout ? (order.amount * order.payout).toFixed(2) : '0'} est.
-                          </div>
-                        </div>
-
-                        {/* Countdown Timer Bar */}
-                        {order.expiryTime && (
-                          <div className="mt-3 pt-3 border-t border-[#3A3F4A]">
-                            <TradingCountdownBar
-                              expiryTime={order.expiryTime}
-                              size="sm"
-                              showLabel={true}
-                              className="mb-2"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-[#848E9C] text-sm text-center py-8">
-                      No active orders
-                    </div>
-                  )}
+        {/* Tab Content - Scrollable */}
+        <div 
+          className="overflow-y-auto p-4"
+          style={{ height: orderHistoryHeight - 48 }}
+        >
+          {activeBottomTab === 'active' && (
+            <div className="space-y-2">
+              {activeOrders.length > 0 ? (
+                activeOrders.map(order => (
+                  <ActiveTradeCard
+                    key={order.id}
+                    trade={order}
+                    currentPrice={displayPrice}
+                    onExpire={handleOrderExpire}
+                  />
+                ))
+              ) : (
+                <div className="text-center py-8 text-[#848E9C] text-sm">
+                  No active trades
                 </div>
               )}
-              
-              {activeBottomTab === 'scheduled' && (
-                <div className="px-4 py-4 space-y-3">
-                  <h3 className="text-[#EAECEF] font-medium mb-3">Scheduled Orders</h3>
-                  {scheduledOrders.length > 0 ? (
-                    scheduledOrders.map((order) => (
-                      <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
-                        <div className="flex justify-between items-center mb-3">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs text-[#848E9C] font-mono">#{order.id.slice(0,8)}</span>
-                            <div className="flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-[#F0B90B]/20 text-[#F0B90B] border border-[#F0B90B]/30">
-                              <div className="w-2 h-2 bg-[#F0B90B] rounded-full animate-pulse" />
-                              scheduled
-                            </div>
-                          </div>
-                          
-                          {/* Scheduled Time */}
-                          {order.scheduledTime && (
-                            <div className="flex items-center space-x-1">
-                              <Calendar className="w-3 h-3 text-[#848E9C]" />
-                              <span className="text-xs text-[#B7BDC6]">
-                                {new Date(order.scheduledTime).toLocaleTimeString()}
-                              </span>
-                            </div>
-                          )}
-                        </div>
+            </div>
+          )}
 
-                        {/* Main Trade Info */}
-                        <div className="grid grid-cols-2 gap-3 mb-3">
-                          <div className="flex items-center space-x-2">
-                            <div className={`p-1.5 rounded-lg ${
-                              order.direction === 'UP' 
-                                ? 'bg-[#0ECB81]/20 text-[#0ECB81]' 
-                                : 'bg-[#F6465D]/20 text-[#F6465D]'
-                            }`}>
-                              {order.direction === 'UP' ? (
-                                <TrendingUp className="w-4 h-4" />
-                              ) : (
-                                <TrendingDown className="w-4 h-4" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-[#EAECEF]">
-                                {order.symbol}
-                              </div>
-                              <div className="text-sm text-[#B7BDC6] font-mono">
-                                ${order.entryPrice?.toFixed(2) || displayPrice.toFixed(2)}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="text-right">
-                            <div className="text-sm font-medium text-[#EAECEF]">
-                              ${order.amount}
-                            </div>
-                            <div className="text-xs text-[#848E9C]">
-                              {order.duration}s
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex justify-end pt-3 border-t border-[#3A3F4A]">
-                          <button 
-                            onClick={async () => {
-                              try {
-                                const { supabase } = await import('@/lib/supabase');
-                                await supabase
-                                  .from('trades')
-                                  .update({ status: 'CANCELLED' })
-                                  .eq('id', order.id);
-                                setScheduledOrders(prev => prev.filter(o => o.id !== order.id));
-                                toast.success('Scheduled order cancelled');
-                              } catch (error) {
-                                console.error('Error cancelling order:', error);
-                                toast.error('Failed to cancel order');
-                              }
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-[#F6465D]/20 text-[#F6465D] hover:bg-[#F6465D]/30 transition-colors text-xs font-medium"
-                          >
-                            Cancel Order
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-[#848E9C] text-sm text-center py-8">
-                      No scheduled orders
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {activeBottomTab === 'completed' && (
-                <div className="px-4 py-4 space-y-3">
-                  <h3 className="text-[#EAECEF] font-medium mb-3">
-                    {activeTab === 'option' ? 'Completed Options' : 
-                     activeTab === 'future' ? 'Completed Futures' : 'Completed Spot'}
-                  </h3>
-                  {completedOrders.length > 0 ? (
-                    completedOrders.map((order) => (
-                      <CompletedOrderCard key={order.id} order={order} />
-                    ))
-                  ) : (
-                    <div className="text-[#848E9C] text-sm text-center py-8">
-                      No completed orders yet
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          ) : activeTab === 'future' ? (
-            // Futures Tab Content
-            <>
-              {activeBottomTab === 'positions' && (
-                <div className="px-4 py-4 space-y-3">
-                  <h3 className="text-[#EAECEF] font-medium mb-3">Open Positions</h3>
-                  {futuresPositions.length > 0 ? (
-                    futuresPositions.map((position) => (
-                      <div key={position.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
-                        <div className="flex justify-between items-center mb-3">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs text-[#848E9C] font-mono">#{position.id.slice(0,8)}</span>
-                            <div className="flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-[#0ECB81]/20 text-[#0ECB81] border border-[#0ECB81]/30">
-                              <div className="w-2 h-2 bg-[#0ECB81] rounded-full animate-pulse" />
-                              {position.status}
-                            </div>
-                          </div>
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            position.side === 'long' ? 'bg-[#0ECB81]/20 text-[#0ECB81]' : 'bg-[#F6465D]/20 text-[#F6465D]'
+          {activeBottomTab === 'scheduled' && (
+            <div className="space-y-2">
+              {scheduledOrders.length > 0 ? (
+                scheduledOrders.map(order => (
+                  <div key={order.id} className="bg-[#2B3139] rounded-lg p-4 border border-[#3A3F4A]">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-semibold ${
+                            order.direction === 'UP' ? 'text-[#0ECB81]' : 'text-[#F6465D]'
                           }`}>
-                            {position.side?.toUpperCase()}
+                            {order.direction}
                           </span>
+                          <span className="text-xs text-[#848E9C]">{order.symbol}</span>
                         </div>
-                        
-                        <div className="grid grid-cols-2 gap-3 mb-3">
-                          <div>
-                            <div className="text-xs text-[#848E9C]">Size</div>
-                            <div className="text-sm font-medium text-[#EAECEF]">
-                              {position.amount} {position.symbol?.replace('USDT', '')}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-[#848E9C]">Entry Price</div>
-                            <div className="text-sm text-[#B7BDC6] font-mono">
-                              ${position.price?.toFixed(2) || position.entryPrice?.toFixed(2)}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-[#848E9C]">Leverage</div>
-                            <div className="text-sm text-[#F0B90B] font-medium">
-                              {position.leverage}x
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-[#848E9C]">PnL</div>
-                            <div className={`text-sm font-medium ${
-                              (position.unrealizedPnl || 0) >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'
-                            }`}>
-                              ${position.unrealizedPnl?.toFixed(2) || '0'}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex justify-end pt-3 border-t border-[#3A3F4A]">
-                          <button 
-                            onClick={() => {
-                              setFuturesPositions(prev => prev.filter(p => p.id !== position.id));
-                              toast.success('Position closed');
-                            }}
-                            className="px-4 py-2 bg-[#F0B90B] text-[#0B0E11] rounded-lg text-sm font-medium hover:bg-[#F0B90B]/90 transition-colors"
-                          >
-                            Close Position
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-[#848E9C] text-sm text-center py-8">No open positions</div>
-                  )}
-                </div>
-              )}
-              
-              {activeBottomTab === 'open' && (
-                <div className="px-4 py-4 space-y-3">
-                  <h3 className="text-[#EAECEF] font-medium mb-3">Open Orders</h3>
-                  {futuresOrders.length > 0 ? (
-                    futuresOrders.map((order) => (
-                      <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-xs text-[#848E9C] font-mono">#{order.id.slice(0,8)}</span>
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            order.status === 'filled' ? 'bg-[#0ECB81]/20 text-[#0ECB81]' : 'bg-[#F0B90B]/20 text-[#F0B90B]'
-                          }`}>
-                            {order.status}
-                          </span>
-                        </div>
-                        <div className="text-sm text-[#B7BDC6]">
-                          <div className="flex justify-between mb-1">
-                            <span>{order.symbol} {order.side?.toString().toUpperCase()}</span>
-                            <span className="text-[#848E9C]">{new Date(order.timestamp).toLocaleTimeString()}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Amount: {order.amount} {order.symbol?.replace('USDT', '')}</span>
-                            <span className="text-[#848E9C]">Price: ${order.price?.toFixed(2)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-[#848E9C] text-sm text-center py-8">No open orders</div>
-                  )}
-                </div>
-              )}
-              
-              {activeBottomTab === 'closed' && (
-                <div className="px-4 py-4 space-y-3">
-                  <h3 className="text-[#EAECEF] font-medium mb-3">Closed Orders</h3>
-                  {completedOrders.length > 0 ? (
-                    completedOrders.map((order) => (
-                      <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-xs text-[#848E9C] font-mono">#{order.id.slice(0,8)}</span>
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            order.result === 'win' 
-                              ? 'bg-[#0ECB81]/20 text-[#0ECB81] border border-[#0ECB81]/30'
-                              : 'bg-[#F6465D]/20 text-[#F6465D] border border-[#F6465D]/30'
-                          }`}>
-                            {order.result || 'loss'}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <div className="text-sm text-[#848E9C]">Pair</div>
-                            <div className="text-sm font-medium text-[#EAECEF]">{order.symbol}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm text-[#848E9C]">Amount</div>
-                            <div className="text-sm font-medium text-[#EAECEF]">${order.amount}</div>
-                          </div>
-                        </div>
-                        {order.pnl !== undefined && (
-                          <div className="flex justify-between items-center pt-3 border-t border-[#3A3F4A]">
-                            <span className="text-sm text-[#848E9C]">PnL</span>
-                            <span className={`text-sm font-medium ${
-                              order.pnl >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'
-                            }`}>
-                              {order.pnl >= 0 ? '+' : ''}{order.pnl.toFixed(2)} USDT
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-[#848E9C] text-sm text-center py-8">No closed orders</div>
-                  )}
-                </div>
-              )}
-            </>
-          ) : (
-            // Spot Tab Content
-            <>
-              {activeBottomTab === 'open' && (
-                <div className="px-4 py-4 space-y-3">
-                  <h3 className="text-[#EAECEF] font-medium mb-3">Open Orders</h3>
-                  {spotOrders.length > 0 ? (
-                    spotOrders.map((order) => (
-                      <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-xs text-[#848E9C] font-mono">#{order.id.slice(0,8)}</span>
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            order.status === 'filled' ? 'bg-[#0ECB81]/20 text-[#0ECB81]' : 'bg-[#F0B90B]/20 text-[#F0B90B]'
-                          }`}>
-                            {order.status}
-                          </span>
-                        </div>
-                        <div className="text-sm text-[#B7BDC6]">
-                          <div className="flex justify-between mb-1">
-                            <span>{order.symbol} {order.side?.toString().toUpperCase()}</span>
-                            <span className="text-[#848E9C]">{new Date(order.timestamp).toLocaleTimeString()}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Amount: {order.amount} {order.symbol?.replace('USDT', '')}</span>
-                            <span className="text-[#848E9C]">Price: ${order.price?.toFixed(2)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-[#848E9C] text-sm text-center py-8">No open orders</div>
-                  )}
-                </div>
-              )}
-              
-              {activeBottomTab === 'completed' && (
-                <div className="px-4 py-4 space-y-3">
-                  <h3 className="text-[#EAECEF] font-medium mb-3">Completed Orders</h3>
-                  {completedOrders.length > 0 ? (
-                    completedOrders.map((order) => (
-                      <div key={order.id} className="bg-[#2B3139] rounded-xl p-4 border border-[#3A3F4A]">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-xs text-[#848E9C] font-mono">#{order.id.slice(0,8)}</span>
-                          <span className="text-xs px-2 py-1 rounded bg-[#0ECB81]/20 text-[#0ECB81]">
-                            completed
-                          </span>
-                        </div>
-                        <div className="text-sm text-[#B7BDC6]">
-                          <div className="flex justify-between mb-1">
-                            <span>{order.symbol} {order.side?.toString().toUpperCase()}</span>
-                            <span className="text-[#848E9C]">{new Date(order.timestamp).toLocaleTimeString()}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Amount: {order.amount} {order.symbol?.replace('USDT', '')}</span>
-                            <span className={`font-medium ${(order.pnl || 0) >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
-                              {order.pnl ? (order.pnl >= 0 ? '+' : '') + order.pnl.toFixed(2) : '0'} USDT
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-[#848E9C] text-sm text-center py-8">No completed orders</div>
-                  )}
-                </div>
-              )}
-
-              {activeBottomTab === 'assets' && (
-                <div className="px-4 py-4 space-y-3">
-                  <h3 className="text-[#EAECEF] font-medium mb-3">Your Assets</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center p-3 bg-[#2B3139] rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-[#F0B90B]/20 rounded-full flex items-center justify-center">
-                          <span className="text-[#F0B90B] font-bold">$</span>
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-[#EAECEF]">USDT</div>
-                          <div className="text-xs text-[#848E9C]">Tether</div>
+                        <div className="text-xs text-[#B7BDC6] mt-1">
+                          Stake: ${order.stake.toFixed(2)} • {order.duration}s • {order.fluctuation}%
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm font-medium text-[#EAECEF]">
-                          {hideBalances ? '••••' : getTradingBalance('USDT').toFixed(2)}
-                        </div>
-                        <div className="text-xs text-[#848E9C]">
-                          ≈ ${hideBalances ? '••••' : getTradingBalance('USDT').toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-between items-center p-3 bg-[#2B3139] rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-[#F0B90B]/20 rounded-full flex items-center justify-center">
-                          <span className="text-[#F0B90B] font-bold">₿</span>
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-[#EAECEF]">BTC</div>
-                          <div className="text-xs text-[#848E9C]">Bitcoin</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-medium text-[#EAECEF]">
-                          {hideBalances ? '••••' : '0.00000000'}
-                        </div>
-                        <div className="text-xs text-[#848E9C]">
-                          ≈ $0.00
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-between items-center p-3 bg-[#2B3139] rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-[#F0B90B]/20 rounded-full flex items-center justify-center">
-                          <span className="text-[#F0B90B] font-bold">Ξ</span>
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-[#EAECEF]">ETH</div>
-                          <div className="text-xs text-[#848E9C]">Ethereum</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-medium text-[#EAECEF]">
-                          {hideBalances ? '••••' : '0.00000000'}
-                        </div>
-                        <div className="text-xs text-[#848E9C]">
-                          ≈ $0.00
+                        <div className="text-xs text-[#848E9C]">Scheduled</div>
+                        <div className="text-xs font-mono text-[#F0B90B]">
+                          {new Date(order.scheduledTime * 1000).toLocaleTimeString()}
                         </div>
                       </div>
                     </div>
                   </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-[#848E9C] text-sm">
+                  No scheduled trades
                 </div>
               )}
-            </>
+            </div>
           )}
-        </div>
 
-        {/* Footer - Fixed */}
-        <div className="flex-shrink-0">
-          <div className="py-3 text-center border-t border-[#2B3139]">
-            <button 
-              onClick={() => navigate(`/trading/${symbol}/chart`)}
-              className="text-[#F0B90B] text-sm flex items-center justify-center space-x-2 hover:text-[#F0B90B]/80 transition-colors"
-            >
-              <BarChart3 className="h-4 w-4" />
-              <span>{selectedPair.baseAsset} Chart</span>
-            </button>
-          </div>
-          <div className="py-2 text-center text-xs text-[#848E9C]">
-            kryvex.com
-          </div>
+          {activeBottomTab === 'completed' && (
+            <div className="space-y-2">
+              {uniqueCompletedOrders.length > 0 ? (
+                uniqueCompletedOrders.map(order => (
+                  <CompletedOrderCard key={order.id} order={order} />
+                ))
+              ) : (
+                <div className="text-center py-8 text-[#848E9C] text-sm">
+                  No completed trades
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ===== ASSET SELECTOR MODAL ===== */}
-      <AssetSelectorModal
-        isOpen={showAssetSelector}
-        onClose={() => setShowAssetSelector(false)}
-        onSelect={handleAssetSelect}
-        currentCategory={selectedPair.category}
-      />
-
-      {/* ===== MODALS ===== */}
-
-      {/* Leverage Modal */}
+      {/* Fluctuation Modal */}
       <AnimatePresence>
-        {showLeverageModal && (
+        {showFluctuationModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 z-50 flex items-end justify-center p-4"
-            onClick={() => setShowLeverageModal(false)}
+            className="fixed inset-0 bg-black/80 flex items-end justify-center z-50 p-4"
+            onClick={() => setShowFluctuationModal(false)}
           >
             <motion.div
-              initial={{ y: 100, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 100, opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              transition={slideUp.transition}
               className="bg-[#1E2329] border border-[#2B3139] rounded-t-2xl w-full max-w-md"
               onClick={e => e.stopPropagation()}
             >
               <div className="p-4 border-b border-[#2B3139]">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-[#EAECEF]">Select Leverage</h3>
-                  <motion.button 
-                    whileHover={{ scale: 1.1, rotate: 90 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setShowLeverageModal(false)}
-                    className="p-1 hover:bg-[#2B3139] rounded-lg transition-colors"
-                  >
-                    <X className="w-5 h-5 text-[#848E9C]" />
-                  </motion.button>
-                </div>
+                <h3 className="text-lg font-semibold text-[#EAECEF]">Fluctuation Range</h3>
               </div>
-              <div className="p-4 grid grid-cols-3 gap-3">
-                {LEVERAGE_OPTIONS.map(lev => (
-                  <motion.button
-                    key={lev}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+              <div className="p-4 space-y-2">
+                {FLUCTUATION_RANGES[optionDuration]?.map((range, idx) => (
+                  <button
+                    key={idx}
                     onClick={() => {
-                      setFuturesLeverage(lev);
-                      setShowLeverageModal(false);
+                      setOptionFluctuation(range.value);
+                      setShowFluctuationModal(false);
                     }}
-                    className={`p-3 rounded-lg text-center ${
-                      futuresLeverage === lev
-                        ? 'bg-[#F0B90B] text-[#0B0E11]'
-                        : 'bg-[#2B3139] text-[#848E9C] hover:bg-[#373B42]'
+                    className={`w-full flex items-center justify-between p-4 rounded-lg ${
+                      optionFluctuation === range.value
+                        ? 'bg-[#F0B90B]/20 border border-[#F0B90B]'
+                        : 'bg-[#2B3139] hover:bg-[#323A45]'
                     }`}
                   >
-                    {lev}x
-                  </motion.button>
+                    <div>
+                      <span className="text-[#EAECEF] font-medium">{range.label}</span>
+                      <span className="text-xs text-[#848E9C] block mt-1">
+                        Payout: {(range.payout * 100 - 100).toFixed(0)}%
+                      </span>
+                    </div>
+                    {optionFluctuation === range.value && (
+                      <CheckCircle className="w-5 h-5 text-[#F0B90B]" />
+                    )}
+                  </button>
                 ))}
               </div>
             </motion.div>
@@ -3158,14 +2001,14 @@ export default function UnifiedTradingPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 z-50 flex items-end justify-center p-4"
+            className="fixed inset-0 bg-black/80 flex items-end justify-center z-50 p-4"
             onClick={() => setShowScheduledModal(false)}
           >
             <motion.div
-              initial={{ y: 100, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 100, opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              transition={slideUp.transition}
               className="bg-[#1E2329] border border-[#2B3139] rounded-t-2xl w-full max-w-md"
               onClick={e => e.stopPropagation()}
             >
@@ -3173,259 +2016,94 @@ export default function UnifiedTradingPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-[#EAECEF]">Scheduled Time</h3>
-                    <p className="text-xs text-[#848E9C] mt-1">
-                      Customize the opening time (UTC+0) for your position.
-                    </p>
+                    <p className="text-xs text-[#848E9C] mt-1">(UTC+0)</p>
                   </div>
-                  <motion.button 
-                    whileHover={{ scale: 1.1, rotate: 90 }}
-                    whileTap={{ scale: 0.9 }}
+                  <button 
                     onClick={() => setShowScheduledModal(false)}
                     className="p-1 hover:bg-[#2B3139] rounded-lg transition-colors"
                   >
                     <X className="w-5 h-5 text-[#848E9C]" />
-                  </motion.button>
+                  </button>
                 </div>
               </div>
 
               <div className="p-4 space-y-4">
-                {/* Current Time Display */}
+                {/* Current Time */}
                 <div className="bg-[#2B3139] rounded-lg p-3">
                   <div className="text-center">
-                    <div className="text-xs text-[#848E9C] mb-1">Current Time (UTC+0)</div>
+                    <div className="text-xs text-[#848E9C] mb-1">Current Time</div>
                     <div className="text-lg font-mono text-[#EAECEF]">{currentUTC}</div>
                   </div>
                 </div>
 
                 {/* Time Selector */}
                 <div className="grid grid-cols-3 gap-3">
-                  {/* Hours */}
-                  <div>
-                    <label className="text-xs text-[#848E9C] block mb-1">Hours</label>
-                    <div className="bg-[#2B3139] rounded-lg p-2 flex items-center justify-between">
-                      <button
-                        onClick={() => setScheduledTime(prev => ({ ...prev, hours: Math.max(0, prev.hours - 1) }))}
-                        className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="text-lg font-mono text-[#EAECEF]">
-                        {scheduledTime.hours.toString().padStart(2, '0')}
-                      </span>
-                      <button
-                        onClick={() => setScheduledTime(prev => ({ ...prev, hours: Math.min(23, prev.hours + 1) }))}
-                        className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
+                  {['Hours', 'Minutes', 'Seconds'].map((label, idx) => (
+                    <div key={label}>
+                      <label className="text-xs text-[#848E9C] block mb-1">{label}</label>
+                      <div className="bg-[#2B3139] rounded-lg p-2 flex items-center justify-between">
+                        <button
+                          onClick={() => setScheduledTime(prev => {
+                            const key = label.toLowerCase() as keyof typeof prev;
+                            return { ...prev, [key]: Math.max(0, prev[key] - 1) };
+                          })}
+                          className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="text-lg font-mono text-[#EAECEF]">
+                          {label === 'Hours' 
+                            ? scheduledTime.hours.toString().padStart(2, '0')
+                            : label === 'Minutes'
+                            ? scheduledTime.minutes.toString().padStart(2, '0')
+                            : scheduledTime.seconds.toString().padStart(2, '0')}
+                        </span>
+                        <button
+                          onClick={() => setScheduledTime(prev => {
+                            const key = label.toLowerCase() as keyof typeof prev;
+                            const max = label === 'Hours' ? 23 : 59;
+                            return { ...prev, [key]: Math.min(max, prev[key] + 1) };
+                          })}
+                          className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-
-                  {/* Minutes */}
-                  <div>
-                    <label className="text-xs text-[#848E9C] block mb-1">Minutes</label>
-                    <div className="bg-[#2B3139] rounded-lg p-2 flex items-center justify-between">
-                      <button
-                        onClick={() => setScheduledTime(prev => ({ ...prev, minutes: Math.max(0, prev.minutes - 1) }))}
-                        className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="text-lg font-mono text-[#EAECEF]">
-                        {scheduledTime.minutes.toString().padStart(2, '0')}
-                      </span>
-                      <button
-                        onClick={() => setScheduledTime(prev => ({ ...prev, minutes: Math.min(59, prev.minutes + 1) }))}
-                        className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Seconds */}
-                  <div>
-                    <label className="text-xs text-[#848E9C] block mb-1">Seconds</label>
-                    <div className="bg-[#2B3139] rounded-lg p-2 flex items-center justify-between">
-                      <button
-                        onClick={() => setScheduledTime(prev => ({ ...prev, seconds: Math.max(0, prev.seconds - 1) }))}
-                        className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="text-lg font-mono text-[#EAECEF]">
-                        {scheduledTime.seconds.toString().padStart(2, '0')}
-                      </span>
-                      <button
-                        onClick={() => setScheduledTime(prev => ({ ...prev, seconds: Math.min(59, prev.seconds + 1) }))}
-                        className="text-[#848E9C] hover:text-[#EAECEF] transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+                  ))}
                 </div>
 
-                {/* Scheduled Time Display */}
+                {/* Selected Time */}
                 <div className="bg-[#2B3139] rounded-lg p-3">
                   <div className="text-center">
-                    <div className="text-xs text-[#848E9C] mb-1">Open Position</div>
+                    <div className="text-xs text-[#848E9C] mb-1">Scheduled Time</div>
                     <div className="text-lg font-mono text-[#F0B90B]">
                       {scheduledTime.hours.toString().padStart(2, '0')}:
                       {scheduledTime.minutes.toString().padStart(2, '0')}:
-                      {scheduledTime.seconds.toString().padStart(2, '0')} (UTC+0)
+                      {scheduledTime.seconds.toString().padStart(2, '0')}
                     </div>
                   </div>
                 </div>
 
-                {/* Action Buttons */}
+                {/* Actions */}
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={() => setShowScheduledModal(false)}
-                    className="flex-1 bg-[#2B3139] text-[#848E9C] py-3 rounded-lg font-medium hover:bg-[#373B42] transition-colors"
+                    className="flex-1 bg-[#2B3139] text-[#848E9C] py-3 rounded-lg font-medium hover:bg-[#323A45] transition-colors"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={handleSaveScheduled}
+                    onClick={() => {
+                      setIsScheduled(true);
+                      setShowScheduledModal(false);
+                      toast.success(`Trade scheduled for ${scheduledTime.hours}:${scheduledTime.minutes}:${scheduledTime.seconds} UTC`);
+                    }}
                     className="flex-1 bg-[#F0B90B] text-[#0B0E11] py-3 rounded-lg font-medium hover:bg-[#F0B90B]/90 transition-colors"
                   >
-                    Save
+                    Schedule
                   </button>
                 </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Duration Modal */}
-      <AnimatePresence>
-        {showDurationModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 z-50 flex items-end justify-center p-4"
-            onClick={() => setShowDurationModal(false)}
-          >
-            <motion.div
-              initial={{ y: 100, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 100, opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="bg-[#1E2329] border border-[#2B3139] rounded-t-2xl w-full max-w-md"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="p-4 border-b border-[#2B3139]">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-[#EAECEF]">Select Duration</h3>
-                  <motion.button 
-                    whileHover={{ scale: 1.1, rotate: 90 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setShowDurationModal(false)}
-                    className="p-1 hover:bg-[#2B3139] rounded-lg transition-colors"
-                  >
-                    <X className="w-5 h-5 text-[#848E9C]" />
-                  </motion.button>
-                </div>
-              </div>
-              <div className="p-4 space-y-2">
-                {OPTIONS_TIMEFRAMES.map(option => (
-                  <motion.button
-                    key={option.value}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      setOptionDuration(option.value);
-                      setOptionFluctuation(option.move);
-                      setOptionPayout(option.payout);
-                      setOptionMove(option.move);
-                      setShowDurationModal(false);
-                    }}
-                    className={`w-full flex items-center justify-between p-4 rounded-lg ${
-                      optionDuration === option.value
-                        ? 'bg-[#F0B90B]/20 border border-[#F0B90B]'
-                        : 'bg-[#2B3139] hover:bg-[#373B42]'
-                    }`}
-                  >
-                    <div>
-                      <span className="text-[#EAECEF] font-medium">{option.label}</span>
-                      <span className="text-xs text-[#848E9C] block mt-1">
-                        Profit: +{option.profit}% • Move: ≥{option.move}%
-                      </span>
-                    </div>
-                    {optionDuration === option.value && (
-                      <CheckCircle className="w-5 h-5 text-[#F0B90B]" />
-                    )}
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Fluctuation Modal */}
-      <AnimatePresence>
-        {showFluctuationModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 z-50 flex items-end justify-center p-4"
-            onClick={() => setShowFluctuationModal(false)}
-          >
-            <motion.div
-              initial={{ y: 100, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 100, opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="bg-[#1E2329] border border-[#2B3139] rounded-t-2xl w-full max-w-md"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="p-4 border-b border-[#2B3139]">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-[#EAECEF]">Fluctuation Range</h3>
-                  <motion.button 
-                    whileHover={{ scale: 1.1, rotate: 90 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setShowFluctuationModal(false)}
-                    className="p-1 hover:bg-[#2B3139] rounded-lg transition-colors"
-                  >
-                    <X className="w-5 h-5 text-[#848E9C]" />
-                  </motion.button>
-                </div>
-              </div>
-              <div className="p-4 space-y-2">
-                {FLUCTUATION_RANGES[optionDuration as keyof typeof FLUCTUATION_RANGES]?.map((range, idx) => (
-                  <motion.button
-                    key={idx}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      setOptionFluctuation(range.value);
-                      setOptionPayout(range.payout);
-                      setOptionMove(range.move);
-                      setShowFluctuationModal(false);
-                    }}
-                    className={`w-full flex items-center justify-between p-4 rounded-lg ${
-                      optionFluctuation === range.value
-                        ? 'bg-[#F0B90B]/20 border border-[#F0B90B]'
-                        : 'bg-[#2B3139] hover:bg-[#373B42]'
-                    }`}
-                  >
-                    <div>
-                      <span className="text-[#EAECEF] font-medium">{range.label}</span>
-                      <span className="text-xs text-[#848E9C] block mt-1">
-                        Payout: {range.payout.toFixed(3)}x
-                      </span>
-                    </div>
-                    {optionFluctuation === range.value && (
-                      <CheckCircle className="w-5 h-5 text-[#F0B90B]" />
-                    )}
-                  </motion.button>
-                ))}
               </div>
             </motion.div>
           </motion.div>

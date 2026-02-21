@@ -1,6 +1,6 @@
-// pages/ArbitragePage.tsx - COMPLETE PREMIUM REDESIGN
+// pages/ArbitragePage.tsx - COMPLETE PREMIUM REDESIGN with Database Integration
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Zap, Shield, BarChart3, History, Wallet, 
@@ -11,7 +11,7 @@ import {
   Sparkles, Gem, Layers, Lock, Unlock, CheckCircle,
   AlertCircle, MoreVertical, ChevronDown, ChevronUp,
   Star, Flame, Globe, ShieldCheck, Rocket, Crown,
-  Gift, Target, ZapOff, ShieldOff
+  Gift, Target, ZapOff, ShieldOff, RefreshCcw
 } from 'lucide-react';
 import { Dialog } from '@headlessui/react';
 
@@ -22,7 +22,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Hooks and Context
@@ -30,7 +29,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
 import { useTradingControl } from '@/hooks/useTradingControl';
-import { useUnifiedTrading } from '@/hooks/useUnifiedTrading';
+import { unifiedTradingService } from '@/services/unified-trading-service';
+import { TradeType, ArbitrageContract, StakingPosition } from '@/services/unified-trading-service';
 
 // Icons
 import { 
@@ -61,6 +61,7 @@ interface ArbitrageProduct {
   risk: 'Low' | 'Medium' | 'High';
   icon: React.ReactNode;
   color: string;
+  dailyRate: number;
 }
 
 interface StakingTier {
@@ -72,28 +73,6 @@ interface StakingTier {
   icon: React.ReactNode;
   color: string;
   bgColor: string;
-}
-
-interface ArbitrageContract {
-  id: string;
-  productId: string;
-  productLabel: string;
-  amount: number;
-  startTime: string;
-  endTime: string;
-  dailyRate: number;
-  status: 'active' | 'completed' | 'failed';
-  pnl?: number;
-  claimed?: number;
-}
-
-interface StakingPosition {
-  id: string;
-  amount: number;
-  startTime: string;
-  dailyRate: number;
-  accumulatedRewards: number;
-  status: 'active' | 'completed' | 'unstaked';
 }
 
 // ==================== CONSTANTS ====================
@@ -119,14 +98,15 @@ const ARBITRAGE_PRODUCTS: ArbitrageProduct[] = [
     tier: 'Basic',
     minInvestment: 1000,
     maxInvestment: 9999,
-    dailyReturn: '0.80% – 1.00%',
-    annualReturn: '292% – 365%',
+    dailyReturn: '0.10% – 0.15%',
+    annualReturn: '36.5% – 54.75%',
     duration: 1,
     cryptos: ['USDT', 'BTC', 'ETH'],
-    features: ['Quick returns', 'Low risk', 'Daily payouts', 'Instant settlement'],
+    features: ['Quick returns', 'Low risk', 'Daily payouts'],
     risk: 'Low',
     icon: <Zap className="w-5 h-5" />,
-    color: 'from-gray-500 to-gray-400'
+    color: 'from-gray-500 to-gray-400',
+    dailyRate: 0.001
   },
   {
     id: 'arb-3d',
@@ -134,14 +114,15 @@ const ARBITRAGE_PRODUCTS: ArbitrageProduct[] = [
     tier: 'Bronze',
     minInvestment: 10000,
     maxInvestment: 49999,
-    dailyReturn: '1.01% – 1.19%',
-    annualReturn: '368% – 434%',
+    dailyReturn: '0.12% – 0.18%',
+    annualReturn: '43.8% – 65.7%',
     duration: 3,
     cryptos: ['USDT', 'BTC', 'ETH', 'SOL'],
-    features: ['Enhanced returns', 'Medium risk', 'Compound available', 'Priority support'],
+    features: ['Enhanced returns', 'Medium risk', 'Compound available'],
     risk: 'Medium',
     icon: <Rocket className="w-5 h-5" />,
-    color: 'from-amber-600 to-amber-500'
+    color: 'from-amber-600 to-amber-500',
+    dailyRate: 0.0012
   },
   {
     id: 'arb-7d',
@@ -149,14 +130,15 @@ const ARBITRAGE_PRODUCTS: ArbitrageProduct[] = [
     tier: 'Silver',
     minInvestment: 50000,
     maxInvestment: 99999,
-    dailyReturn: '1.20% – 1.29%',
-    annualReturn: '438% – 470%',
+    dailyReturn: '0.15% – 0.20%',
+    annualReturn: '54.75% – 73%',
     duration: 7,
     cryptos: ['USDT', 'BTC', 'ETH', 'SOL', 'BNB'],
-    features: ['High yield', 'Weekly compounding', 'VIP support', 'Early withdrawal'],
+    features: ['High yield', 'Weekly compounding', 'VIP support'],
     risk: 'Medium',
     icon: <Gem className="w-5 h-5" />,
-    color: 'from-slate-400 to-slate-300'
+    color: 'from-slate-400 to-slate-300',
+    dailyRate: 0.0015
   },
   {
     id: 'arb-10d',
@@ -164,14 +146,15 @@ const ARBITRAGE_PRODUCTS: ArbitrageProduct[] = [
     tier: 'Gold',
     minInvestment: 100000,
     maxInvestment: 199999,
-    dailyReturn: '1.30% – 1.49%',
-    annualReturn: '474% – 543%',
+    dailyReturn: '0.18% – 0.22%',
+    annualReturn: '65.7% – 80.3%',
     duration: 10,
     cryptos: ['USDT', 'BTC', 'ETH', 'SOL', 'BNB', 'ADA'],
-    features: ['Elite returns', 'Priority withdrawals', 'Dedicated manager', 'Zero fees'],
+    features: ['Elite returns', 'Priority withdrawals', 'Dedicated manager'],
     risk: 'High',
     icon: <Crown className="w-5 h-5" />,
-    color: 'from-yellow-500 to-yellow-400'
+    color: 'from-yellow-500 to-yellow-400',
+    dailyRate: 0.0018
   },
   {
     id: 'arb-15d',
@@ -179,14 +162,15 @@ const ARBITRAGE_PRODUCTS: ArbitrageProduct[] = [
     tier: 'Platinum',
     minInvestment: 200000,
     maxInvestment: 499999,
-    dailyReturn: '1.40% – 1.49%',
-    annualReturn: '511% – 543%',
+    dailyReturn: '0.20% – 0.25%',
+    annualReturn: '73% – 91.25%',
     duration: 15,
     cryptos: ['USDT', 'BTC', 'ETH', 'SOL', 'BNB', 'ADA', 'XRP'],
-    features: ['Pro tier returns', 'Instant withdrawals', 'Private community', 'API access'],
+    features: ['Pro tier returns', 'Instant withdrawals', 'Private community'],
     risk: 'High',
     icon: <Shield className="w-5 h-5" />,
-    color: 'from-purple-500 to-purple-400'
+    color: 'from-purple-500 to-purple-400',
+    dailyRate: 0.002
   },
   {
     id: 'arb-25d',
@@ -194,68 +178,24 @@ const ARBITRAGE_PRODUCTS: ArbitrageProduct[] = [
     tier: 'Diamond',
     minInvestment: 500000,
     maxInvestment: 999999,
-    dailyReturn: '1.45% – 1.49%',
-    annualReturn: '529% – 543%',
+    dailyReturn: '0.22% – 0.28%',
+    annualReturn: '80.3% – 102.2%',
     duration: 25,
     cryptos: ['USDT', 'BTC', 'ETH', 'SOL', 'BNB', 'ADA', 'XRP', 'DOT'],
-    features: ['Maximum returns', 'Zero fees', 'Lifetime rewards', 'Governance rights'],
+    features: ['Maximum returns', 'Zero fees', 'Lifetime rewards'],
     risk: 'High',
     icon: <Target className="w-5 h-5" />,
-    color: 'from-blue-500 to-blue-400'
+    color: 'from-blue-500 to-blue-400',
+    dailyRate: 0.0022
   }
 ];
 
 const STAKING_TIERS: StakingTier[] = [
-  { 
-    range: '$1,000 – $10,000', 
-    min: 1000, 
-    max: 10000, 
-    dailyRate: 0.0010, 
-    annualRate: 36.5, 
-    icon: <span className="text-2xl">🌱</span>,
-    color: 'from-green-500 to-green-400',
-    bgColor: 'bg-green-500/10'
-  },
-  { 
-    range: '$10,000 – $50,000', 
-    min: 10000, 
-    max: 50000, 
-    dailyRate: 0.0030, 
-    annualRate: 109.5, 
-    icon: <span className="text-2xl">🌿</span>,
-    color: 'from-emerald-500 to-emerald-400',
-    bgColor: 'bg-emerald-500/10'
-  },
-  { 
-    range: '$50,000 – $200,000', 
-    min: 50000, 
-    max: 200000, 
-    dailyRate: 0.0075, 
-    annualRate: 273.75, 
-    icon: <span className="text-2xl">🌳</span>,
-    color: 'from-teal-500 to-teal-400',
-    bgColor: 'bg-teal-500/10'
-  },
-  { 
-    range: '$200,000 – $500,000', 
-    min: 200000, 
-    max: 500000, 
-    dailyRate: 0.0130, 
-    annualRate: 474.5, 
-    icon: <span className="text-2xl">🌲</span>,
-    color: 'from-blue-500 to-blue-400',
-    bgColor: 'bg-blue-500/10'
-  },
-  { 
-    range: '$500,000+', 
-    min: 500000, 
-    max: Infinity, 
-    dailyRate: 0.0185, 
-    annualRate: 675.25, 
-    icon: <span className="text-2xl">🏆</span>,
-    color: 'from-purple-500 to-purple-400',
-    bgColor: 'bg-purple-500/10'
-  }
+  { range: '$1,000 – $10,000', min: 1000, max: 10000, dailyRate: 0.0008, annualRate: 29.2, icon: '🌱', color: 'green', bgColor: 'bg-green-500/10' },
+  { range: '$10,000 – $50,000', min: 10000, max: 50000, dailyRate: 0.0012, annualRate: 43.8, icon: '🌿', color: 'emerald', bgColor: 'bg-emerald-500/10' },
+  { range: '$50,000 – $200,000', min: 50000, max: 200000, dailyRate: 0.0018, annualRate: 65.7, icon: '🌳', color: 'teal', bgColor: 'bg-teal-500/10' },
+  { range: '$200,000 – $500,000', min: 200000, max: 500000, dailyRate: 0.0025, annualRate: 91.25, icon: '🌲', color: 'blue', bgColor: 'bg-blue-500/10' },
+  { range: '$500,000+', min: 500000, max: Infinity, dailyRate: 0.0035, annualRate: 127.75, icon: '🏆', color: 'purple', bgColor: 'bg-purple-500/10' }
 ];
 
 const CRYPTO_ICONS: Record<string, React.ReactNode> = {
@@ -420,12 +360,8 @@ export default function ArbitragePage() {
   const { toast } = useToast();
   const { user, isAuthenticated, logout } = useAuth();
   const { 
-    balances, 
-    getBalance,
-    lockBalance,
-    unlockBalance,
-    addBalance,
-    refreshData,
+    getTradingBalance, 
+    refreshBalances, 
     loading: walletLoading 
   } = useUnifiedWallet();
   const { 
@@ -434,7 +370,6 @@ export default function ArbitragePage() {
     countdown,
     shouldWin 
   } = useTradingControl();
-  const { executeTrade } = useUnifiedTrading();
 
   // UI State
   const [activeTab, setActiveTab] = useState<'arbitrage' | 'staking'>('arbitrage');
@@ -467,7 +402,7 @@ export default function ArbitragePage() {
     avgDailyReturn: 0
   });
 
-  // Load mock data (replace with real API calls)
+  // Load user data from real API
   useEffect(() => {
     loadUserData();
   }, [user?.id]);
@@ -475,65 +410,98 @@ export default function ArbitragePage() {
   const loadUserData = async () => {
     setLoading(true);
     try {
-      // Mock data - replace with actual API calls
-      const mockContracts: ArbitrageContract[] = [
-        {
-          id: '1',
-          productId: 'arb-1d',
-          productLabel: '1 Day Flash',
-          amount: 5000,
-          startTime: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          endTime: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-          dailyRate: 0.009,
-          status: 'completed',
-          pnl: 45,
-          claimed: 45
-        },
-        {
-          id: '2',
-          productId: 'arb-3d',
-          productLabel: '3 Day Express',
-          amount: 15000,
-          startTime: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-          endTime: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-          dailyRate: 0.011,
-          status: 'active'
-        }
-      ];
+      if (!user?.id) {
+        // Initialize with empty data if not authenticated
+        setActiveContracts([]);
+        setContractHistory([]);
+        setStakingPositions([]);
+        setStakingHistory([]);
+        setStats({
+          totalInvested: 0,
+          totalEarned: 0,
+          activeContracts: 0,
+          activeStaking: 0,
+          avgDailyReturn: 0
+        });
+        return;
+      }
 
-      const mockStaking: StakingPosition[] = [
-        {
-          id: '1',
-          amount: 10000,
-          startTime: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          dailyRate: 0.003,
-          accumulatedRewards: 150,
-          status: 'active'
-        }
-      ];
+      // Load real arbitrage contracts from trading service
+      const arbitrageTrades = await unifiedTradingService.getUserTrades(user.id, 'arbitrage');
+      const stakingTrades = await unifiedTradingService.getUserTrades(user.id, 'staking');
 
-      setActiveContracts(mockContracts.filter(c => c.status === 'active'));
-      setContractHistory(mockContracts.filter(c => c.status === 'completed'));
-      setStakingPositions(mockStaking.filter(s => s.status === 'active'));
-      setStakingHistory(mockStaking.filter(s => s.status === 'completed'));
+      // Filter and map arbitrage contracts
+      const activeArbitrage = arbitrageTrades
+        .filter(trade => trade.status === 'active')
+        .map(trade => trade as ArbitrageContract);
 
-      // Calculate stats
-      const totalInvested = mockContracts.reduce((sum, c) => sum + c.amount, 0) + 
-                           mockStaking.reduce((sum, s) => sum + s.amount, 0);
-      const totalEarned = mockContracts.reduce((sum, c) => sum + (c.pnl || 0), 0) +
-                          mockStaking.reduce((sum, s) => sum + s.accumulatedRewards, 0);
+      const completedArbitrage = arbitrageTrades
+        .filter(trade => trade.status === 'completed' || trade.status === 'failed')
+        .map(trade => trade as ArbitrageContract);
+
+      // Filter and map staking positions
+      const activeStaking = stakingTrades
+        .filter(trade => trade.status === 'active')
+        .map(trade => ({
+          id: trade.id,
+          userId: trade.userId,
+          amount: trade.amount,
+          startTime: trade.createdAt,
+          dailyRate: trade.metadata?.dailyRate || 0.001,
+          accumulatedRewards: trade.pnl || 0,
+          status: trade.status as 'active' | 'completed' | 'unstaked'
+        }));
+
+      const completedStaking = stakingTrades
+        .filter(trade => trade.status === 'completed' || trade.status === 'failed')
+        .map(trade => ({
+          id: trade.id,
+          userId: trade.userId,
+          amount: trade.amount,
+          startTime: trade.createdAt,
+          dailyRate: trade.metadata?.dailyRate || 0.001,
+          accumulatedRewards: trade.pnl || 0,
+          status: trade.status as 'active' | 'completed' | 'unstaked'
+        }));
+
+      // Update state with real data
+      setActiveContracts(activeArbitrage);
+      setContractHistory(completedArbitrage);
+      setStakingPositions(activeStaking);
+      setStakingHistory(completedStaking);
+
+      // Calculate real stats
+      const totalInvested = [...arbitrageTrades, ...stakingTrades].reduce((sum, trade) => sum + trade.amount, 0);
+      const totalEarned = [...arbitrageTrades, ...stakingTrades].reduce((sum, trade) => sum + (trade.pnl || 0), 0);
 
       setStats({
         totalInvested,
         totalEarned,
-        activeContracts: mockContracts.filter(c => c.status === 'active').length,
-        activeStaking: mockStaking.filter(s => s.status === 'active').length,
-        avgDailyReturn: totalEarned / (totalInvested || 1) * 100
+        activeContracts: activeArbitrage.length,
+        activeStaking: activeStaking.length,
+        avgDailyReturn: totalInvested > 0 ? (totalEarned / totalInvested) * 100 : 0
       });
 
     } catch (error) {
       console.error('Failed to load user data:', error);
-      toast.error('Failed to load your arbitrage data');
+      toast({
+        title: 'Error',
+        description: 'Failed to load your arbitrage data',
+        variant: 'destructive'
+      });
+      
+      // Initialize with empty data on error
+      setActiveContracts([]);
+      setContractHistory([]);
+      setStakingPositions([]);
+      setStakingHistory([]);
+      setStats({
+        totalInvested: 0,
+        totalEarned: 0,
+        activeContracts: 0,
+        activeStaking: 0,
+        avgDailyReturn: 0
+      });
     } finally {
       setLoading(false);
     }
@@ -542,116 +510,117 @@ export default function ArbitragePage() {
   // Handle arbitrage start
   const handleStartArbitrage = useCallback(async () => {
     if (!isAuthenticated) {
-      toast.error('Please login to start arbitrage');
+      toast({
+        title: 'Authentication Required',
+        description: 'Please login to start arbitrage',
+        variant: 'destructive'
+      });
       return;
     }
 
     if (!selectedProduct) {
-      toast.error('Please select an arbitrage product');
+      toast({
+        title: 'No Product Selected',
+        description: 'Please select an arbitrage product',
+        variant: 'destructive'
+      });
       return;
     }
 
     const amount = Number(investmentAmount);
     if (!amount || amount < selectedProduct.minInvestment) {
-      toast.error(`Minimum investment is ${formatCurrency(selectedProduct.minInvestment)}`);
+      toast({
+        title: 'Invalid Amount',
+        description: `Minimum investment is ${formatCurrency(selectedProduct.minInvestment)}`,
+        variant: 'destructive'
+      });
       return;
     }
 
-    if (amount > getBalance('USDT')) {
-      toast.error(`Insufficient balance. You have ${formatCurrency(getBalance('USDT'))}`);
+    if (amount > getTradingBalance('USDT')) {
+      toast({
+        title: 'Insufficient Balance',
+        description: `You have ${formatCurrency(getTradingBalance('USDT'))} USDT available`,
+        variant: 'destructive'
+      });
       return;
     }
 
     setExecuting(true);
 
     try {
-      // Check if this contract should win based on admin settings
-      const wins = await shouldWin('arbitrage');
-      
-      const contractId = `arb_${Date.now()}`;
-      const duration = selectedProduct.duration * 24 * 60 * 60 * 1000;
-      const dailyRate = parseFloat(selectedProduct.dailyReturn.split('–')[0].replace('%', '')) / 100;
-
-      // Lock the funds
-      const lockResult = await lockBalance('USDT', amount, contractId, {
-        productId: selectedProduct.id,
-        productLabel: selectedProduct.label,
-        duration: selectedProduct.duration
+      // Execute arbitrage trade through unified trading service
+      const result = await unifiedTradingService.executeTrade({
+        type: 'arbitrage',
+        data: {
+          amount,
+          productId: selectedProduct.id,
+          productLabel: selectedProduct.label,
+          duration: selectedProduct.duration,
+          asset: 'USDT',
+          dailyRate: selectedProduct.dailyRate
+        },
+        userId: user!.id
       });
 
-      if (!lockResult.success) {
-        throw new Error(lockResult.error || 'Failed to lock funds');
-      }
-
-      // Create contract
-      const newContract: ArbitrageContract = {
-        id: contractId,
-        productId: selectedProduct.id,
-        productLabel: selectedProduct.label,
-        amount,
-        startTime: new Date().toISOString(),
-        endTime: new Date(Date.now() + duration).toISOString(),
-        dailyRate,
-        status: 'active'
-      };
-
-      setActiveContracts(prev => [newContract, ...prev]);
-      
-      toast.success({
-        title: 'Contract Started',
-        description: `You invested ${formatCurrency(amount)} in ${selectedProduct.label}`,
-      });
-
-      // Schedule completion
-      setTimeout(async () => {
-        const totalReturn = amount * (1 + dailyRate * selectedProduct.duration);
-        const profit = totalReturn - amount;
-
-        // Update contract status
-        setActiveContracts(prev => prev.filter(c => c.id !== contractId));
-        setContractHistory(prev => [{
-          ...newContract,
-          status: 'completed',
-          pnl: profit,
-          claimed: profit
-        }, ...prev]);
-
-        // Add profit to wallet
-        await addBalance('USDT', totalReturn, 'arbitrage_profit', contractId);
-        
-        toast.success({
-          title: 'Contract Completed',
-          description: `You earned ${formatCurrency(profit)} from your arbitrage contract`,
+      if (result.success) {
+        toast({
+          title: 'Arbitrage Started! 🚀',
+          description: `Your ${selectedProduct.label} contract has been activated.`,
         });
-      }, duration);
-
-      // Clear form
-      setInvestmentAmount('');
-      setSelectedProduct(null);
+        
+        // Reset form
+        setSelectedProduct(null);
+        setInvestmentAmount('');
+        
+        // Reload data to show new contract
+        await loadUserData();
+        
+        // Refresh wallet balance
+        await refreshBalances();
+      } else {
+        throw new Error(result.error || 'Failed to start arbitrage');
+      }
 
     } catch (error) {
       console.error('Failed to start arbitrage:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to start arbitrage');
+      toast({
+        title: 'Failed to Start Arbitrage',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive'
+      });
     } finally {
       setExecuting(false);
     }
-  }, [isAuthenticated, selectedProduct, investmentAmount, getBalance, lockBalance, addBalance, shouldWin, toast]);
+  }, [isAuthenticated, selectedProduct, investmentAmount, user, getTradingBalance, refreshBalances, toast]);
 
   // Handle staking start
   const handleStartStaking = useCallback(async () => {
     if (!isAuthenticated) {
-      toast.error('Please login to start staking');
+      toast({
+        title: 'Authentication Required',
+        description: 'Please login to start staking',
+        variant: 'destructive'
+      });
       return;
     }
 
     const amount = Number(stakingAmount);
     if (!amount || amount < 1000) {
-      toast.error('Minimum staking amount is $1,000');
+      toast({
+        title: 'Invalid Amount',
+        description: 'Minimum staking amount is $1,000',
+        variant: 'destructive'
+      });
       return;
     }
 
-    if (amount > getBalance('USDT')) {
-      toast.error(`Insufficient balance. You have ${formatCurrency(getBalance('USDT'))}`);
+    if (amount > getTradingBalance('USDT')) {
+      toast({
+        title: 'Insufficient Balance',
+        description: `You have ${formatCurrency(getTradingBalance('USDT'))} USDT available`,
+        variant: 'destructive'
+      });
       return;
     }
 
@@ -661,80 +630,62 @@ export default function ArbitragePage() {
     setExecuting(true);
 
     try {
-      const positionId = `stake_${Date.now()}`;
-
-      // Lock the funds
-      const lockResult = await lockBalance('USDT', amount, positionId, {
+      // Execute staking trade through unified trading service
+      const result = await unifiedTradingService.executeTrade({
         type: 'staking',
-        tier: tier.range,
-        dailyRate: tier.dailyRate
+        data: {
+          amount,
+          tier: tier.range,
+          dailyRate: tier.dailyRate,
+          asset: 'USDT'
+        },
+        userId: user!.id
       });
 
-      if (!lockResult.success) {
-        throw new Error(lockResult.error || 'Failed to lock funds');
-      }
-
-      // Create staking position
-      const newPosition: StakingPosition = {
-        id: positionId,
-        amount,
-        startTime: new Date().toISOString(),
-        dailyRate: tier.dailyRate,
-        accumulatedRewards: 0,
-        status: 'active'
-      };
-
-      setStakingPositions(prev => [newPosition, ...prev]);
-
-      toast.success({
-        title: 'Staking Started',
-        description: `You staked ${formatCurrency(amount)} at ${(tier.dailyRate * 100).toFixed(2)}% daily`,
-      });
-
-      // Start reward accumulation
-      const interval = setInterval(async () => {
-        setStakingPositions(prev => 
-          prev.map(pos => 
-            pos.id === positionId
-              ? { ...pos, accumulatedRewards: pos.accumulatedRewards + (amount * tier.dailyRate / 86400) }
-              : pos
-          )
-        );
-      }, 1000);
-
-      // Schedule unstaking (30 days)
-      setTimeout(async () => {
-        clearInterval(interval);
+      if (result.success) {
+        toast({
+          title: 'Staking Started! 🎉',
+          description: `Your ${tier.range} staking position has been activated.`,
+        });
         
-        const position = stakingPositions.find(p => p.id === positionId);
-        if (position) {
-          const totalReturn = amount + position.accumulatedRewards;
-          
-          setStakingPositions(prev => prev.filter(p => p.id !== positionId));
-          setStakingHistory(prev => [{
-            ...position,
-            status: 'completed'
-          }, ...prev]);
-
-          await unlockBalance('USDT', amount, positionId);
-          await addBalance('USDT', position.accumulatedRewards, 'staking_reward', `${positionId}_reward`);
-
-          toast.success({
-            title: 'Staking Completed',
-            description: `You earned ${formatCurrency(position.accumulatedRewards)} from staking`,
-          });
-        }
-      }, 30 * 24 * 60 * 60 * 1000);
-
-      setStakingAmount('');
+        // Reset form
+        setStakingAmount('');
+        
+        // Reload data to show new position
+        await loadUserData();
+        
+        // Refresh wallet balance
+        await refreshBalances();
+      } else {
+        throw new Error(result.error || 'Failed to start staking');
+      }
 
     } catch (error) {
       console.error('Failed to start staking:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to start staking');
+      toast({
+        title: 'Failed to Start Staking',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive'
+      });
     } finally {
       setExecuting(false);
     }
-  }, [isAuthenticated, stakingAmount, getBalance, lockBalance, unlockBalance, addBalance, toast]);
+  }, [isAuthenticated, stakingAmount, user, getTradingBalance, refreshBalances, toast]);
+
+  // Calculate estimated returns for staking
+  const estimatedReturns = useMemo(() => {
+    if (!stakingAmount || Number(stakingAmount) < 1000) return null;
+    
+    const amount = Number(stakingAmount);
+    const tier = STAKING_TIERS.find(t => amount >= t.min && amount <= t.max) || STAKING_TIERS[STAKING_TIERS.length - 1];
+    
+    return {
+      daily: amount * tier.dailyRate,
+      weekly: amount * tier.dailyRate * 7,
+      monthly: amount * tier.dailyRate * 30,
+      apy: tier.annualRate
+    };
+  }, [stakingAmount]);
 
   return (
     <motion.div 
@@ -878,7 +829,7 @@ export default function ArbitragePage() {
               >
                 <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-[#F0B90B] to-yellow-500 rounded-xl flex items-center justify-center group-hover:scale-105 transition-all duration-200 shadow-lg shadow-[#F0B90B]/20">
                   <span className="text-sm font-bold text-[#0B0E11]">
-                    {user?.first_name?.[0] || user?.email?.[0] || 'U'}
+                    {user?.email?.[0] || 'U'}
                   </span>
                 </div>
                 <motion.div
@@ -1245,21 +1196,21 @@ export default function ArbitragePage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-4 pt-4 border-t border-[#2B3139]">
                       <div className="flex items-center gap-2">
                         <Wallet className="w-4 h-4 text-[#848E9C]" />
-                        <span className="text-sm text-[#848E9C]">Available Balance</span>
+                        <span className="text-sm text-[#848E9C]">Trading Balance</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <motion.span 
-                          key={getBalance('USDT')}
+                          key={getTradingBalance('USDT')}
                           initial={{ scale: 1.2 }}
                           animate={{ scale: 1 }}
                           className="font-bold text-[#EAECEF]"
                         >
-                          {hideBalances ? '••••••' : formatCurrency(getBalance('USDT'))} USDT
+                          {hideBalances ? '••••••' : formatCurrency(getTradingBalance('USDT'))} USDT
                         </motion.span>
                         <motion.button 
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
-                          onClick={() => setInvestmentAmount(getBalance('USDT').toString())}
+                          onClick={() => setInvestmentAmount(getTradingBalance('USDT').toString())}
                           className="text-xs text-[#F0B90B] hover:text-[#F0B90B]/80 font-medium"
                         >
                           Max
@@ -1291,9 +1242,10 @@ export default function ArbitragePage() {
                       
                       <div className="space-y-3">
                         {activeContracts.map((contract, index) => {
+                          const startTime = new Date(contract.createdAt).getTime();
+                          const endTime = contract.endTime ? new Date(contract.endTime).getTime() : startTime + (contract.duration || 7) * 24 * 60 * 60 * 1000;
                           const progress = Math.min(
-                            (Date.now() - new Date(contract.startTime).getTime()) / 
-                            (new Date(contract.endTime).getTime() - new Date(contract.startTime).getTime()) * 100,
+                            (Date.now() - startTime) / (endTime - startTime) * 100,
                             100
                           );
                           
@@ -1319,7 +1271,7 @@ export default function ArbitragePage() {
                                       <Zap className="w-5 h-5 text-[#F0B90B]" />
                                     </div>
                                     <div>
-                                      <p className="font-semibold text-[#EAECEF]">{contract.productLabel}</p>
+                                      <p className="font-semibold text-[#EAECEF]">{contract.productLabel || 'Arbitrage Contract'}</p>
                                       <p className="text-xs text-[#848E9C]">ID: {contract.id.slice(0, 8)}</p>
                                     </div>
                                   </div>
@@ -1340,12 +1292,12 @@ export default function ArbitragePage() {
                                   </div>
                                   <div className="bg-[#1E2329] rounded-lg p-2.5">
                                     <p className="text-xs text-[#848E9C] mb-1">Time Left</p>
-                                    <p className="font-semibold text-[#F0B90B]">{formatTimeRemaining(contract.endTime)}</p>
+                                    <p className="font-semibold text-[#F0B90B]">{formatTimeRemaining(contract.endTime || contract.updatedAt)}</p>
                                   </div>
                                   <div className="bg-[#1E2329] rounded-lg p-2.5">
                                     <p className="text-xs text-[#848E9C] mb-1">Est. Return</p>
                                     <p className="font-semibold text-green-400">
-                                      +{formatCompactCurrency(contract.amount * contract.dailyRate * contract.dailyRate * 30)}
+                                      +{formatCompactCurrency(contract.amount * contract.dailyRate * 30)}
                                     </p>
                                   </div>
                                 </div>
@@ -1396,7 +1348,7 @@ export default function ArbitragePage() {
                         Staking Tiers
                       </h2>
                       <Badge className="bg-[#F0B90B]/10 text-[#F0B90B] border-[#F0B90B]/20">
-                        Up to 675% APY
+                        Up to 127% APY
                       </Badge>
                     </div>
                     
@@ -1526,7 +1478,7 @@ export default function ArbitragePage() {
                     </div>
 
                     {/* Estimated Returns */}
-                    {stakingAmount && Number(stakingAmount) >= 1000 && (
+                    {estimatedReturns && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
@@ -1539,10 +1491,10 @@ export default function ArbitragePage() {
                         
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                           {[
-                            { label: 'Daily', value: Number(stakingAmount) * 0.003 },
-                            { label: 'Weekly', value: Number(stakingAmount) * 0.021 },
-                            { label: 'Monthly', value: Number(stakingAmount) * 0.09 },
-                            { label: 'APY', value: 109.5, suffix: '%' }
+                            { label: 'Daily', value: estimatedReturns.daily },
+                            { label: 'Weekly', value: estimatedReturns.weekly },
+                            { label: 'Monthly', value: estimatedReturns.monthly },
+                            { label: 'APY', value: estimatedReturns.apy, suffix: '%' }
                           ].map((item, i) => (
                             <motion.div 
                               key={item.label}
@@ -1717,14 +1669,26 @@ export default function ArbitragePage() {
                   <History className="text-[#F0B90B]" />
                   Transaction History
                 </h2>
-                <motion.button
-                  whileHover={{ scale: 1.1, rotate: 90 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setRecordsOpen(false)}
-                  className="text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139] rounded-lg w-10 h-10 flex items-center justify-center transition-colors"
-                >
-                  <X size={20} />
-                </motion.button>
+                <div className="flex items-center gap-2">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => loadUserData()}
+                    disabled={loading}
+                    className="text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139] rounded-lg w-10 h-10 flex items-center justify-center transition-colors"
+                    title="Refresh data"
+                  >
+                    <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.1, rotate: 90 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setRecordsOpen(false)}
+                    className="text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139] rounded-lg w-10 h-10 flex items-center justify-center transition-colors"
+                  >
+                    <X size={20} />
+                  </motion.button>
+                </div>
               </div>
               
               <div className="p-6">
@@ -1758,7 +1722,7 @@ export default function ArbitragePage() {
                               <div className="w-8 h-8 bg-[#F0B90B]/10 rounded-lg flex items-center justify-center">
                                 <Zap className="w-4 h-4 text-[#F0B90B]" />
                               </div>
-                              <span className="font-medium text-[#EAECEF]">{contract.productLabel}</span>
+                              <span className="font-medium text-[#EAECEF]">{contract.productLabel || 'Arbitrage Contract'}</span>
                             </div>
                             <Badge className="bg-green-400/10 text-green-400 border-green-400/20">Active</Badge>
                           </div>
@@ -1773,7 +1737,7 @@ export default function ArbitragePage() {
                             </div>
                             <div className="bg-[#1E2329] rounded-lg p-2">
                               <span className="text-xs text-[#848E9C] block mb-1">Remaining</span>
-                              <p className="font-medium text-[#F0B90B]">{formatTimeRemaining(contract.endTime)}</p>
+                              <p className="font-medium text-[#F0B90B]">{formatTimeRemaining(contract.endTime || contract.updatedAt)}</p>
                             </div>
                           </div>
                         </motion.div>
@@ -1834,7 +1798,7 @@ export default function ArbitragePage() {
                               <div className="w-8 h-8 bg-[#F0B90B]/10 rounded-lg flex items-center justify-center">
                                 <Zap className="w-4 h-4 text-[#F0B90B]" />
                               </div>
-                              <span className="font-medium text-[#EAECEF]">{contract.productLabel}</span>
+                              <span className="font-medium text-[#EAECEF]">{contract.productLabel || 'Arbitrage Contract'}</span>
                             </div>
                             <Badge className="bg-green-400/10 text-green-400 border-green-400/20">Completed</Badge>
                           </div>
@@ -1849,7 +1813,7 @@ export default function ArbitragePage() {
                             </div>
                             <div className="bg-[#1E2329] rounded-lg p-2">
                               <span className="text-xs text-[#848E9C] block mb-1">Date</span>
-                              <p className="font-medium text-[#F0B90B]">{new Date(contract.endTime).toLocaleDateString()}</p>
+                              <p className="font-medium text-[#F0B90B]">{new Date(contract.endTime || contract.updatedAt).toLocaleDateString()}</p>
                             </div>
                           </div>
                         </motion.div>
@@ -1968,15 +1932,12 @@ export default function ArbitragePage() {
                   className="w-12 h-12 bg-gradient-to-br from-[#F0B90B] to-yellow-500 rounded-xl flex items-center justify-center shadow-lg shadow-[#F0B90B]/20"
                 >
                   <span className="text-lg font-bold text-[#0B0E11]">
-                    {user?.first_name?.[0] || user?.email?.[0] || 'U'}
+                    {user?.email?.[0] || 'U'}
                   </span>
                 </motion.div>
                 <div>
                   <p className="font-semibold text-[#EAECEF]">
-                    {user?.first_name && user?.last_name 
-                      ? `${user.first_name} ${user.last_name}` 
-                      : user?.email || 'User'
-                    }
+                    {user?.email || 'User'}
                   </p>
                   <p className="text-xs text-[#848E9C]">{user?.email}</p>
                 </div>

@@ -48,7 +48,7 @@ export default function EnhancedPairSelectorModal({ open, onClose, onSelectPair,
     // Use mock data immediately to avoid CORS issues
     try {
       const fallbackData = CRYPTO_SYMBOLS.map(symbol => {
-        const basePrice = symbol === 'BTC' ? 67000 : symbol === 'ETH' ? 3500 : symbol === 'USDT' ? 1 : Math.random() * 1000;
+        const basePrice = symbol === 'BTC' ? 67668.18 : symbol === 'ETH' ? 3492.89 : symbol === 'USDT' ? 1 : Math.random() * 1000;
         return {
           name: symbol + '/USDT',
           price: basePrice * (1 + (Math.random() - 0.5) * 0.02), // ±2% variation
@@ -74,7 +74,7 @@ export default function EnhancedPairSelectorModal({ open, onClose, onSelectPair,
     // Use mock data immediately to avoid CORS issues
     try {
       const priceMap: Record<string, { price: number; change: number }> = {
-        'BTC': { price: 67000, change: (Math.random() - 0.5) * 5 },
+        'BTC': { price: 67668.18, change: (Math.random() - 0.5) * 5 },
         'ETH': { price: 3500, change: (Math.random() - 0.5) * 5 },
         'BNB': { price: 700, change: (Math.random() - 0.5) * 5 },
         'SOL': { price: 150, change: (Math.random() - 0.5) * 5 },

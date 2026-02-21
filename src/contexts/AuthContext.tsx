@@ -43,12 +43,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Check if user is already logged in on app start
     const checkUser = async () => {
       try {
-        const result = await supabaseApi.getCurrentUser();
+        // Add a wrapper timeout for the entire authentication process
+        const authTimeout = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Authentication initialization timeout')), 15000);
+        });
+
+        const userCheck = supabaseApi.getCurrentUser();
+        const result = await Promise.race([userCheck, authTimeout]) as any;
+        
         if (result && result.profile) {
           setUser(result.profile);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to check current user:', error);
+        // Handle timeout gracefully - don't show error to user
+        if (error.message && (error.message.includes('timeout') || error.message.includes('aborted'))) {
+          console.log('Authentication timeout - user may need to login again');
+        } else {
+          // Only show non-timeout errors
+          console.error('Authentication error:', error);
+        }
       } finally {
         setIsLoading(false);
       }

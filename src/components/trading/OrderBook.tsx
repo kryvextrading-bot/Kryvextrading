@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useMarketData } from '@/contexts/MarketDataContext';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -12,6 +13,7 @@ interface OrderBookProps {
   loading?: boolean;
   baseAsset: string;
   quoteAsset: string;
+  symbol: string;
 }
 
 const OrderBookRow = ({ 
@@ -74,16 +76,20 @@ export const OrderBook: React.FC<OrderBookProps> = ({
   asks,
   loading,
   baseAsset,
-  quoteAsset
+  quoteAsset,
+  symbol
 }) => {
+  const { prices } = useMarketData();
+
   // Use mock data if no real data is available
   const displayData = useMemo(() => {
     if (bids.length === 0 && asks.length === 0 && !loading) {
-      // Generate mock data around current BTC price
-      return generateMockOrderBook(67000);
+      // Generate mock data around current price from MarketDataContext
+      const currentPrice = prices[symbol] || 67668.18;
+      return generateMockOrderBook(currentPrice);
     }
     return { bids, asks };
-  }, [bids, asks, loading]);
+  }, [bids, asks, loading, prices, symbol]);
 
   const { bids: displayBids, asks: displayAsks } = displayData;
 

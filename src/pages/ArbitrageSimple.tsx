@@ -1,6 +1,6 @@
-// pages/ArbitragePage.tsx - COMPLETE PREMIUM REDESIGN
+// pages/ArbitragePage.tsx - COMPLETE PREMIUM REDESIGN with Database Integration
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Zap, Shield, BarChart3, History, Wallet, 
@@ -11,7 +11,7 @@ import {
   Sparkles, Gem, Layers, Lock, Unlock, CheckCircle,
   AlertCircle, MoreVertical, ChevronDown, ChevronUp,
   Star, Flame, Globe, ShieldCheck, Rocket, Crown,
-  Gift, Target, ZapOff, ShieldOff
+  Gift, Target, ZapOff, ShieldOff, RefreshCcw
 } from 'lucide-react';
 import { Dialog } from '@headlessui/react';
 
@@ -22,17 +22,15 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Hooks and Context
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { useUnifiedWallet as useUnifiedWalletV2 } from '@/hooks/useUnifiedWallet-v2';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
 import { useTradingControl } from '@/hooks/useTradingControl';
-import { useUnifiedTrading } from '@/hooks/useUnifiedTrading';
 import { unifiedTradingService } from '@/services/unified-trading-service';
-import { TradeType, ArbitrageContract } from '@/services/unified-trading-service';
+import { TradeType, ArbitrageContract, StakingPosition } from '@/services/unified-trading-service';
 
 // Icons
 import { 
@@ -49,7 +47,6 @@ import {
 } from 'react-icons/si';
 
 // ==================== TYPES ====================
-// Using real types from unified-trading-service
 interface ArbitrageProduct {
   id: string;
   label: string;
@@ -64,6 +61,7 @@ interface ArbitrageProduct {
   risk: 'Low' | 'Medium' | 'High';
   icon: React.ReactNode;
   color: string;
+  dailyRate: number;
 }
 
 interface StakingTier {
@@ -75,28 +73,6 @@ interface StakingTier {
   icon: React.ReactNode;
   color: string;
   bgColor: string;
-}
-
-interface ArbitrageContract {
-  id: string;
-  productId: string;
-  productLabel: string;
-  amount: number;
-  startTime: string;
-  endTime: string;
-  dailyRate: number;
-  status: 'active' | 'completed' | 'failed';
-  pnl?: number;
-  claimed?: number;
-}
-
-interface StakingPosition {
-  id: string;
-  amount: number;
-  startTime: string;
-  dailyRate: number;
-  accumulatedRewards: number;
-  status: 'active' | 'completed' | 'unstaked';
 }
 
 // ==================== CONSTANTS ====================
@@ -129,7 +105,8 @@ const ARBITRAGE_PRODUCTS: ArbitrageProduct[] = [
     features: ['Quick returns', 'Low risk', 'Daily payouts'],
     risk: 'Low',
     icon: <Zap className="w-5 h-5" />,
-    color: 'from-gray-500 to-gray-400'
+    color: 'from-gray-500 to-gray-400',
+    dailyRate: 0.001
   },
   {
     id: 'arb-3d',
@@ -144,7 +121,8 @@ const ARBITRAGE_PRODUCTS: ArbitrageProduct[] = [
     features: ['Enhanced returns', 'Medium risk', 'Compound available'],
     risk: 'Medium',
     icon: <Rocket className="w-5 h-5" />,
-    color: 'from-amber-600 to-amber-500'
+    color: 'from-amber-600 to-amber-500',
+    dailyRate: 0.0012
   },
   {
     id: 'arb-7d',
@@ -159,7 +137,8 @@ const ARBITRAGE_PRODUCTS: ArbitrageProduct[] = [
     features: ['High yield', 'Weekly compounding', 'VIP support'],
     risk: 'Medium',
     icon: <Gem className="w-5 h-5" />,
-    color: 'from-slate-400 to-slate-300'
+    color: 'from-slate-400 to-slate-300',
+    dailyRate: 0.0015
   },
   {
     id: 'arb-10d',
@@ -174,7 +153,8 @@ const ARBITRAGE_PRODUCTS: ArbitrageProduct[] = [
     features: ['Elite returns', 'Priority withdrawals', 'Dedicated manager'],
     risk: 'High',
     icon: <Crown className="w-5 h-5" />,
-    color: 'from-yellow-500 to-yellow-400'
+    color: 'from-yellow-500 to-yellow-400',
+    dailyRate: 0.0018
   },
   {
     id: 'arb-15d',
@@ -189,7 +169,8 @@ const ARBITRAGE_PRODUCTS: ArbitrageProduct[] = [
     features: ['Pro tier returns', 'Instant withdrawals', 'Private community'],
     risk: 'High',
     icon: <Shield className="w-5 h-5" />,
-    color: 'from-purple-500 to-purple-400'
+    color: 'from-purple-500 to-purple-400',
+    dailyRate: 0.002
   },
   {
     id: 'arb-25d',
@@ -204,7 +185,8 @@ const ARBITRAGE_PRODUCTS: ArbitrageProduct[] = [
     features: ['Maximum returns', 'Zero fees', 'Lifetime rewards'],
     risk: 'High',
     icon: <Target className="w-5 h-5" />,
-    color: 'from-blue-500 to-blue-400'
+    color: 'from-blue-500 to-blue-400',
+    dailyRate: 0.0022
   }
 ];
 
@@ -378,18 +360,16 @@ export default function ArbitragePage() {
   const { toast } = useToast();
   const { user, isAuthenticated, logout } = useAuth();
   const { 
-    balances,
-    getTradingBalance,
-    refreshBalances,
+    getTradingBalance, 
+    refreshBalances, 
     loading: walletLoading 
-  } = useUnifiedWalletV2();
+  } = useUnifiedWallet();
   const { 
     userOutcome,
     activeWindows,
     countdown,
     shouldWin 
   } = useTradingControl();
-  const { executeTrade } = useUnifiedTrading();
 
   // UI State
   const [activeTab, setActiveTab] = useState<'arbitrage' | 'staking'>('arbitrage');
@@ -464,9 +444,10 @@ export default function ArbitragePage() {
         .filter(trade => trade.status === 'active')
         .map(trade => ({
           id: trade.id,
+          userId: trade.userId,
           amount: trade.amount,
           startTime: trade.createdAt,
-          dailyRate: 0.001, // Default rate, should come from trade metadata
+          dailyRate: trade.metadata?.dailyRate || 0.001,
           accumulatedRewards: trade.pnl || 0,
           status: trade.status as 'active' | 'completed' | 'unstaked'
         }));
@@ -475,9 +456,10 @@ export default function ArbitragePage() {
         .filter(trade => trade.status === 'completed' || trade.status === 'failed')
         .map(trade => ({
           id: trade.id,
+          userId: trade.userId,
           amount: trade.amount,
           startTime: trade.createdAt,
-          dailyRate: 0.001,
+          dailyRate: trade.metadata?.dailyRate || 0.001,
           accumulatedRewards: trade.pnl || 0,
           status: trade.status as 'active' | 'completed' | 'unstaked'
         }));
@@ -502,7 +484,11 @@ export default function ArbitragePage() {
 
     } catch (error) {
       console.error('Failed to load user data:', error);
-      toast.error('Failed to load your arbitrage data');
+      toast({
+        title: 'Error',
+        description: 'Failed to load your arbitrage data',
+        variant: 'destructive'
+      });
       
       // Initialize with empty data on error
       setActiveContracts([]);
@@ -524,23 +510,39 @@ export default function ArbitragePage() {
   // Handle arbitrage start
   const handleStartArbitrage = useCallback(async () => {
     if (!isAuthenticated) {
-      toast.error('Please login to start arbitrage');
+      toast({
+        title: 'Authentication Required',
+        description: 'Please login to start arbitrage',
+        variant: 'destructive'
+      });
       return;
     }
 
     if (!selectedProduct) {
-      toast.error('Please select an arbitrage product');
+      toast({
+        title: 'No Product Selected',
+        description: 'Please select an arbitrage product',
+        variant: 'destructive'
+      });
       return;
     }
 
     const amount = Number(investmentAmount);
     if (!amount || amount < selectedProduct.minInvestment) {
-      toast.error(`Minimum investment is ${formatCurrency(selectedProduct.minInvestment)}`);
+      toast({
+        title: 'Invalid Amount',
+        description: `Minimum investment is ${formatCurrency(selectedProduct.minInvestment)}`,
+        variant: 'destructive'
+      });
       return;
     }
 
     if (amount > getTradingBalance('USDT')) {
-      toast.error(`Insufficient trading balance. You have ${formatCurrency(getTradingBalance('USDT'))}`);
+      toast({
+        title: 'Insufficient Balance',
+        description: `You have ${formatCurrency(getTradingBalance('USDT'))} USDT available`,
+        variant: 'destructive'
+      });
       return;
     }
 
@@ -548,17 +550,22 @@ export default function ArbitragePage() {
 
     try {
       // Execute arbitrage trade through unified trading service
-      const result = await executeTrade('arbitrage', {
-        amount,
-        productId: selectedProduct.id,
-        productLabel: selectedProduct.label,
-        duration: selectedProduct.duration,
-        asset: 'USDT'
+      const result = await unifiedTradingService.executeTrade({
+        type: 'arbitrage',
+        data: {
+          amount,
+          productId: selectedProduct.id,
+          productLabel: selectedProduct.label,
+          duration: selectedProduct.duration,
+          asset: 'USDT',
+          dailyRate: selectedProduct.dailyRate
+        },
+        userId: user!.id
       });
 
       if (result.success) {
         toast({
-          title: 'Arbitrage Started!',
+          title: 'Arbitrage Started! 🚀',
           description: `Your ${selectedProduct.label} contract has been activated.`,
         });
         
@@ -570,7 +577,7 @@ export default function ArbitragePage() {
         await loadUserData();
         
         // Refresh wallet balance
-        refreshBalances();
+        await refreshBalances();
       } else {
         throw new Error(result.error || 'Failed to start arbitrage');
       }
@@ -585,23 +592,35 @@ export default function ArbitragePage() {
     } finally {
       setExecuting(false);
     }
-  }, [isAuthenticated, selectedProduct, investmentAmount, executeTrade, loadUserData, refreshBalances, toast]);
+  }, [isAuthenticated, selectedProduct, investmentAmount, user, getTradingBalance, refreshBalances, toast]);
 
   // Handle staking start
   const handleStartStaking = useCallback(async () => {
     if (!isAuthenticated) {
-      toast.error('Please login to start staking');
+      toast({
+        title: 'Authentication Required',
+        description: 'Please login to start staking',
+        variant: 'destructive'
+      });
       return;
     }
 
     const amount = Number(stakingAmount);
     if (!amount || amount < 1000) {
-      toast.error('Minimum staking amount is $1,000');
+      toast({
+        title: 'Invalid Amount',
+        description: 'Minimum staking amount is $1,000',
+        variant: 'destructive'
+      });
       return;
     }
 
     if (amount > getTradingBalance('USDT')) {
-      toast.error(`Insufficient trading balance. You have ${formatCurrency(getTradingBalance('USDT'))}`);
+      toast({
+        title: 'Insufficient Balance',
+        description: `You have ${formatCurrency(getTradingBalance('USDT'))} USDT available`,
+        variant: 'destructive'
+      });
       return;
     }
 
@@ -612,16 +631,20 @@ export default function ArbitragePage() {
 
     try {
       // Execute staking trade through unified trading service
-      const result = await executeTrade('staking', {
-        amount,
-        tier: tier.range,
-        dailyRate: tier.dailyRate,
-        asset: 'USDT'
+      const result = await unifiedTradingService.executeTrade({
+        type: 'staking',
+        data: {
+          amount,
+          tier: tier.range,
+          dailyRate: tier.dailyRate,
+          asset: 'USDT'
+        },
+        userId: user!.id
       });
 
       if (result.success) {
         toast({
-          title: 'Staking Started!',
+          title: 'Staking Started! 🎉',
           description: `Your ${tier.range} staking position has been activated.`,
         });
         
@@ -632,7 +655,7 @@ export default function ArbitragePage() {
         await loadUserData();
         
         // Refresh wallet balance
-        refreshBalances();
+        await refreshBalances();
       } else {
         throw new Error(result.error || 'Failed to start staking');
       }
@@ -647,7 +670,22 @@ export default function ArbitragePage() {
     } finally {
       setExecuting(false);
     }
-  }, [isAuthenticated, stakingAmount, executeTrade, loadUserData, refreshBalances, toast]);
+  }, [isAuthenticated, stakingAmount, user, getTradingBalance, refreshBalances, toast]);
+
+  // Calculate estimated returns for staking
+  const estimatedReturns = useMemo(() => {
+    if (!stakingAmount || Number(stakingAmount) < 1000) return null;
+    
+    const amount = Number(stakingAmount);
+    const tier = STAKING_TIERS.find(t => amount >= t.min && amount <= t.max) || STAKING_TIERS[STAKING_TIERS.length - 1];
+    
+    return {
+      daily: amount * tier.dailyRate,
+      weekly: amount * tier.dailyRate * 7,
+      monthly: amount * tier.dailyRate * 30,
+      apy: tier.annualRate
+    };
+  }, [stakingAmount]);
 
   return (
     <motion.div 
@@ -791,7 +829,7 @@ export default function ArbitragePage() {
               >
                 <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-[#F0B90B] to-yellow-500 rounded-xl flex items-center justify-center group-hover:scale-105 transition-all duration-200 shadow-lg shadow-[#F0B90B]/20">
                   <span className="text-sm font-bold text-[#0B0E11]">
-                    {user?.first_name?.[0] || user?.email?.[0] || 'U'}
+                    {user?.email?.[0] || 'U'}
                   </span>
                 </div>
                 <motion.div
@@ -1204,9 +1242,10 @@ export default function ArbitragePage() {
                       
                       <div className="space-y-3">
                         {activeContracts.map((contract, index) => {
+                          const startTime = new Date(contract.createdAt).getTime();
+                          const endTime = contract.endTime ? new Date(contract.endTime).getTime() : startTime + (contract.duration || 7) * 24 * 60 * 60 * 1000;
                           const progress = Math.min(
-                            (Date.now() - new Date(contract.startTime).getTime()) / 
-                            (new Date(contract.endTime).getTime() - new Date(contract.startTime).getTime()) * 100,
+                            (Date.now() - startTime) / (endTime - startTime) * 100,
                             100
                           );
                           
@@ -1232,7 +1271,7 @@ export default function ArbitragePage() {
                                       <Zap className="w-5 h-5 text-[#F0B90B]" />
                                     </div>
                                     <div>
-                                      <p className="font-semibold text-[#EAECEF]">{contract.productLabel}</p>
+                                      <p className="font-semibold text-[#EAECEF]">{contract.productLabel || 'Arbitrage Contract'}</p>
                                       <p className="text-xs text-[#848E9C]">ID: {contract.id.slice(0, 8)}</p>
                                     </div>
                                   </div>
@@ -1253,12 +1292,12 @@ export default function ArbitragePage() {
                                   </div>
                                   <div className="bg-[#1E2329] rounded-lg p-2.5">
                                     <p className="text-xs text-[#848E9C] mb-1">Time Left</p>
-                                    <p className="font-semibold text-[#F0B90B]">{formatTimeRemaining(contract.endTime)}</p>
+                                    <p className="font-semibold text-[#F0B90B]">{formatTimeRemaining(contract.endTime || contract.updatedAt)}</p>
                                   </div>
                                   <div className="bg-[#1E2329] rounded-lg p-2.5">
                                     <p className="text-xs text-[#848E9C] mb-1">Est. Return</p>
                                     <p className="font-semibold text-green-400">
-                                      +{formatCompactCurrency(contract.amount * contract.dailyRate * contract.dailyRate * 30)}
+                                      +{formatCompactCurrency(contract.amount * contract.dailyRate * 30)}
                                     </p>
                                   </div>
                                 </div>
@@ -1309,7 +1348,7 @@ export default function ArbitragePage() {
                         Staking Tiers
                       </h2>
                       <Badge className="bg-[#F0B90B]/10 text-[#F0B90B] border-[#F0B90B]/20">
-                        Up to 675% APY
+                        Up to 127% APY
                       </Badge>
                     </div>
                     
@@ -1439,7 +1478,7 @@ export default function ArbitragePage() {
                     </div>
 
                     {/* Estimated Returns */}
-                    {stakingAmount && Number(stakingAmount) >= 1000 && (
+                    {estimatedReturns && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
@@ -1452,10 +1491,10 @@ export default function ArbitragePage() {
                         
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                           {[
-                            { label: 'Daily', value: Number(stakingAmount) * 0.003 },
-                            { label: 'Weekly', value: Number(stakingAmount) * 0.021 },
-                            { label: 'Monthly', value: Number(stakingAmount) * 0.09 },
-                            { label: 'APY', value: 109.5, suffix: '%' }
+                            { label: 'Daily', value: estimatedReturns.daily },
+                            { label: 'Weekly', value: estimatedReturns.weekly },
+                            { label: 'Monthly', value: estimatedReturns.monthly },
+                            { label: 'APY', value: estimatedReturns.apy, suffix: '%' }
                           ].map((item, i) => (
                             <motion.div 
                               key={item.label}
@@ -1639,7 +1678,7 @@ export default function ArbitragePage() {
                     className="text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139] rounded-lg w-10 h-10 flex items-center justify-center transition-colors"
                     title="Refresh data"
                   >
-                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                    <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
                   </motion.button>
                   <motion.button
                     whileHover={{ scale: 1.1, rotate: 90 }}
@@ -1683,7 +1722,7 @@ export default function ArbitragePage() {
                               <div className="w-8 h-8 bg-[#F0B90B]/10 rounded-lg flex items-center justify-center">
                                 <Zap className="w-4 h-4 text-[#F0B90B]" />
                               </div>
-                              <span className="font-medium text-[#EAECEF]">{contract.productLabel || contract.metadata?.productLabel || 'Arbitrage Contract'}</span>
+                              <span className="font-medium text-[#EAECEF]">{contract.productLabel || 'Arbitrage Contract'}</span>
                             </div>
                             <Badge className="bg-green-400/10 text-green-400 border-green-400/20">Active</Badge>
                           </div>
@@ -1759,7 +1798,7 @@ export default function ArbitragePage() {
                               <div className="w-8 h-8 bg-[#F0B90B]/10 rounded-lg flex items-center justify-center">
                                 <Zap className="w-4 h-4 text-[#F0B90B]" />
                               </div>
-                              <span className="font-medium text-[#EAECEF]">{contract.productLabel || contract.metadata?.productLabel || 'Arbitrage Contract'}</span>
+                              <span className="font-medium text-[#EAECEF]">{contract.productLabel || 'Arbitrage Contract'}</span>
                             </div>
                             <Badge className="bg-green-400/10 text-green-400 border-green-400/20">Completed</Badge>
                           </div>
@@ -1893,15 +1932,12 @@ export default function ArbitragePage() {
                   className="w-12 h-12 bg-gradient-to-br from-[#F0B90B] to-yellow-500 rounded-xl flex items-center justify-center shadow-lg shadow-[#F0B90B]/20"
                 >
                   <span className="text-lg font-bold text-[#0B0E11]">
-                    {user?.first_name?.[0] || user?.email?.[0] || 'U'}
+                    {user?.email?.[0] || 'U'}
                   </span>
                 </motion.div>
                 <div>
                   <p className="font-semibold text-[#EAECEF]">
-                    {user?.first_name && user?.last_name 
-                      ? `${user.first_name} ${user.last_name}` 
-                      : user?.email || 'User'
-                    }
+                    {user?.email || 'User'}
                   </p>
                   <p className="text-xs text-[#848E9C]">{user?.email}</p>
                 </div>

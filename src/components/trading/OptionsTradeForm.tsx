@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useMarketData } from '@/contexts/MarketDataContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -25,6 +26,7 @@ export const OptionsTradeForm: React.FC<OptionsTradeFormProps> = ({
   const [percent, setPercent] = useState(0);
   const [loading, setLoading] = useState(false);
   const [balance, setBalance] = useState(0);
+  const { prices } = useMarketData();
   const [livePrice, setLivePrice] = useState<number | null>(null);
   useEffect(() => {
     const fetchBalance = async () => {
@@ -44,9 +46,11 @@ export const OptionsTradeForm: React.FC<OptionsTradeFormProps> = ({
     const fetchPrice = async () => {
       setLoading(true);
       try {
-        // Mock price for now - replace with actual Binance API
-        const mockPrice = symbol === 'BTCUSDT' ? 67000 : symbol === 'ETHUSDT' ? 3500 : 100;
-        if (mounted) setLivePrice(mockPrice);
+        // Get price from MarketDataContext
+        const baseAsset = symbol.replace('USDT', '');
+        const marketPrice = prices[baseAsset];
+        const priceToUse = marketPrice || (symbol === 'BTCUSDT' ? 67668.18 : symbol === 'ETHUSDT' ? 3492.89 : 100);
+        if (mounted) setLivePrice(priceToUse);
       } catch {
         if (mounted) setLivePrice(null);
       } finally {

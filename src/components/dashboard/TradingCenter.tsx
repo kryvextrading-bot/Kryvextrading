@@ -77,20 +77,20 @@ const stakingTiers = [
 ];
 
 const tradingPairs = [
-  { label: 'BTC/USDT', price: 67000 },
-  { label: 'ETH/USDT', price: 3200 },
-  { label: 'SOL/USDT', price: 150 },
+  { label: 'BTC/USDT', price: 67668.18 },
+  { label: 'ETH/USDT', price: 3492.89 },
+  { label: 'SOL/USDT', price: 856.88 },
 ];
 const timeRanges = [60, 120, 240, 360, 600];
 
 const spotPairs = [
-  { label: 'BTC/USDT', price: 67000 },
-  { label: 'ETH/USDT', price: 3200 },
-  { label: 'SOL/USDT', price: 150 },
+  { label: 'BTC/USDT', price: 67668.18 },
+  { label: 'ETH/USDT', price: 3492.89 },
+  { label: 'SOL/USDT', price: 856.88 },
 ];
 const futuresPairs = [
-  { label: 'BTC/USDT', price: 67000 },
-  { label: 'ETH/USDT', price: 3200 },
+  { label: 'BTC/USDT', price: 67668.18 },
+  { label: 'ETH/USDT', price: 3492.89 },
 ];
 const optionsPairs = tradingPairs;
 

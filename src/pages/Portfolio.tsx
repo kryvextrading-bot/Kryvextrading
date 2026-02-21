@@ -632,7 +632,6 @@ export default function Portfolio() {
   const [userTrades, setUserTrades] = useState<any[]>([]);
   const [positions, setPositions] = useState<any[]>([]);
   const [options, setOptions] = useState<any[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d' | '1y' | 'all'>('30d');
@@ -641,7 +640,6 @@ export default function Portfolio() {
   useEffect(() => {
     if (user) {
       loadUserData();
-      loadTransactions();
     }
   }, [user]);
 
