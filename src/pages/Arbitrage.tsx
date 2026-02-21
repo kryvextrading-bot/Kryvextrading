@@ -27,7 +27,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 // Hooks and Context
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet-v2';
 import { useTradingControl } from '@/hooks/useTradingControl';
 import { unifiedTradingService } from '@/services/unified-trading-service';
 import { TradeType, ArbitrageContract, StakingPosition } from '@/services/unified-trading-service';

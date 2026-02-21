@@ -4,7 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useUserSettings } from './UserSettingsContext';
 import { useMarketData } from './MarketDataContext';
 import { useAuth } from './AuthContext';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet-v2';
 import { supabase } from '@/lib/supabase';
 import walletApiService from '@/services/wallet-api';
 import { walletService } from '@/services/wallet-service-new';
@@ -242,18 +242,14 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const user = auth?.user;
   const { toast } = useToast();
   const {
-    balances: unifiedBalances, // Now Record<string, number>
-    balanceDetails: unifiedBalanceDetails, // Full WalletBalance objects
+    balances: unifiedBalances,
     locks: unifiedLocks,
-    stats: unifiedStats,
     loading: unifiedLoading,
-    refreshing: unifiedRefreshing,
-    getBalance: getUnifiedBalance,
-    getLockedBalance: getUnifiedLockedBalance,
-    getTotalBalance: getUnifiedTotalBalance,
-    refreshData: refreshUnifiedData,
-    fundingBalances,
-    tradingBalances
+    refreshBalances,
+    getFundingBalance,
+    getTradingBalance,
+    getLockedBalance,
+    getTotalBalance
   } = useUnifiedWallet();
   
   // Refs
@@ -288,12 +284,12 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const result: Record<string, BalanceUpdate> = {};
     
     // Start with unified balances
-    Object.entries(unifiedBalances).forEach(([asset, available]) => {
+    Object.entries(unifiedBalances?.funding || {}).forEach(([asset, available]) => {
       result[asset] = {
         asset,
-        available,
-        locked: unifiedBalanceDetails[asset]?.locked || 0,
-        total: unifiedBalanceDetails[asset]?.total || available
+        available: available as number,
+        locked: unifiedLocks[asset] || 0,
+        total: (available as number) + (unifiedLocks[asset] || 0)
       };
     });
     
@@ -306,7 +302,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
     
     return result;
-  }, [unifiedBalances, unifiedBalanceDetails]);
+  }, [unifiedBalances, unifiedLocks]);
 
   // Update local balances state when unified data changes
   const [balances, setBalances] = useState<Record<string, BalanceUpdate>>(getInitialBalances());
@@ -314,6 +310,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     setBalances(convertedBalances);
   }, [convertedBalances]);
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [orders, setOrders] = useState(getInitialOrders);
   const [portfolio, setPortfolio] = useState<Asset[]>([]);
@@ -335,8 +332,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Legacy compatibility
   const legacyBalance = useMemo(() => {
-    return getUnifiedBalance('USDT');
-  }, [getUnifiedBalance]);
+    return getFundingBalance('USDT');
+  }, [getFundingBalance]);
 
   const legacySetBalance = useCallback((amount: number) => {
     console.log('[WalletContext] Setting balance:', amount);
@@ -353,19 +350,19 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   // Get balance methods - now use unified wallet directly
-  const getBalance = useCallback((asset: string): number => {
-    const balance = getUnifiedBalance(asset);
+  const getBalanceLocal = useCallback((asset: string): number => {
+    const balance = getFundingBalance(asset);
     console.log(`[WalletContext] getBalance(${asset}):`, balance, 'type:', typeof balance);
     return balance;
-  }, [getUnifiedBalance]);
+  }, [getFundingBalance]);
 
-  const getLockedBalance = useCallback((asset: string): number => {
-    return getUnifiedLockedBalance(asset);
-  }, [getUnifiedLockedBalance]);
+  const getLockedBalanceLocal = useCallback((asset: string): number => {
+    return getLockedBalance(asset);
+  }, [getLockedBalance]);
 
-  const getTotalBalance = useCallback((asset: string): number => {
-    return getUnifiedTotalBalance(asset);
-  }, [getUnifiedTotalBalance]);
+  const getTotalBalanceLocal = useCallback((asset: string): number => {
+    return getTotalBalance(asset);
+  }, [getTotalBalance]);
 
   // Core balance update method
   const updateBalance = useCallback(async (asset: string, amount: number, operation: 'add' | 'subtract' | 'set'): Promise<void> => {
@@ -530,12 +527,12 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     
     // Check balance
     if (trade.side === 'buy') {
-      const quoteBalance = getBalance(quoteAsset);
+      const quoteBalance = getBalanceLocal(quoteAsset);
       if (quoteBalance < total) {
         throw new Error(`Insufficient ${quoteAsset} balance. Required: ${total}, Available: ${quoteBalance}`);
       }
     } else {
-      const baseBalance = getBalance(baseAsset);
+      const baseBalance = getBalanceLocal(baseAsset);
       if (baseBalance < trade.amount) {
         throw new Error(`Insufficient ${baseAsset} balance. Required: ${trade.amount}, Available: ${baseBalance}`);
       }
@@ -626,7 +623,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
     
     return transaction;
-  }, [user?.id, getBalance, lockBalance, updateBalance, prices, addTransaction]);
+  }, [user?.id, getBalanceLocal, lockBalance, updateBalance, prices, addTransaction]);
 
   // Execute arbitrage
   const executeArbitrage = useCallback(async (arbitrage: ArbitrageExecution): Promise<Transaction> => {
@@ -637,7 +634,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const transactionId = `arb-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     // Check balance
-    const usdtBalance = getBalance('USDT');
+    const usdtBalance = getBalanceLocal('USDT');
     if (usdtBalance < arbitrage.amount) {
       throw new Error(`Insufficient USDT balance. Required: ${arbitrage.amount}, Available: ${usdtBalance}`);
     }
@@ -687,7 +684,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }));
     
     return transaction;
-  }, [user?.id, getBalance, lockBalance, updateBalance, addTransaction]);
+  }, [user?.id, getBalanceLocal, lockBalance, updateBalance, addTransaction]);
 
   // Execute staking
   const executeStaking = useCallback(async (staking: StakingExecution): Promise<Transaction> => {
@@ -698,7 +695,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const transactionId = `stake-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     // Check balance
-    const assetBalance = getBalance(staking.asset);
+    const assetBalance = getBalanceLocal(staking.asset);
     if (assetBalance < staking.amount) {
       throw new Error(`Insufficient ${staking.asset} balance. Required: ${staking.amount}, Available: ${assetBalance}`);
     }
@@ -752,7 +749,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }));
     
     return transaction;
-  }, [user?.id, getBalance, lockBalance, updateBalance, addTransaction]);
+  }, [user?.id, getBalanceLocal, lockBalance, updateBalance, addTransaction]);
 
   // Delete transaction
   const deleteTransaction = useCallback(async (id: string) => {
@@ -1154,7 +1151,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           
           refreshTimeoutRef.current = setTimeout(() => {
             if (isMounted.current) {
-              refreshUnifiedData();
+              refreshBalances();
             }
           }, 200); // Reduced from 1000ms to 200ms
         }
@@ -1167,7 +1164,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         clearTimeout(refreshTimeoutRef.current);
       }
     };
-  }, [user?.id, refreshUnifiedData]);
+  }, [user?.id, refreshBalances]);
 
   // Listen for balance update events - OPTIMIZED
   useEffect(() => {
@@ -1181,7 +1178,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       
       refreshTimeoutRef.current = setTimeout(() => {
         if (isMounted.current) {
-          refreshUnifiedData();
+          refreshBalances();
         }
       }, 100); // Reduced from 500ms to 100ms
     };
@@ -1191,7 +1188,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => {
       window.removeEventListener('balanceUpdate', handleBalanceUpdate);
     };
-  }, [refreshUnifiedData]);
+  }, [refreshBalances]);
 
   // Load initial data
   useEffect(() => {
@@ -1209,7 +1206,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Update portfolio with real data from unified wallet
   useEffect(() => {
-    if (!user?.id) {
+    if (!user?.id || !unifiedBalances) {
       setPortfolio([]);
       return;
     }
@@ -1218,16 +1215,16 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const assets: Asset[] = [];
     
     // Add funding wallet assets
-    Object.entries(fundingBalances).forEach(([symbol, balance]) => {
+    Object.entries(unifiedBalances.funding || {}).forEach(([symbol, balance]) => {
       if (balance > 0) {
         const price = prices?.[symbol] || (symbol === 'USDT' ? 1 : 0);
-        const locked = getUnifiedLockedBalance(symbol);
+        const locked = getLockedBalance(symbol);
         assets.push({
           symbol,
           name: getAssetName(symbol),
-          balance: balance,
+          balance: balance as number,
           locked: locked,
-          value: (balance + locked) * price,
+          value: ((balance as number) + locked) * price,
           price,
           change24h: 0 // TODO: Get from market data
         });
@@ -1235,15 +1232,16 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
     
     // Add trading wallet assets
-    Object.entries(tradingBalances).forEach(([symbol, tradingBalance]) => {
-      if (tradingBalance.total > 0) {
+    Object.entries(unifiedBalances.trading || {}).forEach(([symbol, tradingBalance]) => {
+      const tb = tradingBalance as { available: number; locked: number; total: number };
+      if (tb.total > 0) {
         const price = prices?.[symbol] || (symbol === 'USDT' ? 1 : 0);
         assets.push({
           symbol: symbol + '_TRADING',
           name: getAssetName(symbol) + ' (Trading)',
-          balance: tradingBalance.available,
-          locked: tradingBalance.locked,
-          value: tradingBalance.total * price,
+          balance: tb.available,
+          locked: tb.locked,
+          value: tb.total * price,
           price,
           change24h: 0 // TODO: Get from market data
         });
@@ -1252,7 +1250,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     
     console.log('💰 Portfolio updated from unified wallet:', assets);
     setPortfolio(assets);
-  }, [user?.id, fundingBalances, tradingBalances, prices, getUnifiedLockedBalance]);
+  }, [user?.id, unifiedBalances, prices, getAssetName, getLockedBalance]);
 
   // Recalculate total value and update history
   useEffect(() => {
@@ -1295,48 +1293,44 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [orders.futures, prices]);
 
-  const value: WalletContextType = {
-    balances: convertedBalances, // Use converted balances for compatibility
-    portfolio,
-    transactions,
-    orders,
-    totalValue,
-    valueHistory,
-    loading: unifiedLoading,
-    balance: legacyBalance,
-    setBalance: legacySetBalance,
-    getBalance,
-    getLockedBalance,
-    getTotalBalance,
-    updateBalance,
-    lockBalance,
-    unlockBalance,
-    executeTrade,
-    executeArbitrage,
-    executeStaking,
-    addTransaction,
-    deleteTransaction,
-    updateTransaction,
-    getTransactionHistory,
-    getTotalPortfolioValue,
-    updatePortfolio,
-    refreshBalance: refreshUnifiedData, // Use unified refresh
-    addBalance,
-    removeBalance,
-    freezeBalance,
-    unfreezeBalance,
-    syncUserBalances
-  };
-
   return (
-    <WalletContext.Provider value={value}>
+    <WalletContext.Provider
+      value={{
+        balances,
+        transactions,
+        orders,
+        portfolio,
+        totalValue,
+        valueHistory,
+        loading,
+        balance: legacyBalance,
+        setBalance: legacySetBalance,
+        getBalance: getBalanceLocal,
+        getLockedBalance: getLockedBalanceLocal,
+        getTotalBalance: getTotalBalanceLocal,
+        updateBalance,
+        lockBalance,
+        unlockBalance,
+        addTransaction,
+        deleteTransaction,
+        updateTransaction,
+        getTransactionHistory,
+        getTotalPortfolioValue,
+        updatePortfolio,
+        refreshBalance: refreshBalances,
+        addBalance,
+        removeBalance,
+        freezeBalance,
+        unfreezeBalance,
+        syncUserBalances
+      }}
+    >
       {children}
     </WalletContext.Provider>
   );
 };
 
 // ==================== HOOK ====================
-
 export function useWallet() {
   const context = useContext(WalletContext);
   if (context === undefined) {
@@ -1344,7 +1338,3 @@ export function useWallet() {
   }
   return context;
 }
-
-// ==================== DEFAULT EXPORT ====================
-
-export default WalletProvider;

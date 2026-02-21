@@ -39,7 +39,7 @@ import { CandlestickController, CandlestickElement } from 'chartjs-chart-financi
 
 // Hooks
 import useBinanceStream from '@/hooks/useBinanceStream';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet-v2';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTradingControl } from '@/hooks/useTradingControl';
 import { useNotification } from '@/contexts/NotificationContext';

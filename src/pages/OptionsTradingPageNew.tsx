@@ -14,7 +14,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet-v2';
 import { useBinanceStream } from '@/hooks/useBinanceStream';
 import { useOptionTrading } from '@/hooks/useOptionTrading';
 import { toast } from 'react-hot-toast';

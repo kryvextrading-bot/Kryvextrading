@@ -17,7 +17,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet-v2';
 import { useTradingControl } from '@/hooks/useTradingControl';
 import RecordsModal from '@/components/RecordsModal';
 import WalletTransfer from '@/components/WalletTransfer';
@@ -631,8 +631,9 @@ export default function WalletPage() {
   
   // Use unified wallet with default values
   const { 
-    fundingBalances,
-    tradingBalances,
+    balances,
+    locks,
+    transactions: walletTransactions,
     getFundingBalance,
     getTradingBalance,
     getLockedBalance,
@@ -676,7 +677,7 @@ export default function WalletPage() {
   
   // Stats
   const [stats, setStats] = useState({
-    activeLocks: 0,
+    activeLocks: locks?.length || 0,
     totalVolume: 0,
     winRate: 0
   });
@@ -711,9 +712,9 @@ export default function WalletPage() {
   // Create portfolio from balances for display
   const portfolio = useMemo(() => {
     const safeBalances = {
-      funding: fundingBalances || {},
-      trading: tradingBalances || {},
-      locked: getLockedBalance || {}
+      funding: balances?.funding || {},
+      trading: balances?.trading || {},
+      locked: balances?.locked || {}
     };
     
     const assets: Asset[] = [];
@@ -785,7 +786,7 @@ export default function WalletPage() {
     assetsArray.sort((a, b) => b.value - a.value);
     
     return assetsArray;
-  }, [fundingBalances, tradingBalances, getLockedBalance, prices, getAssetName]);
+  }, [balances, prices, getAssetName]);
 
   // Update stats when locks change
   useEffect(() => {
@@ -806,22 +807,23 @@ export default function WalletPage() {
 
   // Total balance calculations
   const totalFundingBalance = useMemo(() => {
-    const funding = fundingBalances || {};
+    const funding = balances?.funding || {};
     const total = Object.values(funding).reduce((acc, val) => acc + (Number(val) || 0), 0);
     
     return total;
-  }, [fundingBalances]);
+  }, [balances]);
 
   const totalTradingBalance = useMemo(() => {
-    const trading = tradingBalances || {};
+    const trading = balances?.trading || {};
     const total = Object.values(trading).reduce((acc, val) => acc + (Number(val) || 0), 0);
     
     return total;
-  }, [tradingBalances]);
+  }, [balances]);
 
   const totalLockedBalance = useMemo(() => {
-    return Object.values(getLockedBalance || {}).reduce((acc, val) => acc + (Number(val) || 0), 0);
-  }, [getLockedBalance]);
+    const locked = balances?.locked || {};
+    return Object.values(locked).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  }, [balances]);
 
   const displayBalance = useMemo(() => {
     const total = totalFundingBalance + totalTradingBalance + totalLockedBalance;
@@ -1677,14 +1679,14 @@ export default function WalletPage() {
                 <div>
                   <div className="text-xs text-[#848E9C] mb-1">Funding</div>
                   <div className="text-sm font-semibold text-[#EAECEF]">
-                    {hideBalances ? '••••••' : formatCurrency(totalFundingBalance)}
+                    {hideBalances ? '••••••' : formatCurrency(Number(totalFundingBalance) || 0)}
                   </div>
                 </div>
                 <div className="w-px h-8 bg-[#2B3139]"></div>
                 <div>
                   <div className="text-xs text-[#848E9C] mb-1">Trading</div>
                   <div className="text-sm font-semibold text-[#F0B90B]">
-                    {hideBalances ? '••••••' : formatCurrency(totalTradingBalance)}
+                    {hideBalances ? '••••••' : formatCurrency(Number(totalTradingBalance) || 0)}
                   </div>
                 </div>
                 {totalLockedBalance > 0 && (
@@ -2970,13 +2972,13 @@ export default function WalletPage() {
                   asset: selectedSlipTransaction.asset,
                   status: 'Completed',
                   amount: selectedSlipTransaction.amount,
-                  amountUsd: selectedSlipTransaction.metadata?.amountUsd || selectedSlipTransaction.amount,
+                  amountUsd: Number(selectedSlipTransaction.metadata?.amountUsd) || Number(selectedSlipTransaction.amount) || 0,
                   userName: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email : '',
                   userEmail: user?.email || '',
                   network: selectedSlipTransaction.metadata?.network,
                   address: selectedSlipTransaction.metadata?.address,
                   type: selectedSlipTransaction.type === 'Deposit' ? 'deposit' : 'withdrawal',
-                  fee: selectedSlipTransaction.metadata?.fee,
+                  fee: Number(selectedSlipTransaction.metadata?.fee) || 0,
                   txHash: selectedSlipTransaction.metadata?.txHash,
                   reference: selectedSlipTransaction.metadata?.reference
                 }}

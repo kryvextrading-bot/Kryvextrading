@@ -40,7 +40,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useMarketData } from '@/contexts/MarketDataContext';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet-v2';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // News API interfaces
@@ -196,15 +196,15 @@ export default function Index() {
   
   // Use unified wallet for real data
   const {
-    fundingBalances,
-    tradingBalances,
+    balances,
+    locks,
+    transactions,
     getFundingBalance,
     getTradingBalance,
     getLockedBalance,
     getTotalBalance,
-    refreshData: refreshWalletData,
-    loading: walletLoading,
-    balances // Legacy property (same as fundingBalances)
+    refreshBalances: refreshWalletData,
+    loading: walletLoading
   } = useUnifiedWallet();
   
   const [showBalance, setShowBalance] = useState(true);
@@ -279,16 +279,16 @@ export default function Index() {
 
   // Calculate real wallet balances using proper unified wallet structure
   const totalFundingBalance = useMemo(() => {
-    // Use fundingBalances from unified wallet hook
-    const funding = balances || {};
+    // Use funding balances from unified wallet hook
+    const funding = balances?.funding || {};
     return Object.values(funding).reduce((acc, val) => acc + (Number(val) || 0), 0);
   }, [balances]);
 
   const totalTradingBalance = useMemo(() => {
-    // Use tradingBalances from unified wallet hook - simplified calculation
-    if (!tradingBalances) return 0;
+    // Use trading balances from unified wallet hook
+    const trading = balances?.trading || {};
     
-    return Object.values(tradingBalances).reduce((total, balance) => {
+    return Object.values(trading).reduce((total, balance) => {
       // Handle both simple number format and TradingBalance object format
       if (typeof balance === 'number') {
         return total + balance;
@@ -297,70 +297,77 @@ export default function Index() {
       }
       return total;
     }, 0);
-  }, [tradingBalances]);
+  }, [balances]);
 
   const totalLockedBalance = useMemo(() => {
     // Locked balances - simplified calculation
-    if (!tradingBalances) return 0;
+    const trading = balances?.trading || {};
     
-    return Object.values(tradingBalances).reduce((total, balance) => {
+    return Object.values(trading).reduce((total, balance) => {
       if (balance && typeof balance === 'object' && 'locked' in balance) {
         return total + ((balance as { locked: number }).locked || 0);
       }
       return total;
     }, 0);
-  }, [tradingBalances]);
+  }, [balances]);
 
   // Simplified USDT balance calculation
   const usdtBalance = useMemo(() => {
     // Get USDT balance directly from funding wallet
-    const usdtFunding = Number(balances?.USDT || 0);
-    return usdtFunding + totalTradingBalance;
-  }, [balances?.USDT, totalTradingBalance]);
+    const usdtFunding = Number(balances?.funding?.USDT || 0);
+    const usdtTrading = getTradingBalance('USDT');
+    return usdtFunding + usdtTrading;
+  }, [balances, getTradingBalance]);
 
   // Calculate total portfolio value using market prices - optimized
   const totalPortfolioValue = useMemo(() => {
-    if (!balances && !tradingBalances) return 0;
+    if (!balances) return 0;
     
     let total = 0;
     
-    // Add funding balances - simplified
-    Object.entries(balances).forEach(([asset, balance]) => {
-      const numBalance = Number(balance) || 0;
-      if (numBalance <= 0 || asset.includes('_TRADING')) return;
-      
-      // Get price for asset
-      const price = asset === 'USDT' ? 1 : (prices?.[asset] || 0);
-      total += numBalance * price;
-    });
+    // Add funding balances
+    const funding = balances?.funding;
+    if (funding) {
+      Object.entries(funding).forEach(([asset, balance]) => {
+        const numBalance = Number(balance) || 0;
+        if (numBalance <= 0 || asset.includes('_TRADING')) return;
+        
+        // Get price for asset
+        const price = asset === 'USDT' ? 1 : (prices?.[asset] || 0);
+        total += numBalance * price;
+      });
+    }
     
-    // Add trading balances - simplified
-    Object.entries(tradingBalances).forEach(([asset, balance]) => {
-      let numBalance = 0;
-      
-      // Handle both simple number format and TradingBalance object format
-      if (typeof balance === 'number') {
-        numBalance = balance;
-      } else if (balance && typeof balance === 'object' && 'available' in balance) {
-        numBalance = (balance as { available: number }).available || 0;
-      }
-      
-      if (numBalance <= 0) return;
-      
-      // Get price for asset
-      const price = asset === 'USDT' ? 1 : (prices?.[asset] || 0);
-      total += numBalance * price;
-    });
+    // Add trading balances
+    const trading = balances?.trading;
+    if (trading) {
+      Object.entries(trading).forEach(([asset, balance]) => {
+        let numBalance = 0;
+        
+        // Handle both simple number format and TradingBalance object format
+        if (typeof balance === 'number') {
+          numBalance = balance;
+        } else if (balance && typeof balance === 'object' && 'available' in balance) {
+          numBalance = (balance as { available: number }).available || 0;
+        }
+        
+        if (numBalance <= 0) return;
+        
+        // Get price for asset
+        const price = asset === 'USDT' ? 1 : (prices?.[asset] || 0);
+        total += numBalance * price;
+      });
+    }
     
     return total;
-  }, [balances, tradingBalances, prices]);
+  }, [balances, prices]);
 
   const [walletBalance, setWalletBalance] = useState<WalletBalance>({
     totalUSDT: usdtBalance,
     totalUSD: totalPortfolioValue,
-    totalFundingBalance,
-    totalTradingBalance,
-    totalLockedBalance,
+    totalFundingBalance: totalFundingBalance as number,
+    totalTradingBalance: totalTradingBalance as number,
+    totalLockedBalance: totalLockedBalance as number,
     change24h: 5.67, // This would come from real data in production
     lastUpdated: new Date()
   });
@@ -379,9 +386,9 @@ export default function Index() {
         ...prev,
         totalUSDT: usdtBalance,
         totalUSD: totalPortfolioValue,
-        totalFundingBalance,
-        totalTradingBalance,
-        totalLockedBalance
+        totalFundingBalance: Number(totalFundingBalance),
+        totalTradingBalance: Number(totalTradingBalance),
+        totalLockedBalance: Number(totalLockedBalance)
       }));
       
       console.log('💰 [Index] Balance updated:', {
@@ -748,9 +755,9 @@ export default function Index() {
           className="grid grid-cols-4 gap-3"
         >
           {[
-            { icon: DollarSign, label: 'Funding', value: formatCurrency(totalFundingBalance), tooltip: 'Available for deposits/withdrawals' },
-            { icon: TrendingUp, label: 'Trading', value: formatCurrency(totalTradingBalance), tooltip: 'Available for trading' },
-            { icon: Clock, label: 'Locked', value: formatCurrency(totalLockedBalance), tooltip: 'In open orders' },
+            { icon: DollarSign, label: 'Funding', value: formatCurrency(Number(totalFundingBalance)), tooltip: 'Available for deposits/withdrawals' },
+            { icon: TrendingUp, label: 'Trading', value: formatCurrency(Number(totalTradingBalance)), tooltip: 'Available for trading' },
+            { icon: Clock, label: 'Locked', value: formatCurrency(Number(totalLockedBalance)), tooltip: 'In open orders' },
             { icon: Globe, label: 'Pairs', value: '100+' },
           ].map((stat, index) => {
             const Icon = stat.icon;

@@ -37,10 +37,16 @@ import {
   Maximize2,
   Minimize2,
   Lock,
-  Unlock
+  Unlock,
+  Settings,
+  History,
+  Wallet,
+  ArrowUp,
+  ArrowDown,
+  Percent
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet-v2';
 import { useMarketData } from '@/services/marketDataService';
 import { unifiedTradingService } from '@/services/unified-trading-service';
 import { toast } from 'react-hot-toast';
@@ -142,6 +148,31 @@ interface OptionOrder {
   payout?: number;
   result?: 'win' | 'loss';
   isLocked?: boolean;
+}
+
+interface SpotOrder {
+  id: string;
+  symbol: string;
+  side: 'buy' | 'sell';
+  amount: number;
+  price: number;
+  total: number;
+  status: 'open' | 'filled' | 'cancelled';
+  createdAt: number;
+}
+
+interface FuturesPosition {
+  id: string;
+  symbol: string;
+  side: 'long' | 'short';
+  size: number;
+  entryPrice: number;
+  markPrice: number;
+  leverage: number;
+  margin: number;
+  unrealizedPnl: number;
+  liquidationPrice: number;
+  status: 'open' | 'closed' | 'liquidated';
 }
 
 interface ScheduledOrder {
@@ -605,6 +636,465 @@ const OrderBook: React.FC<{
   </BinanceCard>
 );
 
+// Spot Trading Form Component
+const SpotTradingForm: React.FC<{
+  side: OrderSide;
+  onSideChange: (side: OrderSide) => void;
+  amount: string;
+  onAmountChange: (amount: string) => void;
+  onTrade: () => void;
+  balance: number;
+  hideBalance: boolean;
+  price: number;
+  selectedPair: TradingPair;
+  disabled?: boolean;
+}> = ({ side, onSideChange, amount, onAmountChange, onTrade, balance, hideBalance, price, selectedPair, disabled }) => {
+  const [percentage, setPercentage] = useState(0);
+  
+  const handlePercentageClick = (p: number) => {
+    setPercentage(p);
+    const maxAmount = balance / price;
+    onAmountChange((maxAmount * p / 100).toFixed(6));
+  };
+
+  const parsedAmount = parseFloat(amount) || 0;
+  const totalValue = parsedAmount * price;
+
+  return (
+    <BinanceCard className="p-4">
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button
+          onClick={() => onSideChange('buy')}
+          className={`py-3 rounded-lg text-sm font-medium transition-colors ${
+            side === 'buy'
+              ? 'bg-[#0ECB81] text-[#0B0E11]'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
+        >
+          Buy
+        </button>
+        <button
+          onClick={() => onSideChange('sell')}
+          className={`py-3 rounded-lg text-sm font-medium transition-colors ${
+            side === 'sell'
+              ? 'bg-[#F6465D] text-white'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
+        >
+          Sell
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        {/* Balance */}
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Available</span>
+          <span className="text-[#EAECEF] font-medium">
+            {hideBalance ? '••••' : balance.toFixed(2)} USDT
+          </span>
+        </div>
+
+        {/* Amount Input */}
+        <div>
+          <label className="text-xs text-[#848E9C] mb-1 block">Amount ({selectedPair.baseAsset})</label>
+          <div className="relative">
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => {
+                onAmountChange(e.target.value);
+                setPercentage(0);
+              }}
+              placeholder="0.00"
+              className="w-full bg-[#2B3139] border border-[#3A3F4A] rounded-lg px-3 py-3 text-[#EAECEF] font-mono placeholder-[#5E6673] focus:outline-none focus:border-[#F0B90B] transition-colors"
+              step="any"
+              min="0"
+            />
+          </div>
+        </div>
+
+        {/* Percentage Buttons */}
+        <div className="grid grid-cols-4 gap-1">
+          {[25, 50, 75, 100].map(p => (
+            <button
+              key={p}
+              onClick={() => handlePercentageClick(p)}
+              className={`py-2 rounded text-xs transition-colors ${
+                percentage === p
+                  ? 'bg-[#F0B90B] text-[#0B0E11]'
+                  : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+              }`}
+            >
+              {p}%
+            </button>
+          ))}
+        </div>
+
+        {/* Total Value */}
+        {parsedAmount > 0 && (
+          <div className="flex justify-between text-xs pt-2 border-t border-[#2B3139]">
+            <span className="text-[#848E9C]">Total</span>
+            <span className="text-[#EAECEF] font-mono font-medium">
+              ${totalValue.toFixed(2)} USDT
+            </span>
+          </div>
+        )}
+
+        {/* Action Button */}
+        <button
+          onClick={onTrade}
+          disabled={disabled || !amount || parsedAmount <= 0 || totalValue > balance}
+          className={`w-full py-4 rounded-lg font-medium transition-colors ${
+            side === 'buy'
+              ? 'bg-[#0ECB81] hover:bg-[#0ECB81]/90 text-[#0B0E11]'
+              : 'bg-[#F6465D] hover:bg-[#F6465D]/90 text-white'
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          {side === 'buy' ? 'Buy' : 'Sell'} {selectedPair.baseAsset}
+        </button>
+
+        {totalValue > balance && (
+          <p className="text-xs text-[#F6465D] mt-1">
+            Insufficient balance. Need ${(totalValue - balance).toFixed(2)} more USDT
+          </p>
+        )}
+      </div>
+    </BinanceCard>
+  );
+};
+
+// Futures Trading Form Component
+const FuturesTradingForm: React.FC<{
+  side: PositionSide;
+  onSideChange: (side: PositionSide) => void;
+  leverage: number;
+  onLeverageClick: () => void;
+  amount: string;
+  onAmountChange: (amount: string) => void;
+  onTrade: () => void;
+  balance: number;
+  price: number;
+  selectedPair: TradingPair;
+  disabled?: boolean;
+}> = ({ side, onSideChange, leverage, onLeverageClick, amount, onAmountChange, onTrade, balance, price, selectedPair, disabled }) => {
+  const [percentage, setPercentage] = useState(0);
+  
+  const handlePercentageClick = (p: number) => {
+    setPercentage(p);
+    const maxPosition = (balance * leverage) / price;
+    onAmountChange((maxPosition * p / 100).toFixed(6));
+  };
+
+  const parsedAmount = parseFloat(amount) || 0;
+  const positionValue = parsedAmount * price;
+  const marginRequired = positionValue / leverage;
+
+  return (
+    <BinanceCard className="p-4">
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button
+          onClick={() => onSideChange('long')}
+          className={`py-3 rounded-lg text-sm font-medium ${
+            side === 'long'
+              ? 'bg-[#0ECB81] text-[#0B0E11]'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
+        >
+          Long 📈
+        </button>
+        <button
+          onClick={() => onSideChange('short')}
+          className={`py-3 rounded-lg text-sm font-medium ${
+            side === 'short'
+              ? 'bg-[#F6465D] text-white'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
+        >
+          Short 📉
+        </button>
+      </div>
+
+      {/* Leverage Selector */}
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-sm text-[#848E9C]">Leverage</span>
+        <button
+          onClick={onLeverageClick}
+          className="flex items-center space-x-1 bg-[#2B3139] px-3 py-1 rounded-lg hover:bg-[#323A45] transition-colors"
+        >
+          <span className="text-[#F0B90B] font-medium">{leverage}x</span>
+          <ChevronDown className="h-4 w-4 text-[#848E9C]" />
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        {/* Balance Info */}
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Available Balance</span>
+          <span className="text-[#EAECEF] font-medium">{balance.toFixed(2)} USDT</span>
+        </div>
+
+        {/* Position Size Input */}
+        <div>
+          <label className="text-xs text-[#848E9C] mb-1 block">Position Size ({selectedPair.baseAsset})</label>
+          <div className="relative">
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => {
+                onAmountChange(e.target.value);
+                setPercentage(0);
+              }}
+              placeholder="0.00"
+              className="w-full bg-[#2B3139] border border-[#3A3F4A] rounded-lg px-3 py-3 text-[#EAECEF] font-mono placeholder-[#5E6673] focus:outline-none focus:border-[#F0B90B] transition-colors"
+              step="any"
+              min="0"
+            />
+          </div>
+        </div>
+
+        {/* Percentage Buttons */}
+        <div className="grid grid-cols-4 gap-1">
+          {[25, 50, 75, 100].map(p => (
+            <button
+              key={p}
+              onClick={() => handlePercentageClick(p)}
+              className={`py-2 rounded text-xs transition-colors ${
+                percentage === p
+                  ? 'bg-[#F0B90B] text-[#0B0E11]'
+                  : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+              }`}
+            >
+              {p}%
+            </button>
+          ))}
+        </div>
+
+        {/* Position Details */}
+        {parsedAmount > 0 && (
+          <div className="bg-[#2B3139] rounded-lg p-3 space-y-2">
+            <div className="flex justify-between text-xs">
+              <span className="text-[#848E9C]">Position Value</span>
+              <span className="text-[#EAECEF] font-mono">${positionValue.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-[#848E9C]">Margin Required</span>
+              <span className="text-[#EAECEF] font-mono">${marginRequired.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-[#848E9C]">Liquidation Price</span>
+              <span className="text-[#F6465D] font-mono">
+                ${side === 'long' 
+                  ? (price * (1 - 0.8 / leverage)).toFixed(2)
+                  : (price * (1 + 0.8 / leverage)).toFixed(2)
+                }
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Action Button */}
+        <button
+          onClick={onTrade}
+          disabled={disabled || !amount || parsedAmount <= 0 || marginRequired > balance}
+          className={`w-full py-4 rounded-lg font-medium transition-colors ${
+            side === 'long'
+              ? 'bg-[#0ECB81] hover:bg-[#0ECB81]/90 text-[#0B0E11]'
+              : 'bg-[#F6465D] hover:bg-[#F6465D]/90 text-white'
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          Open {side === 'long' ? 'Long' : 'Short'} Position
+        </button>
+
+        {marginRequired > balance && (
+          <p className="text-xs text-[#F6465D] mt-1">
+            Insufficient margin. Need ${(marginRequired - balance).toFixed(2)} more USDT
+          </p>
+        )}
+      </div>
+    </BinanceCard>
+  );
+};
+
+// Options Trading Form Component
+const OptionsTradingForm: React.FC<{
+  direction: OptionDirection;
+  onDirectionChange: (direction: OptionDirection) => void;
+  duration: number;
+  onDurationClick: () => void;
+  fluctuation: number;
+  onFluctuationClick: () => void;
+  amount: string;
+  onAmountChange: (amount: string) => void;
+  onTrade: () => void;
+  balance: number;
+  hideBalance: boolean;
+  isScheduled: boolean;
+  onScheduleClick: () => void;
+  disabled?: boolean;
+}> = ({ direction, onDirectionChange, duration, onDurationClick, fluctuation, onFluctuationClick, amount, onAmountChange, onTrade, balance, hideBalance, isScheduled, onScheduleClick, disabled }) => {
+  const [percentage, setPercentage] = useState(0);
+  const timeframe = OPTIONS_TIMEFRAMES.find(tf => tf.value === duration) || OPTIONS_TIMEFRAMES[0];
+  const currentFluctuation = FLUCTUATION_RANGES[duration]?.find(f => f.value === fluctuation);
+  const payout = currentFluctuation?.payout || timeframe.payout;
+  const profitPercent = (payout - 1) * 100;
+  const parsedAmount = parseFloat(amount) || 0;
+  const potentialReturn = parsedAmount * payout;
+  const potentialProfit = potentialReturn - parsedAmount;
+  
+  const handlePercentageClick = (p: number) => {
+    setPercentage(p);
+    const amount = (timeframe.maxStake * p / 100).toFixed(2);
+    onAmountChange(amount);
+  };
+
+  return (
+    <BinanceCard className="p-4">
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button
+          onClick={() => onDirectionChange('UP')}
+          className={`py-3 rounded-lg text-sm font-medium ${
+            direction === 'UP'
+              ? 'bg-[#0ECB81] text-[#0B0E11]'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
+        >
+          Up
+        </button>
+        <button
+          onClick={() => onDirectionChange('DOWN')}
+          className={`py-3 rounded-lg text-sm font-medium ${
+            direction === 'DOWN'
+              ? 'bg-[#F6465D] text-white'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
+        >
+          Down
+        </button>
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={onScheduleClick}
+          className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
+            isScheduled
+              ? 'bg-[#F0B90B] text-[#0B0E11]'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
+        >
+          <Clock className="w-3 h-3" />
+          {isScheduled ? 'Scheduled' : 'Schedule'}
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Stake Range</span>
+          <span className="text-[#EAECEF]">
+            ${timeframe.minStake} - ${timeframe.maxStake}
+          </span>
+        </div>
+
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Duration</span>
+          <button 
+            onClick={onDurationClick}
+            className="text-[#F0B90B] hover:text-[#F0B90B]/80 transition-colors flex items-center gap-1"
+          >
+            {timeframe.label}
+            <ChevronDown className="w-3 h-3" />
+          </button>
+        </div>
+
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Payout</span>
+          <button 
+            onClick={onFluctuationClick}
+            className="text-[#F0B90B] hover:text-[#F0B90B]/80 transition-colors flex items-center gap-1"
+          >
+            {currentFluctuation?.label || timeframe.label} ({profitPercent.toFixed(0)}%)
+            <ChevronDown className="w-3 h-3" />
+          </button>
+        </div>
+
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Available</span>
+          <span className="text-[#EAECEF]">
+            {hideBalance ? '••••' : balance.toFixed(2)} USDT
+          </span>
+        </div>
+
+        {amount && parsedAmount > 0 && (
+          <>
+            <div className="flex justify-between text-xs">
+              <span className="text-[#848E9C]">Potential Return</span>
+              <span className="text-[#0ECB81] font-mono">
+                ${potentialReturn.toFixed(2)} USDT
+              </span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-[#848E9C]">Potential Profit</span>
+              <span className="text-[#0ECB81] font-mono">
+                +${potentialProfit.toFixed(2)} USDT
+              </span>
+            </div>
+          </>
+        )}
+
+        <div className="relative">
+          <input
+            type="number"
+            value={amount}
+            onChange={(e) => {
+              onAmountChange(e.target.value);
+              setPercentage(0);
+            }}
+            placeholder="Enter stake amount"
+            className="w-full bg-[#2B3139] border border-[#3A3F4A] rounded-lg px-3 py-3 text-[#EAECEF] font-mono placeholder-[#5E6673] focus:outline-none focus:border-[#F0B90B] transition-colors"
+            min={timeframe.minStake}
+            max={timeframe.maxStake}
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848E9C]">
+            USDT
+          </span>
+        </div>
+
+        <div className="grid grid-cols-4 gap-1">
+          {[25, 50, 75, 100].map(p => {
+            const amount = (timeframe.maxStake * p / 100).toFixed(2);
+            return (
+              <button
+                key={p}
+                onClick={() => handlePercentageClick(p)}
+                className={`py-2 rounded text-xs transition-colors ${
+                  percentage === p
+                    ? 'bg-[#F0B90B] text-[#0B0E11]'
+                    : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+                }`}
+              >
+                {p}%
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={onTrade}
+          disabled={disabled || !amount || parsedAmount < timeframe.minStake || parsedAmount > timeframe.maxStake || parsedAmount > balance}
+          className="w-full bg-[#F0B90B] text-[#0B0E11] py-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#F0B90B]/90 transition-colors"
+        >
+          {isScheduled ? 'Schedule Trade' : 'Buy Option'}
+        </button>
+
+        {parsedAmount > balance && (
+          <p className="text-xs text-[#F6465D] mt-1">
+            Insufficient balance. Need ${parsedAmount.toFixed(2)} USDT
+          </p>
+        )}
+      </div>
+    </BinanceCard>
+  );
+};
+
 // Active Trade Card Component
 const ActiveTradeCard: React.FC<{ 
   trade: OptionOrder; 
@@ -966,449 +1456,13 @@ const CompletedOrderCard: React.FC<{ order: OptionOrder }> = ({ order }) => {
   );
 };
 
-// Options Trading Form Component
-const OptionsTradingForm: React.FC<{
-  direction: OptionDirection;
-  onDirectionChange: (direction: OptionDirection) => void;
-  duration: number;
-  onDurationClick: () => void;
-  fluctuation: number;
-  onFluctuationClick: () => void;
-  amount: string;
-  onAmountChange: (amount: string) => void;
-  onTrade: () => void;
-  balance: number;
-  hideBalance: boolean;
-  isScheduled: boolean;
-  onScheduleClick: () => void;
-  disabled?: boolean;
-}> = ({ direction, onDirectionChange, duration, onDurationClick, fluctuation, onFluctuationClick, amount, onAmountChange, onTrade, balance, hideBalance, isScheduled, onScheduleClick, disabled }) => {
-  const [percentage, setPercentage] = useState(0);
-  const timeframe = OPTIONS_TIMEFRAMES.find(tf => tf.value === duration) || OPTIONS_TIMEFRAMES[0];
-  const currentFluctuation = FLUCTUATION_RANGES[duration]?.find(f => f.value === fluctuation);
-  const payout = currentFluctuation?.payout || timeframe.payout;
-  const profitPercent = (payout - 1) * 100;
-  const parsedAmount = parseFloat(amount) || 0;
-  const potentialReturn = parsedAmount * payout;
-  const potentialProfit = potentialReturn - parsedAmount;
-  
-  const handlePercentageClick = (p: number) => {
-    setPercentage(p);
-    const amount = (timeframe.maxStake * p / 100).toFixed(2);
-    onAmountChange(amount);
-  };
-
-  return (
-    <BinanceCard className="p-4">
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        <button
-          onClick={() => onDirectionChange('UP')}
-          className={`py-3 rounded-lg text-sm font-medium ${
-            direction === 'UP'
-              ? 'bg-[#0ECB81] text-[#0B0E11]'
-              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
-          }`}
-        >
-          Up
-        </button>
-        <button
-          onClick={() => onDirectionChange('DOWN')}
-          className={`py-3 rounded-lg text-sm font-medium ${
-            direction === 'DOWN'
-              ? 'bg-[#F6465D] text-white'
-              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
-          }`}
-        >
-          Down
-        </button>
-      </div>
-
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={onScheduleClick}
-          className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
-            isScheduled
-              ? 'bg-[#F0B90B] text-[#0B0E11]'
-              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
-          }`}
-        >
-          <Clock className="w-3 h-3" />
-          {isScheduled ? 'Scheduled' : 'Schedule'}
-        </button>
-      </div>
-
-      <div className="space-y-4">
-        <div className="flex justify-between text-xs">
-          <span className="text-[#848E9C]">Stake Range</span>
-          <span className="text-[#EAECEF]">
-            ${timeframe.minStake} - ${timeframe.maxStake}
-          </span>
-        </div>
-
-        <div className="flex justify-between text-xs">
-          <span className="text-[#848E9C]">Duration</span>
-          <button 
-            onClick={onDurationClick}
-            className="text-[#F0B90B] hover:text-[#F0B90B]/80 transition-colors flex items-center gap-1"
-          >
-            {timeframe.label}
-            <ChevronDown className="w-3 h-3" />
-          </button>
-        </div>
-
-        <div className="flex justify-between text-xs">
-          <span className="text-[#848E9C]">Payout</span>
-          <button 
-            onClick={onFluctuationClick}
-            className="text-[#F0B90B] hover:text-[#F0B90B]/80 transition-colors flex items-center gap-1"
-          >
-            {currentFluctuation?.label || timeframe.label} ({profitPercent.toFixed(0)}%)
-            <ChevronDown className="w-3 h-3" />
-          </button>
-        </div>
-
-        <div className="flex justify-between text-xs">
-          <span className="text-[#848E9C]">Available</span>
-          <span className="text-[#EAECEF]">
-            {hideBalance ? '••••' : balance.toFixed(2)} USDT
-          </span>
-        </div>
-
-        {amount && parsedAmount > 0 && (
-          <>
-            <div className="flex justify-between text-xs">
-              <span className="text-[#848E9C]">Potential Return</span>
-              <span className="text-[#0ECB81] font-mono">
-                ${potentialReturn.toFixed(2)} USDT
-              </span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-[#848E9C]">Potential Profit</span>
-              <span className="text-[#0ECB81] font-mono">
-                +${potentialProfit.toFixed(2)} USDT
-              </span>
-            </div>
-          </>
-        )}
-
-        <div className="relative">
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => {
-              onAmountChange(e.target.value);
-              setPercentage(0);
-            }}
-            placeholder="Enter stake amount"
-            className="w-full bg-[#2B3139] border border-[#3A3F4A] rounded-lg px-3 py-3 text-[#EAECEF] font-mono placeholder-[#5E6673] focus:outline-none focus:border-[#F0B90B] transition-colors"
-            min={timeframe.minStake}
-            max={timeframe.maxStake}
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848E9C]">
-            USDT
-          </span>
-        </div>
-
-        <div className="grid grid-cols-4 gap-1">
-          {[25, 50, 75, 100].map(p => {
-            const amount = (timeframe.maxStake * p / 100).toFixed(2);
-            return (
-              <button
-                key={p}
-                onClick={() => handlePercentageClick(p)}
-                className={`py-2 rounded text-xs transition-colors ${
-                  percentage === p
-                    ? 'bg-[#F0B90B] text-[#0B0E11]'
-                    : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
-                }`}
-              >
-                {p}%
-              </button>
-            );
-          })}
-        </div>
-
-        <button
-          onClick={onTrade}
-          disabled={disabled || !amount || parsedAmount < timeframe.minStake || parsedAmount > timeframe.maxStake || parsedAmount > balance}
-          className="w-full bg-[#F0B90B] text-[#0B0E11] py-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#F0B90B]/90 transition-colors"
-        >
-          {isScheduled ? 'Schedule Trade' : 'Buy Option'}
-        </button>
-
-        {parsedAmount > balance && (
-          <p className="text-xs text-[#F6465D] mt-1">
-            Insufficient balance. Need ${parsedAmount.toFixed(2)} USDT
-          </p>
-        )}
-      </div>
-    </BinanceCard>
-  );
-};
-
-// Spot Trading Form Component
-const SpotTradingForm: React.FC<{
-  side: 'buy' | 'sell';
-  onSideChange: (side: 'buy' | 'sell') => void;
-  amount: string;
-  onAmountChange: (amount: string) => void;
-  balance: number;
-  currentPrice: number;
-  hideBalance: boolean;
-  disabled?: boolean;
-}> = ({ side, onSideChange, amount, onAmountChange, balance, currentPrice, hideBalance, disabled }) => {
-  const parsedAmount = parseFloat(amount) || 0;
-  const total = parsedAmount * currentPrice;
-
-  return (
-    <BinanceCard className="p-4">
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        <button
-          onClick={() => onSideChange('buy')}
-          className={`py-3 rounded-lg text-sm font-medium ${
-            side === 'buy'
-              ? 'bg-[#0ECB81] text-[#0B0E11]'
-              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
-          }`}
-        >
-          Buy
-        </button>
-        <button
-          onClick={() => onSideChange('sell')}
-          className={`py-3 rounded-lg text-sm font-medium ${
-            side === 'sell'
-              ? 'bg-[#F6465D] text-white'
-              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
-          }`}
-        >
-          Sell
-        </button>
-      </div>
-
-      <div className="space-y-4">
-        <div className="flex justify-between text-xs">
-          <span className="text-[#848E9C]">Available</span>
-          <span className="text-[#EAECEF]">
-            {hideBalance ? '••••' : balance.toFixed(2)} USDT
-          </span>
-        </div>
-
-        <div className="flex justify-between text-xs">
-          <span className="text-[#848E9C]">Price</span>
-          <span className="text-[#EAECEF] font-mono">
-            ${currentPrice.toFixed(2)}
-          </span>
-        </div>
-
-        {amount && parsedAmount > 0 && (
-          <div className="flex justify-between text-xs">
-            <span className="text-[#848E9C]">Total</span>
-            <span className="text-[#EAECEF] font-mono">
-              ${total.toFixed(2)} USDT
-            </span>
-          </div>
-        )}
-
-        <div className="relative">
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => onAmountChange(e.target.value)}
-            placeholder="Enter amount"
-            className="w-full bg-[#2B3139] border border-[#3A3F4A] rounded-lg px-3 py-3 text-[#EAECEF] font-mono placeholder-[#5E6673] focus:outline-none focus:border-[#F0B90B] transition-colors"
-            min="0"
-            step="0.001"
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848E9C]">
-            BTC
-          </span>
-        </div>
-
-        <div className="grid grid-cols-4 gap-1">
-          {[25, 50, 75, 100].map(p => {
-            const amount = (balance * p / 100).toFixed(6);
-            return (
-              <button
-                key={p}
-                onClick={() => onAmountChange(amount)}
-                className="py-2 rounded text-xs bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF] transition-colors"
-              >
-                {p}%
-              </button>
-            );
-          })}
-        </div>
-
-        <button
-          disabled={disabled || !amount || parsedAmount <= 0 || (side === 'buy' && total > balance)}
-          className="w-full bg-[#F0B90B] text-[#0B0E11] py-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#F0B90B]/90 transition-colors"
-        >
-          {side === 'buy' ? 'Buy BTC' : 'Sell BTC'}
-        </button>
-
-        {side === 'buy' && total > balance && (
-          <p className="text-xs text-[#F6465D] mt-1">
-            Insufficient balance. Need ${total.toFixed(2)} USDT
-          </p>
-        )}
-      </div>
-    </BinanceCard>
-  );
-};
-
-// Futures Trading Form Component
-const FuturesTradingForm: React.FC<{
-  side: 'long' | 'short';
-  onSideChange: (side: 'long' | 'short') => void;
-  leverage: number;
-  onLeverageChange: (leverage: number) => void;
-  amount: string;
-  onAmountChange: (amount: string) => void;
-  balance: number;
-  currentPrice: number;
-  hideBalance: boolean;
-  disabled?: boolean;
-}> = ({ side, onSideChange, leverage, onLeverageChange, amount, onAmountChange, balance, currentPrice, hideBalance, disabled }) => {
-  const parsedAmount = parseFloat(amount) || 0;
-  const notional = parsedAmount * currentPrice;
-  const margin = notional / leverage;
-  const roe = side === 'long' ? 2.5 : -2.5; // Placeholder ROE calculation
-
-  return (
-    <BinanceCard className="p-4">
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        <button
-          onClick={() => onSideChange('long')}
-          className={`py-3 rounded-lg text-sm font-medium ${
-            side === 'long'
-              ? 'bg-[#0ECB81] text-[#0B0E11]'
-              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
-          }`}
-        >
-          Long
-        </button>
-        <button
-          onClick={() => onSideChange('short')}
-          className={`py-3 rounded-lg text-sm font-medium ${
-            side === 'short'
-              ? 'bg-[#F6465D] text-white'
-              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
-          }`}
-        >
-          Short
-        </button>
-      </div>
-
-      <div className="space-y-4">
-        <div className="flex justify-between text-xs">
-          <span className="text-[#848E9C]">Available</span>
-          <span className="text-[#EAECEF]">
-            {hideBalance ? '••••' : balance.toFixed(2)} USDT
-          </span>
-        </div>
-
-        <div className="flex justify-between text-xs">
-          <span className="text-[#848E9C]">Leverage</span>
-          <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min="1"
-              max="125"
-              value={leverage}
-              onChange={(e) => onLeverageChange(parseInt(e.target.value))}
-              className="w-16 h-1 bg-[#2B3139] rounded-lg appearance-none cursor-pointer"
-              title="Adjust leverage"
-            />
-            <span className="text-[#F0B90B] font-mono text-xs">
-              {leverage}x
-            </span>
-          </div>
-        </div>
-
-        <div className="flex justify-between text-xs">
-          <span className="text-[#848E9C]">Price</span>
-          <span className="text-[#EAECEF] font-mono">
-            ${currentPrice.toFixed(2)}
-          </span>
-        </div>
-
-        {amount && parsedAmount > 0 && (
-          <>
-            <div className="flex justify-between text-xs">
-              <span className="text-[#848E9C]">Notional</span>
-              <span className="text-[#EAECEF] font-mono">
-                ${notional.toFixed(2)} USDT
-              </span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-[#848E9C]">Margin</span>
-              <span className="text-[#EAECEF] font-mono">
-                ${margin.toFixed(2)} USDT
-              </span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-[#848E9C]">Est. ROE</span>
-              <span className={`font-mono ${roe >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
-                {roe >= 0 ? '+' : ''}{roe.toFixed(2)}%
-              </span>
-            </div>
-          </>
-        )}
-
-        <div className="relative">
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => onAmountChange(e.target.value)}
-            placeholder="Enter amount"
-            className="w-full bg-[#2B3139] border border-[#3A3F4A] rounded-lg px-3 py-3 text-[#EAECEF] font-mono placeholder-[#5E6673] focus:outline-none focus:border-[#F0B90B] transition-colors"
-            min="0"
-            step="0.001"
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848E9C]">
-            BTC
-          </span>
-        </div>
-
-        <div className="grid grid-cols-4 gap-1">
-          {[25, 50, 75, 100].map(p => {
-            const amount = (balance * p / 100).toFixed(6);
-            return (
-              <button
-                key={p}
-                onClick={() => onAmountChange(amount)}
-                className="py-2 rounded text-xs bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF] transition-colors"
-              >
-                {p}%
-              </button>
-            );
-          })}
-        </div>
-
-        <button
-          disabled={disabled || !amount || parsedAmount <= 0 || margin > balance}
-          className="w-full bg-[#F0B90B] text-[#0B0E11] py-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#F0B90B]/90 transition-colors"
-        >
-          {side === 'long' ? 'Buy/Long' : 'Sell/Short'}
-        </button>
-
-        {margin > balance && (
-          <p className="text-xs text-[#F6465D] mt-1">
-            Insufficient margin. Need ${margin.toFixed(2)} USDT
-          </p>
-        )}
-      </div>
-    </BinanceCard>
-  );
-};
-
 // ==================== MAIN COMPONENT ====================
 
 export default function UnifiedTradingPage() {
   const navigate = useNavigate();
   const { symbol, tab } = useParams();
   const { user, isAuthenticated } = useAuth();
-  const { getTradingBalance, refreshData } = useUnifiedWallet();
+  const { getTradingBalance, refreshBalances } = useUnifiedWallet();
 
   // Find selected pair
   const selectedPair = useMemo(() => {
@@ -1442,16 +1496,18 @@ export default function UnifiedTradingPage() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [chartExpanded, setChartExpanded] = useState(false);
   
-  // Spot State (simplified for brevity)
-  const [spotSide, setSpotSide] = useState<'buy' | 'sell'>('buy');
+  // Spot State
+  const [spotSide, setSpotSide] = useState<OrderSide>('buy');
   const [spotAmount, setSpotAmount] = useState('');
+  const [spotOrders, setSpotOrders] = useState<SpotOrder[]>([]);
   
-  // Futures State (simplified for brevity)
-  const [futuresSide, setFuturesSide] = useState<'long' | 'short'>('long');
-  const [futuresLeverage, setFuturesLeverage] = useState(100);
+  // Futures State
+  const [futuresSide, setFuturesSide] = useState<PositionSide>('long');
+  const [futuresLeverage, setFuturesLeverage] = useState(10);
   const [futuresAmount, setFuturesAmount] = useState('');
   const [showLeverageModal, setShowLeverageModal] = useState(false);
   const [futuresBalance, setFuturesBalance] = useState(0);
+  const [futuresPositions, setFuturesPositions] = useState<FuturesPosition[]>([]);
 
   // Options State
   const [optionDirection, setOptionDirection] = useState<OptionDirection>('UP');
@@ -1512,12 +1568,8 @@ export default function UnifiedTradingPage() {
     const loadOrders = async () => {
       setLoading(true);
       try {
-        console.log('🔄 [LoadOrders] Starting to load orders for user:', user.id);
-        
         // Load active options
         const active = await unifiedTradingService.getActiveOptionsOrders(user.id);
-        console.log('📋 [LoadOrders] Raw active orders from service:', active);
-        
         const formattedActive: OptionOrder[] = active.map(order => ({
           id: order.id,
           userId: order.userId,
@@ -1534,15 +1586,10 @@ export default function UnifiedTradingPage() {
           fee: order.fee || order.stake * 0.001,
           isLocked: true
         }));
-        
-        console.log('📋 [LoadOrders] Formatted active orders:', formattedActive);
-        console.log('📋 [LoadOrders] Setting active orders count:', formattedActive.length);
         setActiveOrders(formattedActive);
 
         // Load completed options
         const completed = await unifiedTradingService.getCompletedOptionsOrders(user.id);
-        console.log('📋 [LoadOrders] Raw completed orders from service:', completed);
-        
         const formattedCompleted: OptionOrder[] = completed.map(order => {
           const isWin = order.pnl && order.pnl > 0;
           return {
@@ -1564,9 +1611,6 @@ export default function UnifiedTradingPage() {
             result: isWin ? 'win' : 'loss'
           };
         });
-        
-        console.log('📋 [LoadOrders] Formatted completed orders:', formattedCompleted);
-        console.log('📋 [LoadOrders] Setting completed orders count:', formattedCompleted.length);
         setCompletedOrders(formattedCompleted);
       } catch (error) {
         console.error('❌ [LoadOrders] Error loading orders:', error);
@@ -1580,36 +1624,18 @@ export default function UnifiedTradingPage() {
 
   // Handle order expiration
   const handleOrderExpire = useCallback(async (orderId: string) => {
-    console.log('🕐 [handleOrderExpire] Called with orderId:', orderId);
-    
-    if (processingOrder) {
-      console.log('🚫 [handleOrderExpire] Blocked by processingOrder state');
-      return;
-    }
+    if (processingOrder) return;
     
     setProcessingOrder(orderId);
     
     try {
-      console.log('🔄 [handleOrderExpire] Calling expireOptionsTrade for:', orderId);
       const result = await unifiedTradingService.expireOptionsTrade(orderId);
       
-      console.log('✅ [handleOrderExpire] Result from service:', result);
-      
       if (result.success) {
-        // Find the expired order in active orders
         const expiredOrder = activeOrders.find(o => o.id === orderId);
-        console.log('🔍 [handleOrderExpire] Found expired order:', expiredOrder);
-        
         if (expiredOrder) {
-          // Remove from active orders
-          setActiveOrders(prev => {
-            console.log('📋 [Active] Before removal:', prev.length);
-            const filtered = prev.filter(o => o.id !== orderId);
-            console.log('📋 [Active] After removal:', filtered.length);
-            return filtered;
-          });
+          setActiveOrders(prev => prev.filter(o => o.id !== orderId));
           
-          // Create completed order
           const completedOrder: OptionOrder = {
             ...expiredOrder,
             status: 'COMPLETED',
@@ -1620,63 +1646,136 @@ export default function UnifiedTradingPage() {
             endTime: Date.now() / 1000
           };
           
-          console.log('📋 [Completed] New completed order:', completedOrder);
-          
-          // Add to completed orders (avoid duplicates)
           setCompletedOrders(prev => {
-            console.log('📋 [Completed] Before addition:', prev.length);
-            
-            // Check if order already exists
             const exists = prev.some(o => o.id === orderId);
-            if (exists) {
-              console.log('📋 [Completed] Order already exists, skipping');
-              return prev;
-            }
-            
-            const newCompleted = [completedOrder, ...prev];
-            console.log('📋 [Completed] After addition:', newCompleted.length);
-            return newCompleted;
+            if (exists) return prev;
+            return [completedOrder, ...prev];
           });
           
-          // Refresh balances to update locked funds
-          if (typeof refreshData === 'function') {
-            await refreshData();
-          }
+          await refreshBalances();
 
-          // Show toast notification
           if (result.result === 'win') {
-            const profitAmount = result.profit || 0;
             toast.success(
               <div>
                 <div className="font-bold">🎉 You Won!</div>
-                <div className="text-sm">+${profitAmount.toFixed(2)} USDT Profit</div>
+                <div className="text-sm">+${result.profit?.toFixed(2)} USDT Profit</div>
               </div>,
               { duration: 5000 }
             );
           } else {
-            const lossAmount = Math.abs(result.profit || 0);
             toast.error(
               <div>
                 <div className="font-bold">Trade Lost</div>
-                <div className="text-sm">-${lossAmount.toFixed(2)} USDT</div>
+                <div className="text-sm">-${Math.abs(result.profit || 0).toFixed(2)} USDT</div>
               </div>,
               { duration: 5000 }
             );
           }
-        } else {
-          console.warn('⚠️ [handleOrderExpire] Expired order not found in active orders:', orderId);
         }
-      } else {
-        console.error('❌ [handleOrderExpire] Service returned failure:', result.error);
       }
     } catch (error) {
       console.error('❌ [handleOrderExpire] Error expiring order:', error);
       toast.error('Failed to settle trade');
     } finally {
-      console.log('🔄 [handleOrderExpire] Clearing processingOrder');
       setProcessingOrder(null);
     }
-  }, [activeOrders, displayPrice, refreshData, processingOrder]);
+  }, [activeOrders, displayPrice, refreshBalances, processingOrder]);
+
+  // Handle spot trade
+  const handleSpotTrade = async () => {
+    if (!isAuthenticated) {
+      toast.error('Please login to trade');
+      return;
+    }
+
+    const parsedAmount = parseFloat(spotAmount);
+    if (!parsedAmount || parsedAmount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    const total = parsedAmount * displayPrice;
+    if (total > getTradingBalance('USDT')) {
+      toast.error(`Insufficient balance. Need $${total.toFixed(2)} USDT`);
+      return;
+    }
+
+    // Simulate order creation
+    const newOrder: SpotOrder = {
+      id: `spot_${Date.now()}`,
+      symbol: selectedPair.symbol,
+      side: spotSide,
+      amount: parsedAmount,
+      price: displayPrice,
+      total: total,
+      status: 'filled',
+      createdAt: Date.now() / 1000
+    };
+
+    setSpotOrders(prev => [newOrder, ...prev]);
+    
+    toast.success(
+      <div>
+        <div className="font-bold">Order Executed!</div>
+        <div className="text-sm">{spotSide === 'buy' ? 'Bought' : 'Sold'} {parsedAmount} {selectedPair.baseAsset}</div>
+      </div>,
+      { duration: 5000 }
+    );
+
+    setSpotAmount('');
+  };
+
+  // Handle futures trade
+  const handleFuturesTrade = async () => {
+    if (!isAuthenticated) {
+      toast.error('Please login to trade');
+      return;
+    }
+
+    const parsedAmount = parseFloat(futuresAmount);
+    if (!parsedAmount || parsedAmount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    const positionValue = parsedAmount * displayPrice;
+    const marginRequired = positionValue / futuresLeverage;
+
+    if (marginRequired > getTradingBalance('USDT')) {
+      toast.error(`Insufficient margin. Need $${marginRequired.toFixed(2)} USDT`);
+      return;
+    }
+
+    // Create new position
+    const newPosition: FuturesPosition = {
+      id: `future_${Date.now()}`,
+      symbol: selectedPair.symbol,
+      side: futuresSide,
+      size: parsedAmount,
+      entryPrice: displayPrice,
+      markPrice: displayPrice,
+      leverage: futuresLeverage,
+      margin: marginRequired,
+      unrealizedPnl: 0,
+      liquidationPrice: futuresSide === 'long' 
+        ? displayPrice * (1 - 0.8 / futuresLeverage)
+        : displayPrice * (1 + 0.8 / futuresLeverage),
+      status: 'open'
+    };
+
+    setFuturesPositions(prev => [newPosition, ...prev]);
+    
+    toast.success(
+      <div>
+        <div className="font-bold">Position Opened!</div>
+        <div className="text-sm">{futuresSide === 'long' ? 'Long' : 'Short'} {parsedAmount} {selectedPair.baseAsset}</div>
+        <div className="text-xs text-[#848E9C]">Leverage: {futuresLeverage}x | Margin: ${marginRequired.toFixed(2)}</div>
+      </div>,
+      { duration: 5000 }
+    );
+
+    setFuturesAmount('');
+  };
 
   // Handle option trade
   const handleOptionTrade = async () => {
@@ -1699,8 +1798,7 @@ export default function UnifiedTradingPage() {
       return;
     }
 
-    const balance = getTradingBalance('USDT');
-    if (parsedAmount > balance) {
+    if (parsedAmount > getTradingBalance('USDT')) {
       toast.error(`Insufficient balance. Need $${parsedAmount.toFixed(2)} USDT`);
       return;
     }
@@ -1710,7 +1808,6 @@ export default function UnifiedTradingPage() {
 
     try {
       if (isScheduled) {
-        // Handle scheduled trade
         const scheduledTimeStr = new Date(Date.now() + 
           (scheduledTime.hours * 3600 + scheduledTime.minutes * 60 + scheduledTime.seconds) * 1000
         ).toISOString();
@@ -1731,7 +1828,6 @@ export default function UnifiedTradingPage() {
         toast.success(`Trade scheduled for ${scheduledTime.hours}:${scheduledTime.minutes}:${scheduledTime.seconds} UTC`);
         setIsScheduled(false);
       } else {
-        // Execute immediate trade
         const result = await unifiedTradingService.executeTrade({
           type: 'options',
           data: {
@@ -1748,9 +1844,6 @@ export default function UnifiedTradingPage() {
         });
 
         if (result.success && result.trade) {
-          console.log('✅ [TradeCreation] Trade created successfully:', result.trade);
-          
-          // Add to active orders
           const newOrder: OptionOrder = {
             id: result.trade.id,
             userId: user.id,
@@ -1768,16 +1861,9 @@ export default function UnifiedTradingPage() {
             isLocked: true
           };
           
-          console.log('📋 [TradeCreation] New order object:', newOrder);
+          setActiveOrders(prev => [...prev, newOrder]);
           
-          setActiveOrders(prev => {
-            const updated = [...prev, newOrder];
-            console.log('📋 [TradeCreation] Active orders after adding:', updated.length);
-            return updated;
-          });
-          
-          // Refresh balances to show locked funds
-          await refreshData();
+          await refreshBalances();
           
           toast.success(
             <div>
@@ -1807,9 +1893,6 @@ export default function UnifiedTradingPage() {
 
   const handleResize = useCallback((e: MouseEvent) => {
     if (!isResizing.current || !resizeRef.current) return;
-    
-    const container = resizeRef.current.parentElement;
-    if (!container) return;
     
     const newHeight = window.innerHeight - e.clientY - 60;
     const maxHeight = window.innerHeight * 0.7;
@@ -1882,7 +1965,7 @@ export default function UnifiedTradingPage() {
                 )}
               </button>
               <button 
-                onClick={() => refreshData()}
+                onClick={() => refreshBalances()}
                 className="p-2 hover:bg-[#2B3139] rounded-lg transition-colors"
               >
                 <RefreshCw className="h-5 w-5 text-[#848E9C]" />
@@ -2001,26 +2084,31 @@ export default function UnifiedTradingPage() {
                 onSideChange={setSpotSide}
                 amount={spotAmount}
                 onAmountChange={setSpotAmount}
+                onTrade={handleSpotTrade}
                 balance={getTradingBalance('USDT')}
-                currentPrice={displayPrice}
                 hideBalance={hideBalances}
-                disabled={marketLoading}
+                price={displayPrice}
+                selectedPair={selectedPair}
+                disabled={marketLoading || !!processingOrder}
               />
             )}
+
             {activeTab === 'future' && (
               <FuturesTradingForm
                 side={futuresSide}
                 onSideChange={setFuturesSide}
                 leverage={futuresLeverage}
-                onLeverageChange={setFuturesLeverage}
+                onLeverageClick={() => setShowLeverageModal(true)}
                 amount={futuresAmount}
                 onAmountChange={setFuturesAmount}
-                balance={futuresBalance}
-                currentPrice={displayPrice}
-                hideBalance={hideBalances}
-                disabled={marketLoading}
+                onTrade={handleFuturesTrade}
+                balance={getTradingBalance('USDT')}
+                price={displayPrice}
+                selectedPair={selectedPair}
+                disabled={marketLoading || !!processingOrder}
               />
             )}
+
             {activeTab === 'option' && (
               <OptionsTradingForm
                 direction={optionDirection}
@@ -2096,6 +2184,50 @@ export default function UnifiedTradingPage() {
         )}
       </AnimatePresence>
 
+      {/* Leverage Modal */}
+      <AnimatePresence>
+        {showLeverageModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 flex items-end justify-center z-50 p-4"
+            onClick={() => setShowLeverageModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              transition={slideUp.transition}
+              className="bg-[#1E2329] border border-[#2B3139] rounded-t-2xl w-full max-w-md"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-[#2B3139]">
+                <h3 className="text-lg font-semibold text-[#EAECEF]">Select Leverage</h3>
+              </div>
+              <div className="p-4 grid grid-cols-3 gap-3">
+                {[1, 2, 3, 5, 10, 20, 25, 33, 50, 100].map(lev => (
+                  <button
+                    key={lev}
+                    onClick={() => {
+                      setFuturesLeverage(lev);
+                      setShowLeverageModal(false);
+                    }}
+                    className={`p-3 rounded-lg text-center transition-colors ${
+                      futuresLeverage === lev
+                        ? 'bg-[#F0B90B] text-[#0B0E11]'
+                        : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+                    }`}
+                  >
+                    {lev}x
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Resizable Order History */}
       <div 
         ref={resizeRef}
@@ -2155,7 +2287,7 @@ export default function UnifiedTradingPage() {
                     : 'border-transparent text-[#848E9C] hover:text-[#EAECEF]'
                 }`}
               >
-                Positions (0)
+                Positions ({futuresPositions.length})
               </button>
               <button
                 onClick={() => setActiveBottomTab('open')}
@@ -2189,7 +2321,7 @@ export default function UnifiedTradingPage() {
                     : 'border-transparent text-[#848E9C] hover:text-[#EAECEF]'
                 }`}
               >
-                Open Orders (0)
+                Open Orders ({spotOrders.length})
               </button>
               <button
                 onClick={() => setActiveBottomTab('completed')}
@@ -2286,6 +2418,117 @@ export default function UnifiedTradingPage() {
                   No completed trades
                 </div>
               )}
+            </div>
+          )}
+
+          {activeBottomTab === 'positions' && (
+            <div className="space-y-2">
+              {futuresPositions.length > 0 ? (
+                futuresPositions.map(position => (
+                  <div key={position.id} className="bg-[#2B3139] rounded-lg p-4 border border-[#3A3F4A]">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold ${
+                          position.side === 'long' ? 'text-[#0ECB81]' : 'text-[#F6465D]'
+                        }`}>
+                          {position.side === 'long' ? 'LONG' : 'SHORT'}
+                        </span>
+                        <span className="text-xs text-[#848E9C]">{position.symbol}</span>
+                      </div>
+                      <Badge className="bg-green-400/10 text-green-400 border-green-400/20">Open</Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-[#848E9C]">Size:</span>
+                        <span className="ml-1 text-[#EAECEF]">{position.size} {position.symbol.replace('USDT', '')}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#848E9C]">Entry:</span>
+                        <span className="ml-1 text-[#EAECEF]">${position.entryPrice.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#848E9C]">Leverage:</span>
+                        <span className="ml-1 text-[#F0B90B]">{position.leverage}x</span>
+                      </div>
+                      <div>
+                        <span className="text-[#848E9C]">PnL:</span>
+                        <span className="ml-1 text-[#0ECB81]">${position.unrealizedPnl.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-[#848E9C] text-sm">
+                  No open positions
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeBottomTab === 'open' && activeTab === 'spot' && (
+            <div className="space-y-2">
+              {spotOrders.length > 0 ? (
+                spotOrders.map(order => (
+                  <div key={order.id} className="bg-[#2B3139] rounded-lg p-4 border border-[#3A3F4A]">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold ${
+                          order.side === 'buy' ? 'text-[#0ECB81]' : 'text-[#F6465D]'
+                        }`}>
+                          {order.side === 'buy' ? 'BUY' : 'SELL'}
+                        </span>
+                        <span className="text-xs text-[#848E9C]">{order.symbol}</span>
+                      </div>
+                      <Badge className="bg-green-400/10 text-green-400 border-green-400/20">Filled</Badge>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <span className="text-[#848E9C]">Amount:</span>
+                        <span className="ml-1 text-[#EAECEF]">{order.amount}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#848E9C]">Price:</span>
+                        <span className="ml-1 text-[#EAECEF]">${order.price.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#848E9C]">Total:</span>
+                        <span className="ml-1 text-[#EAECEF]">${order.total.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-[#848E9C] text-sm">
+                  No open orders
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeBottomTab === 'assets' && (
+            <div className="space-y-2">
+              <div className="flex justify-between items-center p-3 bg-[#2B3139] rounded-lg">
+                <div>
+                  <div className="text-sm font-medium text-[#EAECEF]">USDT</div>
+                  <div className="text-xs text-[#848E9C]">Tether</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-medium text-[#EAECEF]">
+                    {hideBalances ? '••••' : getTradingBalance('USDT').toFixed(2)}
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-[#2B3139] rounded-lg">
+                <div>
+                  <div className="text-sm font-medium text-[#EAECEF]">{selectedPair.baseAsset}</div>
+                  <div className="text-xs text-[#848E9C]">{selectedPair.name}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-medium text-[#EAECEF]">
+                    0.00000000
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>

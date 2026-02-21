@@ -44,7 +44,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet-v2';
 import { useUnifiedTrading } from '@/hooks/useUnifiedTrading';
 import { useToast, toast } from '@/hooks/use-toast';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
@@ -574,7 +574,6 @@ const SummaryCard = ({ title, value, subValue, icon, color = 'default' }: any) =
   </Card>
 );
 
-// ==================== MAIN COMPONENT ====================
 export default function Portfolio() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -582,21 +581,18 @@ export default function Portfolio() {
   // Hooks
   const { portfolio: walletPortfolio, totalValue, valueHistory, transactions } = useWallet();
   const {
-    fundingBalances,
-    tradingBalances,
+    balances,
+    locks,
     getFundingBalance,
     getTradingBalance,
     getLockedBalance,
     getTotalBalance,
-    stats,
-    locks,
-    refreshData,
+    refreshBalances,
     loading: walletLoading
   } = useUnifiedWallet();
 
   const {
     getUserTrades,
-    getUserPositions,
     getUserOptions,
     loading: tradingLoading
   } = useUnifiedTrading();
@@ -646,15 +642,14 @@ export default function Portfolio() {
   const loadUserData = async () => {
     setLoading(true);
     try {
-      const [trades, positionsData, optionsData] = await Promise.all([
+      const [trades, optionsData] = await Promise.all([
         getUserTrades(),
-        getUserPositions(),
         getUserOptions()
       ]);
 
       setUserTrades(trades || []);
-      setPositions(positionsData || []);
       setOptions(optionsData || []);
+      setPositions(positions || []);
     } catch (error) {
       console.error('Failed to load user data:', error);
       toast({
@@ -673,7 +668,7 @@ export default function Portfolio() {
     const assets: Record<string, PortfolioAsset> = {};
 
     // Add funding wallet balances
-    Object.entries(fundingBalances || {}).forEach(([symbol, balance]) => {
+    Object.entries(balances?.funding || {}).forEach(([symbol, balance]) => {
       if (typeof balance === 'number' && balance > 0) {
         assets[symbol] = {
           symbol,
@@ -689,7 +684,7 @@ export default function Portfolio() {
     });
 
     // Add trading wallet balances
-    Object.entries(tradingBalances || {}).forEach(([symbol, data]: [string, any]) => {
+    Object.entries(balances?.trading || {}).forEach(([symbol, data]: [string, any]) => {
       if (data && data.available > 0) {
         if (assets[symbol]) {
           assets[symbol].balance += data.available;
@@ -738,7 +733,7 @@ export default function Portfolio() {
     });
 
     return Object.values(assets).sort((a, b) => b.value - a.value);
-  }, [fundingBalances, tradingBalances, prices, positions, options]);
+  }, [balances?.funding, balances?.trading, prices, positions, options]);
 
   // Calculate total portfolio value
   const totalPortfolioValue = useMemo(() => {
@@ -754,8 +749,8 @@ export default function Portfolio() {
   const activeTradesCount = useMemo(() => {
     return (positions?.filter((p: any) => p.status === 'open')?.length || 0) +
       (options?.filter((o: any) => o.status === 'active')?.length || 0) +
-      (stats?.activeLocks || 0);
-  }, [positions, options, stats]);
+      (locks?.length || 0);
+  }, [positions, options, locks]);
 
   // Calculate performance metrics
   const performanceMetrics = useMemo(() => {
@@ -875,7 +870,7 @@ export default function Portfolio() {
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
-                onClick={refreshData}
+                onClick={refreshBalances}
                 className="p-1.5 md:p-2 hover:bg-[#23262F] rounded-lg transition-colors"
                 disabled={isLoading}
               >
@@ -1199,15 +1194,15 @@ export default function Portfolio() {
         <motion.div variants={fadeInUp} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-4 md:mb-6">
           <SummaryCard
             title="Funding Wallet"
-            value={hideBalances ? '••••••' : `$${(fundingBalances?.USDT || 0).toFixed(2)}`}
-            subValue={`${Object.keys(fundingBalances || {}).length} assets`}
+            value={hideBalances ? '••••••' : `$${(getFundingBalance('USDT') || 0).toFixed(2)}`}
+            subValue={`${Object.keys(balances?.funding || {}).length} assets`}
             icon={<Wallet size={16} className="text-[#F0B90B]" />}
           />
 
           <SummaryCard
             title="Trading Wallet"
-            value={hideBalances ? '••••••' : `$${(tradingBalances?.USDT?.available || 0).toFixed(2)}`}
-            subValue={`$${(tradingBalances?.USDT?.locked || 0).toFixed(2)} locked`}
+            value={hideBalances ? '••••••' : `$${(getTradingBalance('USDT') || 0).toFixed(2)}`}
+            subValue={`$${(getLockedBalance('USDT') || 0).toFixed(2)} locked`}
             icon={<Activity size={16} className="text-[#F0B90B]" />}
           />
 

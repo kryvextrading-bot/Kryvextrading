@@ -47,6 +47,8 @@ export interface BalanceResult {
   newLockedBalance?: number;
   transactionId?: string;
   lockId?: string;
+  outcome?: 'win' | 'loss';
+  returnAmount?: number;
 }
 
 class UnifiedWalletService {
@@ -221,13 +223,14 @@ class UnifiedWalletService {
         .from('wallet_transactions')
         .insert({
           user_id: userId,
-          asset,
+          currency: asset,
           type: 'transfer',
           subtype: 'funding_to_trading',
           amount: -amount,
+          balance_before: currentFunding,
           balance_after: newFundingBalance,
-          reference,
-          metadata: { from: 'funding', to: 'trading' },
+          reference_id: reference,
+          description: `Transfer from funding to trading: ${reference}`,
           created_at: new Date().toISOString()
         });
 
@@ -236,13 +239,14 @@ class UnifiedWalletService {
         .from('wallet_transactions')
         .insert({
           user_id: userId,
-          asset,
+          currency: asset,
           type: 'transfer',
           subtype: 'funding_to_trading',
           amount: amount,
+          balance_before: currentTrading,
           balance_after: newTradingBalance,
-          reference,
-          metadata: { from: 'funding', to: 'trading' },
+          reference_id: reference,
+          description: `Transfer from funding to trading: ${reference}`,
           created_at: new Date().toISOString()
         });
 
@@ -315,13 +319,14 @@ class UnifiedWalletService {
         .from('wallet_transactions')
         .insert({
           user_id: userId,
-          asset,
+          currency: asset,
           type: 'transfer',
           subtype: 'trading_to_funding',
           amount: -amount,
+          balance_before: currentTrading,
           balance_after: newTradingBalance,
-          reference,
-          metadata: { from: 'trading', to: 'funding' },
+          reference_id: reference,
+          description: `Transfer from trading to funding: ${reference}`,
           created_at: new Date().toISOString()
         });
 
@@ -329,13 +334,14 @@ class UnifiedWalletService {
         .from('wallet_transactions')
         .insert({
           user_id: userId,
-          asset,
+          currency: asset,
           type: 'transfer',
           subtype: 'trading_to_funding',
           amount: amount,
+          balance_before: currentFunding,
           balance_after: newFundingBalance,
-          reference,
-          metadata: { from: 'trading', to: 'funding' },
+          reference_id: reference,
+          description: `Transfer from trading to funding: ${reference}`,
           created_at: new Date().toISOString()
         });
 
@@ -432,17 +438,14 @@ class UnifiedWalletService {
         .from('wallet_transactions')
         .insert({
           user_id: userId,
-          asset,
+          currency: asset,
           type: 'lock',
           subtype: lockType,
           amount: -amount,
+          balance_before: currentTrading,
           balance_after: newTradingBalance,
-          reference: referenceId,
-          metadata: {
-            lockId: lock.id,
-            expiresAt: expiresAt.toISOString(),
-            ...metadata
-          },
+          reference_id: referenceId,
+          description: `Locked ${amount} ${asset} for ${lockType}: ${referenceId}`,
           created_at: new Date().toISOString()
         });
 
@@ -537,18 +540,14 @@ class UnifiedWalletService {
           .from('wallet_transactions')
           .insert({
             user_id: userId,
-            asset: lock.asset,
+            currency: lock.asset,
             type: 'release',
             subtype: outcome,
             amount: returnAmount,
+            balance_before: newTradingBalance - returnAmount,
             balance_after: newTradingBalance,
-            reference: referenceId,
-            metadata: {
-              lockId: lock.id,
-              stake: lock.amount,
-              profit: profit || 0,
-              outcome
-            },
+            reference_id: referenceId,
+            description: `Released ${returnAmount} ${lock.asset} from ${lock.lock_type}: ${referenceId}`,
             created_at: new Date().toISOString()
           });
       } else {
@@ -557,17 +556,14 @@ class UnifiedWalletService {
           .from('wallet_transactions')
           .insert({
             user_id: userId,
-            asset: lock.asset,
+            currency: lock.asset,
             type: 'release',
             subtype: 'loss',
             amount: 0,
+            balance_before: newTradingBalance,
             balance_after: newTradingBalance,
-            reference: referenceId,
-            metadata: {
-              lockId: lock.id,
-              stake: lock.amount,
-              outcome: 'loss'
-            },
+            reference_id: referenceId,
+            description: `Loss recorded for ${lock.amount} ${lock.asset}: ${referenceId}`,
             created_at: new Date().toISOString()
           });
       }

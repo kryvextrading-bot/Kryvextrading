@@ -43,7 +43,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 // Hooks
 import { useAuth } from '@/contexts/AuthContext';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet-v2';
 import { useTradingControl } from '@/hooks/useTradingControl';
 
 // Services

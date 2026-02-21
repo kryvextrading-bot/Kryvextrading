@@ -35,7 +35,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
+import { useUnifiedWallet } from '@/hooks/useUnifiedWallet-v2';
 import { useBinanceStream } from '@/hooks/useBinanceStream';
 import { useOrderBook } from '@/hooks/useOrderBook';
 import { useRecentTrades } from '@/hooks/useRecentTrades';
