@@ -1234,12 +1234,12 @@ export default function Index() {
           >
             <div className="p-4 space-y-4">
               {[
-                { icon: Settings, label: 'Settings', badge: null },
-                { icon: Shield, label: 'Security', badge: null },
-                { icon: Award, label: 'Rewards', badge: '2 new' },
-                { icon: Gift, label: 'Referrals', badge: null },
-                { icon: Star, label: 'Favorites', badge: null },
-                { icon: Sparkles, label: 'New Features', badge: '3' },
+                { icon: Settings, label: 'Settings', badge: null, route: '/settings' },
+                { icon: Shield, label: 'Security', badge: null, route: '/security' },
+                { icon: Award, label: 'Rewards', badge: '2 new', route: '/share' },
+                { icon: Gift, label: 'Referrals', badge: null, route: '/share' },
+                { icon: Star, label: 'Favorites', badge: null, route: '/account?tab=favorites' },
+                { icon: Sparkles, label: 'New Features', badge: '3', route: '/account?tab=features' },
               ].map((item, index) => {
                 const Icon = item.icon;
                 return (
@@ -1250,6 +1250,10 @@ export default function Index() {
                     transition={{ delay: index * 0.05 }}
                     whileHover={{ x: 5 }}
                     className="w-full flex items-center justify-between p-4 bg-[#1E2329] rounded-xl border border-[#2B3139]"
+                    onClick={() => {
+                      navigate(item.route);
+                      setMobileMenuOpen(false);
+                    }}
                   >
                     <div className="flex items-center space-x-3">
                       <Icon className="h-5 w-5 text-[#F0B90B]" />
