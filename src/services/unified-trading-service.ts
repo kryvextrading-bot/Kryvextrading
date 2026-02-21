@@ -150,6 +150,40 @@ class UnifiedTradingService {
     }
   }
 
+  // ==================== USER TRADES ====================
+
+  async getUserTrades(userId: string, type?: TradeType): Promise<any[]> {
+    try {
+      console.log('🔍 [UnifiedTradingService] getUserTrades called with userId:', userId, 'type:', type);
+
+      // Use direct query with proper filtering
+      let query = supabase
+        .from('trades')
+        .select('*')
+        .eq('user_id', userId);
+
+      // Add type filter if provided
+      if (type) {
+        query = query.eq('type', type);
+      }
+
+      const { data, error } = await query
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ [UnifiedTradingService] Error fetching trades:', error);
+        return [];
+      }
+
+      console.log('✅ [UnifiedTradingService] Found trades:', data?.length || 0);
+      return data || [];
+
+    } catch (error) {
+      console.error('❌ [UnifiedTradingService] Exception in getUserTrades:', error);
+      return [];
+    }
+  }
+
   // ==================== OPTIONS EXPIRATION ====================
 
   async expireOptionsTrade(tradeId: string): Promise<ExpireOptionsResult> {
