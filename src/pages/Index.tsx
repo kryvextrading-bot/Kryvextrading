@@ -1239,7 +1239,7 @@ export default function Index() {
                 { icon: Award, label: 'Rewards', badge: '2 new', route: '/share' },
                 { icon: Gift, label: 'Referrals', badge: null, route: '/share' },
                 { icon: Star, label: 'Favorites', badge: null, route: '/account?tab=favorites' },
-                { icon: Sparkles, label: 'New Features', badge: '3', route: '/account?tab=features' },
+                { icon: Sparkles, label: 'New Features', badge: '3', route: 'http://127.0.0.1:51709/presale' },
               ].map((item, index) => {
                 const Icon = item.icon;
                 return (
@@ -1251,7 +1251,13 @@ export default function Index() {
                     whileHover={{ x: 5 }}
                     className="w-full flex items-center justify-between p-4 bg-[#1E2329] rounded-xl border border-[#2B3139]"
                     onClick={() => {
-                      navigate(item.route);
+                      if (item.route.startsWith('http')) {
+                        // Handle external URL
+                        window.open(item.route, '_blank');
+                      } else {
+                        // Handle internal route
+                        navigate(item.route);
+                      }
                       setMobileMenuOpen(false);
                     }}
                   >
