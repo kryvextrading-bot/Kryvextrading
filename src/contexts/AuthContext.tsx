@@ -45,7 +45,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         // Add a wrapper timeout for the entire authentication process
         const authTimeout = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Authentication initialization timeout')), 15000);
+          setTimeout(() => reject(new Error('Authentication initialization timeout')), 45000);
         });
 
         const userCheck = supabaseApi.getCurrentUser();

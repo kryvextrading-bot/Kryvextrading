@@ -1146,6 +1146,262 @@ const OptionsTradingForm: React.FC<{
   );
 };
 
+// Spot Trading Form Component
+const SpotTradingForm: React.FC<{
+  side: 'buy' | 'sell';
+  onSideChange: (side: 'buy' | 'sell') => void;
+  amount: string;
+  onAmountChange: (amount: string) => void;
+  balance: number;
+  currentPrice: number;
+  hideBalance: boolean;
+  disabled?: boolean;
+}> = ({ side, onSideChange, amount, onAmountChange, balance, currentPrice, hideBalance, disabled }) => {
+  const parsedAmount = parseFloat(amount) || 0;
+  const total = parsedAmount * currentPrice;
+
+  return (
+    <BinanceCard className="p-4">
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button
+          onClick={() => onSideChange('buy')}
+          className={`py-3 rounded-lg text-sm font-medium ${
+            side === 'buy'
+              ? 'bg-[#0ECB81] text-[#0B0E11]'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
+        >
+          Buy
+        </button>
+        <button
+          onClick={() => onSideChange('sell')}
+          className={`py-3 rounded-lg text-sm font-medium ${
+            side === 'sell'
+              ? 'bg-[#F6465D] text-white'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
+        >
+          Sell
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Available</span>
+          <span className="text-[#EAECEF]">
+            {hideBalance ? '••••' : balance.toFixed(2)} USDT
+          </span>
+        </div>
+
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Price</span>
+          <span className="text-[#EAECEF] font-mono">
+            ${currentPrice.toFixed(2)}
+          </span>
+        </div>
+
+        {amount && parsedAmount > 0 && (
+          <div className="flex justify-between text-xs">
+            <span className="text-[#848E9C]">Total</span>
+            <span className="text-[#EAECEF] font-mono">
+              ${total.toFixed(2)} USDT
+            </span>
+          </div>
+        )}
+
+        <div className="relative">
+          <input
+            type="number"
+            value={amount}
+            onChange={(e) => onAmountChange(e.target.value)}
+            placeholder="Enter amount"
+            className="w-full bg-[#2B3139] border border-[#3A3F4A] rounded-lg px-3 py-3 text-[#EAECEF] font-mono placeholder-[#5E6673] focus:outline-none focus:border-[#F0B90B] transition-colors"
+            min="0"
+            step="0.001"
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848E9C]">
+            BTC
+          </span>
+        </div>
+
+        <div className="grid grid-cols-4 gap-1">
+          {[25, 50, 75, 100].map(p => {
+            const amount = (balance * p / 100).toFixed(6);
+            return (
+              <button
+                key={p}
+                onClick={() => onAmountChange(amount)}
+                className="py-2 rounded text-xs bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF] transition-colors"
+              >
+                {p}%
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          disabled={disabled || !amount || parsedAmount <= 0 || (side === 'buy' && total > balance)}
+          className="w-full bg-[#F0B90B] text-[#0B0E11] py-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#F0B90B]/90 transition-colors"
+        >
+          {side === 'buy' ? 'Buy BTC' : 'Sell BTC'}
+        </button>
+
+        {side === 'buy' && total > balance && (
+          <p className="text-xs text-[#F6465D] mt-1">
+            Insufficient balance. Need ${total.toFixed(2)} USDT
+          </p>
+        )}
+      </div>
+    </BinanceCard>
+  );
+};
+
+// Futures Trading Form Component
+const FuturesTradingForm: React.FC<{
+  side: 'long' | 'short';
+  onSideChange: (side: 'long' | 'short') => void;
+  leverage: number;
+  onLeverageChange: (leverage: number) => void;
+  amount: string;
+  onAmountChange: (amount: string) => void;
+  balance: number;
+  currentPrice: number;
+  hideBalance: boolean;
+  disabled?: boolean;
+}> = ({ side, onSideChange, leverage, onLeverageChange, amount, onAmountChange, balance, currentPrice, hideBalance, disabled }) => {
+  const parsedAmount = parseFloat(amount) || 0;
+  const notional = parsedAmount * currentPrice;
+  const margin = notional / leverage;
+  const roe = side === 'long' ? 2.5 : -2.5; // Placeholder ROE calculation
+
+  return (
+    <BinanceCard className="p-4">
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button
+          onClick={() => onSideChange('long')}
+          className={`py-3 rounded-lg text-sm font-medium ${
+            side === 'long'
+              ? 'bg-[#0ECB81] text-[#0B0E11]'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
+        >
+          Long
+        </button>
+        <button
+          onClick={() => onSideChange('short')}
+          className={`py-3 rounded-lg text-sm font-medium ${
+            side === 'short'
+              ? 'bg-[#F6465D] text-white'
+              : 'bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]'
+          }`}
+        >
+          Short
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Available</span>
+          <span className="text-[#EAECEF]">
+            {hideBalance ? '••••' : balance.toFixed(2)} USDT
+          </span>
+        </div>
+
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Leverage</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min="1"
+              max="125"
+              value={leverage}
+              onChange={(e) => onLeverageChange(parseInt(e.target.value))}
+              className="w-16 h-1 bg-[#2B3139] rounded-lg appearance-none cursor-pointer"
+              title="Adjust leverage"
+            />
+            <span className="text-[#F0B90B] font-mono text-xs">
+              {leverage}x
+            </span>
+          </div>
+        </div>
+
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848E9C]">Price</span>
+          <span className="text-[#EAECEF] font-mono">
+            ${currentPrice.toFixed(2)}
+          </span>
+        </div>
+
+        {amount && parsedAmount > 0 && (
+          <>
+            <div className="flex justify-between text-xs">
+              <span className="text-[#848E9C]">Notional</span>
+              <span className="text-[#EAECEF] font-mono">
+                ${notional.toFixed(2)} USDT
+              </span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-[#848E9C]">Margin</span>
+              <span className="text-[#EAECEF] font-mono">
+                ${margin.toFixed(2)} USDT
+              </span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-[#848E9C]">Est. ROE</span>
+              <span className={`font-mono ${roe >= 0 ? 'text-[#0ECB81]' : 'text-[#F6465D]'}`}>
+                {roe >= 0 ? '+' : ''}{roe.toFixed(2)}%
+              </span>
+            </div>
+          </>
+        )}
+
+        <div className="relative">
+          <input
+            type="number"
+            value={amount}
+            onChange={(e) => onAmountChange(e.target.value)}
+            placeholder="Enter amount"
+            className="w-full bg-[#2B3139] border border-[#3A3F4A] rounded-lg px-3 py-3 text-[#EAECEF] font-mono placeholder-[#5E6673] focus:outline-none focus:border-[#F0B90B] transition-colors"
+            min="0"
+            step="0.001"
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848E9C]">
+            BTC
+          </span>
+        </div>
+
+        <div className="grid grid-cols-4 gap-1">
+          {[25, 50, 75, 100].map(p => {
+            const amount = (balance * p / 100).toFixed(6);
+            return (
+              <button
+                key={p}
+                onClick={() => onAmountChange(amount)}
+                className="py-2 rounded text-xs bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF] transition-colors"
+              >
+                {p}%
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          disabled={disabled || !amount || parsedAmount <= 0 || margin > balance}
+          className="w-full bg-[#F0B90B] text-[#0B0E11] py-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#F0B90B]/90 transition-colors"
+        >
+          {side === 'long' ? 'Buy/Long' : 'Sell/Short'}
+        </button>
+
+        {margin > balance && (
+          <p className="text-xs text-[#F6465D] mt-1">
+            Insufficient margin. Need ${margin.toFixed(2)} USDT
+          </p>
+        )}
+      </div>
+    </BinanceCard>
+  );
+};
+
 // ==================== MAIN COMPONENT ====================
 
 export default function UnifiedTradingPage() {
@@ -1739,6 +1995,32 @@ export default function UnifiedTradingPage() {
 
           {/* Right Column - Trading Form */}
           <div className="order-1 lg:order-2">
+            {activeTab === 'spot' && (
+              <SpotTradingForm
+                side={spotSide}
+                onSideChange={setSpotSide}
+                amount={spotAmount}
+                onAmountChange={setSpotAmount}
+                balance={getTradingBalance('USDT')}
+                currentPrice={displayPrice}
+                hideBalance={hideBalances}
+                disabled={marketLoading}
+              />
+            )}
+            {activeTab === 'future' && (
+              <FuturesTradingForm
+                side={futuresSide}
+                onSideChange={setFuturesSide}
+                leverage={futuresLeverage}
+                onLeverageChange={setFuturesLeverage}
+                amount={futuresAmount}
+                onAmountChange={setFuturesAmount}
+                balance={futuresBalance}
+                currentPrice={displayPrice}
+                hideBalance={hideBalances}
+                disabled={marketLoading}
+              />
+            )}
             {activeTab === 'option' && (
               <OptionsTradingForm
                 direction={optionDirection}

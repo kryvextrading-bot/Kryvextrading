@@ -252,7 +252,7 @@ class SupabaseApiService {
     try {
       // Add timeout to prevent hanging
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Authentication timeout')), 8000);
+        setTimeout(() => reject(new Error('Authentication timeout')), 25000);
       });
 
       const userPromise = supabase.auth.getUser();
@@ -268,7 +268,7 @@ class SupabaseApiService {
         .maybeSingle();
       
       const profileTimeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000);
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 15000);
       });
       
       const { data: profile, error: profileError } = await Promise.race([profilePromise, profileTimeoutPromise]) as any;

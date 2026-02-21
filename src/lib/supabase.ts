@@ -31,22 +31,39 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
     },
-    // Add fetch timeout with proper typing
+    // Add fetch timeout with proper typing and retry logic
     fetch: async (url: RequestInfo | URL, options: RequestInit = {}) => {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000)
+      const maxRetries = 3
+      const baseDelay = 1000
       
-      try {
-        const response = await fetch(url, {
-          ...options,
-          signal: controller.signal
-        })
-        clearTimeout(timeoutId)
-        return response
-      } catch (error) {
-        clearTimeout(timeoutId)
-        throw error
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 30000) // Increased to 30s
+        
+        try {
+          const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+          })
+          clearTimeout(timeoutId)
+          return response
+        } catch (error: any) {
+          clearTimeout(timeoutId)
+          
+          // Don't retry if it's an abort or non-retryable error
+          if (error.name === 'AbortError' || attempt === maxRetries) {
+            throw error
+          }
+          
+          // Wait before retry with exponential backoff
+          const delay = baseDelay * Math.pow(2, attempt - 1)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          
+          console.warn(`[Supabase] Fetch attempt ${attempt} failed, retrying...`, error.message)
+        }
       }
+      
+      throw new Error('Failed after multiple retry attempts')
     }
   },
   db: {
