@@ -1,9 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { CheckCircle, Download, Printer, Calendar, DollarSign, Hash, Clock } from 'lucide-react';
+import { CheckCircle, Download, Printer, Calendar, DollarSign, Hash, Clock, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
-interface DepositSlipData {
+interface TransactionSlipData {
   transactionId: string;
   date: string;
   time: string;
@@ -15,15 +15,17 @@ interface DepositSlipData {
   userEmail?: string;
   network?: string;
   address?: string;
+  type: 'deposit' | 'withdrawal';
+  fee?: number;
 }
 
-interface DepositSlipProps {
-  data: DepositSlipData;
+interface TransactionSlipProps {
+  data: TransactionSlipData;
   onClose?: () => void;
   showCloseButton?: boolean;
 }
 
-const DepositSlip: React.FC<DepositSlipProps> = ({ 
+const TransactionSlip: React.FC<TransactionSlipProps> = ({ 
   data, 
   onClose, 
   showCloseButton = true 
@@ -103,7 +105,7 @@ const DepositSlip: React.FC<DepositSlipProps> = ({
       }
 
       // Generate filename
-      const filename = `deposit-slip-${data.transactionId}-${new Date().toISOString().split('T')[0]}.pdf`;
+      const filename = `${data.type}-slip-${data.transactionId}-${new Date().toISOString().split('T')[0]}.pdf`;
       pdf.save(filename);
       
     } catch (error) {
@@ -143,21 +145,33 @@ const DepositSlip: React.FC<DepositSlipProps> = ({
           )}
         </div>
 
-        {/* Deposit Slip */}
+        {/* Transaction Slip */}
         <div
           ref={slipRef}
           className="bg-white rounded-lg shadow-lg overflow-hidden"
           style={{ minHeight: '600px' }}
         >
           {/* Header */}
-          <div className="bg-gradient-to-r from-green-500 to-green-600 p-8 text-center">
+          <div className={`bg-gradient-to-r p-8 text-center ${
+            data.type === 'deposit' 
+              ? 'from-green-500 to-green-600' 
+              : 'from-blue-500 to-blue-600'
+          }`}>
             <div className="flex justify-center mb-4">
               <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center">
-                <CheckCircle className="w-10 h-10 text-green-500" />
+                {data.type === 'deposit' ? (
+                  <CheckCircle className="w-10 h-10 text-green-500" />
+                ) : (
+                  <CheckCircle className="w-10 h-10 text-blue-500" />
+                )}
               </div>
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">PAYMENT APPROVED</h1>
-            <p className="text-green-100">Official Deposit Slip • kryvextrading.com</p>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              {data.type === 'deposit' ? 'PAYMENT APPROVED' : 'WITHDRAWAL PROCESSED'}
+            </h1>
+            <p className="text-green-100">
+              Official {data.type === 'deposit' ? 'Deposit' : 'Withdrawal'} Slip • kryvextrading.com
+            </p>
           </div>
 
           {/* Content */}
@@ -215,7 +229,9 @@ const DepositSlip: React.FC<DepositSlipProps> = ({
 
             {/* Amount Section */}
             <div className="bg-gray-50 rounded-lg p-6 mb-8">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Amount Deposited</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                {data.type === 'deposit' ? 'Amount Deposited' : 'Amount Withdrawn'}
+              </h3>
               <div className="text-center">
                 <p className="text-3xl font-bold text-gray-900 mb-2">
                   {data.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {data.asset}
@@ -224,6 +240,13 @@ const DepositSlip: React.FC<DepositSlipProps> = ({
                   <p className="text-lg text-gray-600">
                     Approximately ${data.amountUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
+                )}
+                {data.fee && data.fee > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <p className="text-sm text-gray-500">
+                      {data.type === 'deposit' ? 'Deposit Fee' : 'Withdrawal Fee'}: {data.fee} {data.asset}
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
@@ -252,7 +275,9 @@ const DepositSlip: React.FC<DepositSlipProps> = ({
             {/* Address Information (if available) */}
             {data.address && (
               <div className="bg-gray-50 rounded-lg p-6 mb-8">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Deposit Address</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                  {data.type === 'deposit' ? 'Deposit Address' : 'Withdrawal Address'}
+                </h3>
                 <div className="font-mono text-sm bg-white p-3 rounded border break-all">
                   {data.address}
                 </div>
@@ -279,4 +304,4 @@ const DepositSlip: React.FC<DepositSlipProps> = ({
   );
 };
 
-export default DepositSlip;
+export default TransactionSlip;

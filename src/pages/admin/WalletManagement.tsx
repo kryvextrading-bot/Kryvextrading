@@ -1127,12 +1127,12 @@ export default function WalletManagement() {
   const [fundAction, setFundAction] = useState<'add' | 'remove'>('add');
   const [selectedUserForFund, setSelectedUserForFund] = useState<string>(''); // Add pre-selected user state
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [fundAmount, setFundAmount] = useState<string>('');
+  const [fundAmount, setFundAmount] = useState<string>(''); // Update state names to support both deposit and withdrawal slips
   const [fundCurrency, setFundCurrency] = useState<string>('USDT');
   
-  // Deposit Slip State
-  const [showDepositSlip, setShowDepositSlip] = useState(false);
-  const [depositSlipData, setDepositSlipData] = useState<any>(null);
+  // Transaction Slip State
+  const [showTransactionSlip, setShowTransactionSlip] = useState(false);
+  const [transactionSlipData, setTransactionSlipData] = useState<any>(null);
   
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -1362,8 +1362,8 @@ export default function WalletManagement() {
               description: `${request.currency} ${request.amount.toLocaleString()} has been added to user wallet`,
             });
             
-            // Show deposit slip for approved deposit
-            if (request.type === 'deposit') {
+            // Show transaction slip for approved deposit or withdrawal
+            if (request.type === 'deposit' || request.type === 'withdrawal') {
               const slipData = {
                 transactionId: request.id,
                 date: request.updatedAt || new Date().toISOString(),
@@ -1375,11 +1375,13 @@ export default function WalletManagement() {
                 userName: request.userName,
                 userEmail: request.userEmail,
                 network: request.method,
-                address: request.address
+                address: request.address,
+                type: request.type,
+                fee: request.fee
               };
               
-              setDepositSlipData(slipData);
-              setShowDepositSlip(true);
+              setTransactionSlipData(slipData);
+              setShowTransactionSlip(true);
             }
           }
         } catch (error) {
@@ -1441,6 +1443,26 @@ export default function WalletManagement() {
                 title: "Withdrawal Approved & Processed",
                 description: `${request.currency} ${request.amount.toLocaleString()} has been deducted from user wallet`,
               });
+              
+              // Show transaction slip for approved withdrawal
+              const slipData = {
+                transactionId: request.id,
+                date: request.updatedAt || new Date().toISOString(),
+                time: request.updatedAt || new Date().toISOString(),
+                asset: request.currency,
+                status: 'Completed' as const,
+                amount: request.amount,
+                amountUsd: request.amount,
+                userName: request.userName,
+                userEmail: request.userEmail,
+                network: request.method,
+                address: request.address,
+                type: 'withdrawal' as const,
+                fee: request.fee
+              };
+              
+              setTransactionSlipData(slipData);
+              setShowTransactionSlip(true);
             } catch (error) {
               console.error('Error removing funds from wallet:', error);
               toast({
@@ -2193,13 +2215,13 @@ export default function WalletManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Deposit Slip Modal */}
-      {showDepositSlip && depositSlipData && (
+      {/* Transaction Slip Modal */}
+      {showTransactionSlip && transactionSlipData && (
         <DepositSlip
-          data={depositSlipData}
+          data={transactionSlipData}
           onClose={() => {
-            setShowDepositSlip(false);
-            setDepositSlipData(null);
+            setShowTransactionSlip(false);
+            setTransactionSlipData(null);
           }}
           showCloseButton={true}
         />
