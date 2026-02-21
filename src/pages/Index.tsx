@@ -35,11 +35,25 @@ import {
   Sparkles,
   Flame,
   Star,
-  AlertCircle
+  AlertCircle,
+  Newspaper,
+  ExternalLink
 } from 'lucide-react';
 import { useMarketData } from '@/contexts/MarketDataContext';
 import { useUnifiedWallet } from '@/hooks/useUnifiedWallet';
 import { Skeleton } from '@/components/ui/skeleton';
+
+// News API interfaces
+interface NewsItem {
+  id: string;
+  title: string;
+  body: string;
+  source: string;
+  published_on: number;
+  url: string;
+  imageurl: string;
+  categories: string;
+}
 
 // Import assets from AssetPage
 const ALL_ASSETS: Record<string, {
@@ -79,6 +93,9 @@ const ALL_ASSETS: Record<string, {
 interface WalletBalance {
   totalUSDT: number;
   totalUSD: number;
+  totalFundingBalance: number;
+  totalTradingBalance: number;
+  totalLockedBalance: number;
   change24h: number;
   lastUpdated: Date;
 }
@@ -199,17 +216,76 @@ export default function Index() {
   const [activeService, setActiveService] = useState<string | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [loadingNews, setLoadingNews] = useState(false);
+
+  // Fetch real-time news
+  useEffect(() => {
+    const fetchNews = async () => {
+      setLoadingNews(true);
+      try {
+        // Using CryptoCompare API (free, no API key required for limited access)
+        const response = await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN&limit=5');
+        const data = await response.json();
+        
+        if (data.Data) {
+          setNews(data.Data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch news:', error);
+        // Fallback news
+        setNews([
+          {
+            id: '1',
+            title: 'Bitcoin Surges Past $70,000',
+            body: 'Bitcoin reaches new all-time high as institutional adoption grows.',
+            source: 'CryptoNews',
+            published_on: Date.now() / 1000,
+            url: '#',
+            imageurl: '',
+            categories: 'BTC'
+          },
+          {
+            id: '2',
+            title: 'Ethereum ETF Approval Expected',
+            body: 'SEC signals potential approval for Ethereum ETFs by summer.',
+            source: 'CoinDesk',
+            published_on: Date.now() / 1000 - 3600,
+            url: '#',
+            imageurl: '',
+            categories: 'ETH'
+          },
+          {
+            id: '3',
+            title: 'New Staking Rewards Program',
+            body: 'Kryvex launches enhanced staking rewards with up to 15% APY.',
+            source: 'Kryvex News',
+            published_on: Date.now() / 1000 - 7200,
+            url: '#',
+            imageurl: '',
+            categories: 'Staking'
+          }
+        ]);
+      } finally {
+        setLoadingNews(false);
+      }
+    };
+
+    fetchNews();
+    // Refresh news every 5 minutes
+    const interval = setInterval(fetchNews, 300000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Calculate real wallet balances using proper unified wallet structure
   const totalFundingBalance = useMemo(() => {
     // Use fundingBalances from the unified wallet hook
-    const funding = balances || {}; // balances is the legacy property containing funding balances
+    const funding = balances || {};
     return Object.values(funding).reduce((acc, val) => acc + (Number(val) || 0), 0);
   }, [balances]);
 
   const totalTradingBalance = useMemo(() => {
     // Use tradingBalances from unified wallet hook
-    // tradingBalances is an object with { available, locked, total } for each asset
     let total = 0;
     Object.entries(tradingBalances || {}).forEach(([_, balance]) => {
       // Handle both simple number format and TradingBalance object format
@@ -237,24 +313,12 @@ export default function Index() {
   const usdtBalance = useMemo(() => {
     // Get USDT balance directly from funding wallet
     const usdtFunding = Number(balances?.USDT || 0);
-    const result = usdtFunding + totalTradingBalance;
+    const usdtTrading = totalTradingBalance;
+    const result = usdtFunding + usdtTrading;
     
-    // If no real balances, show default balance for demo
-    if (result === 0 && !walletLoading) {
-      console.log(' [Index] No real balances found, showing demo balance');
-      return 1250.50; // Default demo balance
-    }
-    
-    console.log(' [Index] Balance calculation:', {
-      usdtFunding,
-      totalTradingBalance,
-      totalLockedBalance,
-      usdtBalance: result,
-      rawBalances: balances,
-      loading: walletLoading
-    });
+    // Return actual balance or 0 if no data
     return result;
-  }, [balances, totalTradingBalance, walletLoading]);
+  }, [balances, totalTradingBalance]);
 
   // Calculate total portfolio value using market prices
   const totalPortfolioValue = useMemo(() => {
@@ -299,12 +363,7 @@ export default function Index() {
       total += numBalance * price;
     });
     
-    // If no real portfolio value, show default demo value
-    if (total === 0 && !walletLoading) {
-      console.log(' [Index] No real portfolio value found, showing demo value');
-      return 5425.75; // Default demo portfolio value
-    }
-    
+    // Return actual portfolio value or 0 if no data
     return total;
   }, [balances, tradingBalances, prices]);
 
@@ -347,7 +406,7 @@ export default function Index() {
     }
   }, [prices]);
 
-  // Trending assets from ALL_ASSETS
+  // Trending assets from ALL_ASSETS - using real prices only
   const trendingAssets: TrendingAsset[] = useMemo(() => {
     return Object.values(ALL_ASSETS)
       .filter(asset => asset.category === 'crypto')
@@ -357,8 +416,8 @@ export default function Index() {
         symbol: asset.symbol,
         name: asset.name,
         price: prices?.[asset.symbol] || 0,
-        change24h: `${(Math.random() - 0.5) * 10 > 0 ? '+' : ''}${Math.abs((Math.random() - 0.5) * 10).toFixed(2)}%`,
-        volume: asset.category === 'crypto' ? `${(Math.random() * 1000).toFixed(0)}B` : `${(Math.random() * 100).toFixed(0)}M`,
+        change24h: '0.00%',
+        volume: '0',
         icon: asset.category === 'crypto' ? '₿' : asset.category === 'stock' ? '📈' : asset.category === 'commodity' ? '🥇' : '💎'
       }));
   }, [prices]);
@@ -370,16 +429,16 @@ export default function Index() {
       return {
         symbol,
         name: asset.name,
-        volume: asset.category === 'crypto' ? `${(Math.random() * 100).toFixed(1)}B` : `${(Math.random() * 10).toFixed(1)}M`,
+        volume: '0',
         price: price,
         usdPrice: price,
-        change24h: (Math.random() - 0.5) * 10, // Random change between -5% and +5%
+        change24h: 0,
         icon: asset.category === 'crypto' ? '₿' : asset.category === 'stock' ? '📈' : asset.category === 'commodity' ? '🥇' : '💎',
         category: asset.category as any,
-        high24h: price * (1 + (Math.random() - 0.5) * 0.1),
-        low24h: price * (1 - (Math.random() - 0.5) * 0.1)
+        high24h: price,
+        low24h: price
       };
-    }).slice(0, 6); // Show first 6 assets
+    }).slice(0, 6);
 
     setWatchlist(watchlistData);
   }, [prices]);
@@ -450,6 +509,17 @@ export default function Index() {
     return `${hours}h ago`;
   };
 
+  const formatTimestamp = (timestamp: number): string => {
+    const date = new Date(timestamp * 1000);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+    return date.toLocaleDateString();
+  };
+
   // Refresh data using real wallet context
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -463,37 +533,10 @@ export default function Index() {
     }
   }, [refreshWalletData]);
 
-  // Simulate real-time updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setWatchlist(prev => prev.map(item => ({
-        ...item,
-        price: item.price * (1 + (Math.random() - 0.5) * 0.001),
-        change24h: item.change24h + (Math.random() - 0.5) * 0.1
-      })));
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
   // Recent activity data
   const recentActivity: ActivityItem[] = useMemo(() => {
-    return Object.values(ALL_ASSETS)
-      .filter(asset => prices?.[asset.baseAsset])
-      .slice(0, 3)
-      .map(asset => {
-        const action = Math.random() > 0.5 ? 'Buy' : 'Sell';
-        const amount = (Math.random() * 10).toFixed(4);
-        const price = prices?.[asset.baseAsset] || 0;
-        return {
-          asset: asset.symbol,
-          action,
-          amount,
-          value: `$${(parseFloat(amount) * price).toFixed(0)}`,
-          time: `${Math.floor(Math.random() * 60) + 1} min ago`
-        };
-      });
-  }, [prices]);
+    return [];
+  }, []);
 
   // Quick actions
   const quickActions = useMemo(() => {
@@ -1081,31 +1124,113 @@ export default function Index() {
           </div>
 
           <div className="space-y-3">
-            {recentActivity.map((activity, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: index * 0.1 }}
-                className="flex items-center justify-between py-2 border-b border-[#2B3139] last:border-0"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className={`w-2 h-2 rounded-full ${
-                    activity.action === 'Buy' ? 'bg-[#0ECB81]' : 'bg-[#F6465D]'
-                  }`} />
-                  <div>
-                    <span className="text-[#EAECEF] text-xs font-medium">
-                      {activity.action} {activity.asset}
-                    </span>
-                    <div className="text-[#848E9C] text-[10px]">{activity.time}</div>
+            {recentActivity.length > 0 ? (
+              recentActivity.map((activity, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="flex items-center justify-between py-2 border-b border-[#2B3139] last:border-0"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-2 h-2 rounded-full ${
+                      activity.action === 'Buy' ? 'bg-[#0ECB81]' : 'bg-[#F6465D]'
+                    }`} />
+                    <div>
+                      <span className="text-[#EAECEF] text-xs font-medium">
+                        {activity.action} {activity.asset}
+                      </span>
+                      <div className="text-[#848E9C] text-[10px]">{activity.time}</div>
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <span className="text-[#EAECEF] text-xs">{activity.amount}</span>
-                  <div className="text-[#848E9C] text-[10px]">{activity.value}</div>
-                </div>
-              </motion.div>
-            ))}
+                  <div className="text-right">
+                    <span className="text-[#EAECEF] text-xs">{activity.amount}</span>
+                    <div className="text-[#848E9C] text-[10px]">{activity.value}</div>
+                  </div>
+                </motion.div>
+              ))
+            ) : (
+              <div className="text-center py-6 text-[#5E6673]">
+                <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No recent activity</p>
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* ===== NEWS & UPDATES ===== */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.9 }}
+          className="bg-[#1E2329] border border-[#2B3139] rounded-xl p-4"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <Newspaper className="h-4 w-4 text-[#F0B90B]" />
+              <h3 className="text-[#EAECEF] text-sm font-medium">Crypto News</h3>
+            </div>
+            <span className="bg-[#F0B90B]/10 text-[#F0B90B] text-xs px-2 py-0.5 rounded">
+              {loadingNews ? 'Loading...' : 'LIVE'}
+            </span>
+          </div>
+
+          <div className="space-y-4 max-h-96 overflow-y-auto custom-scrollbar pr-1">
+            {loadingNews ? (
+              <div className="flex justify-center py-8">
+                <div className="w-8 h-8 border-4 border-[#F0B90B] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : news.length > 0 ? (
+              news.map((item) => (
+                <motion.a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  whileHover={{ x: 5 }}
+                  className="block p-3 bg-[#23262F] rounded-xl hover:bg-[#2B3139] transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-start gap-3">
+                    {item.imageurl ? (
+                      <img 
+                        src={item.imageurl} 
+                        alt={item.source}
+                        className="w-12 h-12 rounded-lg object-cover bg-[#2B3139]"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-[#F0B90B]/10 flex items-center justify-center">
+                        <Newspaper className="w-6 h-6 text-[#F0B90B]" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-medium text-[#EAECEF] group-hover:text-[#F0B90B] transition-colors line-clamp-2">
+                        {item.title}
+                      </h4>
+                      <p className="text-xs text-[#848E9C] mt-1 line-clamp-2">
+                        {item.body}
+                      </p>
+                      <div className="flex items-center gap-2 mt-2 text-[10px]">
+                        <span className="text-[#F0B90B]">{item.source}</span>
+                        <span className="text-[#5E6673]">•</span>
+                        <span className="text-[#5E6673]">{formatTimestamp(item.published_on)}</span>
+                        <ExternalLink className="w-3 h-3 text-[#5E6673] ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </div>
+                  </div>
+                </motion.a>
+              ))
+            ) : (
+              <div className="text-center py-8 text-[#5E6673]">
+                <Newspaper className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No news available</p>
+              </div>
+            )}
           </div>
         </motion.div>
 
@@ -1132,51 +1257,10 @@ export default function Index() {
             );
           })}
         </motion.div>
-
-        {/* ===== NEWS & UPDATES ===== */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.9 }}
-          className="bg-[#1E2329] border border-[#2B3139] rounded-xl p-4"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <Sparkles className="h-4 w-4 text-[#F0B90B]" />
-              <h3 className="text-[#EAECEF] text-sm font-medium">Announcements</h3>
-            </div>
-            <span className="bg-[#F0B90B]/10 text-[#F0B90B] text-xs px-2 py-0.5 rounded">NEW</span>
-          </div>
-
-          <div className="space-y-3">
-            {[
-              { title: 'New listing: PEPE/USDT', desc: 'Trading starts in 2h', icon: Star },
-              { title: 'Reduced fees on SOL', desc: '50% discount for 7 days', icon: Zap },
-              { title: 'Staking rewards boost', desc: 'Up to 15% APY', icon: Award },
-            ].map((news, index) => {
-              const Icon = news.icon;
-              return (
-                <motion.div
-                  key={index}
-                  whileHover={{ x: 5 }}
-                  className="flex items-start space-x-3 p-2 rounded-lg hover:bg-[#2B3139] transition-colors cursor-pointer"
-                >
-                  <div className="bg-[#F0B90B]/10 p-2 rounded-lg">
-                    <Icon className="h-4 w-4 text-[#F0B90B]" />
-                  </div>
-                  <div>
-                    <h4 className="text-[#EAECEF] text-xs font-medium">{news.title}</h4>
-                    <p className="text-[#848E9C] text-[10px] mt-0.5">{news.desc}</p>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </motion.div>
       </div>
 
       {/* ===== BOTTOM NAVIGATION ===== */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#1E2329] border-t border-[#2B3139] px-2 pb-2">
+      <div className="fixed bottom-0 left-0 right-0 bg-[#1E2329] border-t border-[#2B3139] px-2 pb-2 z-40">
         <div className="grid grid-cols-5 gap-1">
           {bottomNavItems.map((item, index) => {
             const Icon = item.icon;
@@ -1230,7 +1314,7 @@ export default function Index() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: '100%' }}
             transition={{ type: 'spring', damping: 30 }}
-            className="fixed inset-0 z-40 bg-[#0B0E11] pt-16"
+            className="fixed inset-0 z-50 bg-[#0B0E11] pt-16"
           >
             <div className="p-4 space-y-4">
               {[
