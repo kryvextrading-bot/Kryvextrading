@@ -15,7 +15,7 @@ interface AuthContextType {
   userRole: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (userData: Partial<User> & { password: string }) => Promise<void>;
+  register: (userData: Partial<User> & { password: string }) => Promise<{ user: SupabaseUser; profile: any; requiresConfirmation?: boolean }>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<User>) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -94,7 +94,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('Email and password are required');
       }
       
-      // Convert Partial<User> to UserInsert for the API
+      // Convert Partial<User> to UserInsert for API
       const userInsertData: UserInsert = {
         email: userData.email,
         first_name: userData.first_name || null,
@@ -121,16 +121,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       // Handle email confirmation requirement
       if (result.requiresConfirmation) {
-        throw new Error('Please check your email to confirm your registration before logging in.');
+        // Return result instead of throwing error so Register component can handle it
+        return result;
       }
       
       if (result.profile) {
         setUser(result.profile);
       }
+      
+      return result;
     } catch (error) {
       console.error('Registration failed:', error);
       
-      // Re-throw the error with the same message for UI handling
+      // Re-throw error with same message for UI handling
       if (error instanceof Error) {
         throw error;
       }

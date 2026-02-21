@@ -122,13 +122,25 @@ export default function Register() {
     setIsLoading(true);
     
     try {
-      await register({
+      const result = await register({
         first_name: formData.firstName,
         last_name: formData.lastName,
         email: formData.email,
         password: formData.password,
         phone: '',
       });
+      
+      // Check if email confirmation is required
+      if (result.requiresConfirmation) {
+        toast({
+          title: "📧 Registration Successful!",
+          description: "Please check your email to confirm your account. You'll be able to login after confirmation.",
+        });
+        
+        // Redirect to login page with a message
+        navigate('/login?message=email-confirmation-required');
+        return;
+      }
       
       toast({
         title: "✨ Account Created Successfully!",

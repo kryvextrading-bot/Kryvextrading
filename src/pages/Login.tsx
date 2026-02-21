@@ -34,6 +34,20 @@ export default function Login() {
 
   const from = location.state?.from?.pathname || '/';
 
+  // Handle URL parameters for messages
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const message = params.get('message');
+    
+    if (message === 'email-confirmation-required') {
+      toast({
+        title: "📧 Check Your Email",
+        description: "Please confirm your email address before logging in. Check your inbox for the confirmation link.",
+        duration: 8000,
+      });
+    }
+  }, [location.search, toast]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
