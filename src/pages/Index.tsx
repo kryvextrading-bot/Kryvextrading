@@ -279,70 +279,63 @@ export default function Index() {
 
   // Calculate real wallet balances using proper unified wallet structure
   const totalFundingBalance = useMemo(() => {
-    // Use fundingBalances from the unified wallet hook
+    // Use fundingBalances from unified wallet hook
     const funding = balances || {};
     return Object.values(funding).reduce((acc, val) => acc + (Number(val) || 0), 0);
   }, [balances]);
 
   const totalTradingBalance = useMemo(() => {
-    // Use tradingBalances from unified wallet hook
-    let total = 0;
-    Object.entries(tradingBalances || {}).forEach(([_, balance]) => {
+    // Use tradingBalances from unified wallet hook - simplified calculation
+    if (!tradingBalances) return 0;
+    
+    return Object.values(tradingBalances).reduce((total, balance) => {
       // Handle both simple number format and TradingBalance object format
       if (typeof balance === 'number') {
-        total += balance;
+        return total + balance;
       } else if (balance && typeof balance === 'object' && 'available' in balance) {
-        total += (balance as { available: number }).available || 0;
+        return total + ((balance as { available: number }).available || 0);
       }
-    });
-    return total;
+      return total;
+    }, 0);
   }, [tradingBalances]);
 
   const totalLockedBalance = useMemo(() => {
-    // Locked balances would come from the locks or locked balances
-    let total = 0;
-    Object.entries(tradingBalances || {}).forEach(([_, balance]) => {
+    // Locked balances - simplified calculation
+    if (!tradingBalances) return 0;
+    
+    return Object.values(tradingBalances).reduce((total, balance) => {
       if (balance && typeof balance === 'object' && 'locked' in balance) {
-        total += (balance as { locked: number }).locked || 0;
+        return total + ((balance as { locked: number }).locked || 0);
       }
-    });
-    return total;
+      return total;
+    }, 0);
   }, [tradingBalances]);
 
-  // Real wallet balance - show actual USDT balance
+  // Simplified USDT balance calculation
   const usdtBalance = useMemo(() => {
     // Get USDT balance directly from funding wallet
     const usdtFunding = Number(balances?.USDT || 0);
-    const usdtTrading = totalTradingBalance;
-    const result = usdtFunding + usdtTrading;
-    
-    // Return actual balance or 0 if no data
-    return result;
-  }, [balances, totalTradingBalance]);
+    return usdtFunding + totalTradingBalance;
+  }, [balances?.USDT, totalTradingBalance]);
 
-  // Calculate total portfolio value using market prices
+  // Calculate total portfolio value using market prices - optimized
   const totalPortfolioValue = useMemo(() => {
+    if (!balances && !tradingBalances) return 0;
+    
     let total = 0;
     
-    // Add funding balances
-    Object.entries(balances || {}).forEach(([asset, balance]) => {
+    // Add funding balances - simplified
+    Object.entries(balances).forEach(([asset, balance]) => {
       const numBalance = Number(balance) || 0;
-      if (numBalance <= 0) return;
+      if (numBalance <= 0 || asset.includes('_TRADING')) return;
       
-      // Skip trading wallet entries (they shouldn't be in funding balances anyway)
-      if (asset.includes('_TRADING')) return;
-      
-      // Get price for the asset
-      let price = 1; // Default to 1 for USDT
-      if (asset !== 'USDT' && prices && prices[asset]) {
-        price = prices[asset];
-      }
-      
+      // Get price for asset
+      const price = asset === 'USDT' ? 1 : (prices?.[asset] || 0);
       total += numBalance * price;
     });
     
-    // Add trading balances
-    Object.entries(tradingBalances || {}).forEach(([asset, balance]) => {
+    // Add trading balances - simplified
+    Object.entries(tradingBalances).forEach(([asset, balance]) => {
       let numBalance = 0;
       
       // Handle both simple number format and TradingBalance object format
@@ -354,16 +347,11 @@ export default function Index() {
       
       if (numBalance <= 0) return;
       
-      // Get price for the asset
-      let price = 1; // Default to 1 for USDT
-      if (asset !== 'USDT' && prices && prices[asset]) {
-        price = prices[asset];
-      }
-      
+      // Get price for asset
+      const price = asset === 'USDT' ? 1 : (prices?.[asset] || 0);
       total += numBalance * price;
     });
     
-    // Return actual portfolio value or 0 if no data
     return total;
   }, [balances, tradingBalances, prices]);
 
