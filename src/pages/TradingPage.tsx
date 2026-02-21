@@ -1829,6 +1829,7 @@ export default function UnifiedTradingPage() {
         {/* Tab Headers */}
         <div className="flex border-b border-[#2B3139] overflow-x-auto">
           {activeTab === 'option' ? (
+            // Options Tabs
             <>
               <button
                 onClick={() => setActiveBottomTab('active')}
@@ -1861,8 +1862,74 @@ export default function UnifiedTradingPage() {
                 Completed ({uniqueCompletedOrders.length})
               </button>
             </>
+          ) : activeTab === 'future' ? (
+            // Futures Tabs
+            <>
+              <button
+                onClick={() => setActiveBottomTab('positions')}
+                className={`flex-1 py-3 text-sm border-b-2 whitespace-nowrap transition-colors ${
+                  activeBottomTab === 'positions'
+                    ? 'border-[#F0B90B] text-[#F0B90B]'
+                    : 'border-transparent text-[#848E9C] hover:text-[#EAECEF]'
+                }`}
+              >
+                Positions (0)
+              </button>
+              <button
+                onClick={() => setActiveBottomTab('open')}
+                className={`flex-1 py-3 text-sm border-b-2 whitespace-nowrap transition-colors ${
+                  activeBottomTab === 'open'
+                    ? 'border-[#F0B90B] text-[#F0B90B]'
+                    : 'border-transparent text-[#848E9C] hover:text-[#EAECEF]'
+                }`}
+              >
+                Open Orders (0)
+              </button>
+              <button
+                onClick={() => setActiveBottomTab('closed')}
+                className={`flex-1 py-3 text-sm border-b-2 whitespace-nowrap transition-colors ${
+                  activeBottomTab === 'closed'
+                    ? 'border-[#F0B90B] text-[#F0B90B]'
+                    : 'border-transparent text-[#848E9C] hover:text-[#EAECEF]'
+                }`}
+              >
+                Order History
+              </button>
+            </>
           ) : (
-            <div className="p-4 text-[#848E9C]">Other trading modes coming soon...</div>
+            // Spot Tabs
+            <>
+              <button
+                onClick={() => setActiveBottomTab('open')}
+                className={`flex-1 py-3 text-sm border-b-2 whitespace-nowrap transition-colors ${
+                  activeBottomTab === 'open'
+                    ? 'border-[#F0B90B] text-[#F0B90B]'
+                    : 'border-transparent text-[#848E9C] hover:text-[#EAECEF]'
+                }`}
+              >
+                Open Orders (0)
+              </button>
+              <button
+                onClick={() => setActiveBottomTab('completed')}
+                className={`flex-1 py-3 text-sm border-b-2 whitespace-nowrap transition-colors ${
+                  activeBottomTab === 'completed'
+                    ? 'border-[#F0B90B] text-[#F0B90B]'
+                    : 'border-transparent text-[#848E9C] hover:text-[#EAECEF]'
+                }`}
+              >
+                Order History
+              </button>
+              <button
+                onClick={() => setActiveBottomTab('assets')}
+                className={`flex-1 py-3 text-sm border-b-2 whitespace-nowrap transition-colors ${
+                  activeBottomTab === 'assets'
+                    ? 'border-[#F0B90B] text-[#F0B90B]'
+                    : 'border-transparent text-[#848E9C] hover:text-[#EAECEF]'
+                }`}
+              >
+                Assets
+              </button>
+            </>
           )}
         </div>
 
