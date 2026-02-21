@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { notificationService } from './notification-service';
 
 export interface DepositRequest {
   id?: string;
@@ -226,6 +227,41 @@ class DepositService {
         }
       });
 
+      // Create notification for user
+      if (data && status === 'Approved') {
+        await notificationService.createNotification({
+          user_id: data.user_id,
+          type: 'deposit',
+          title: 'Deposit Approved',
+          message: `Your deposit of ${data.amount} ${data.currency} has been approved and will be processed soon.`,
+          priority: 'high',
+          action_url: '/wallet',
+          action_text: 'View Wallet',
+          metadata: {
+            transaction_id: requestId,
+            amount: data.amount,
+            currency: data.currency,
+            network: data.network
+          }
+        });
+      } else if (data && status === 'Rejected') {
+        await notificationService.createNotification({
+          user_id: data.user_id,
+          type: 'deposit',
+          title: 'Deposit Rejected',
+          message: `Your deposit of ${data.amount} ${data.currency} has been rejected. ${adminNotes ? `Reason: ${adminNotes}` : ''}`,
+          priority: 'medium',
+          action_url: '/wallet',
+          action_text: 'View Wallet',
+          metadata: {
+            transaction_id: requestId,
+            amount: data.amount,
+            currency: data.currency,
+            network: data.network
+          }
+        });
+      }
+
       return { success: true, data };
     } catch (error) {
       console.error('Unexpected error updating deposit status:', error);
@@ -430,6 +466,24 @@ class DepositService {
         action_details: {
           amount: request.amount,
           currency: request.currency,
+          new_balance: walletResult.newBalance
+        }
+      });
+
+      // Create notification for completed deposit
+      await notificationService.createNotification({
+        user_id: request.user_id,
+        type: 'deposit',
+        title: 'Deposit Completed',
+        message: `Your deposit of ${request.amount} ${request.currency} has been completed and added to your wallet.`,
+        priority: 'high',
+        action_url: '/wallet',
+        action_text: 'View Wallet',
+        metadata: {
+          transaction_id: requestId,
+          amount: request.amount,
+          currency: request.currency,
+          network: request.network,
           new_balance: walletResult.newBalance
         }
       });

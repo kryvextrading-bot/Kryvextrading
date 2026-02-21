@@ -1,5 +1,6 @@
 // Wallet API Service - Integration with real database tables
 import { supabase, supabaseAdmin } from '@/lib/supabase';
+import { notificationService } from './notification-service';
 
 // Global type extension for wallet updates
 declare global {
@@ -323,6 +324,24 @@ class WalletApiService {
 
       // 5. Broadcast balance update to frontend (negative amount for removal)
       broadcastBalanceUpdate(userId, -amount, currency);
+
+      // 6. Create notification for user
+      await notificationService.createNotification({
+        user_id: userId,
+        type: 'withdrawal',
+        title: 'Withdrawal Completed',
+        message: `Your withdrawal of ${amount} ${currency} has been completed. Reason: ${reason}`,
+        priority: 'high',
+        action_url: '/wallet',
+        action_text: 'View Wallet',
+        metadata: {
+          transaction_id: `admin_${Date.now()}`,
+          amount: amount,
+          currency: currency,
+          reason: reason,
+          new_balance: newBalance
+        }
+      });
 
     } catch (error) {
       console.error('❌ [WalletAPI] Failed to remove funds:', error);

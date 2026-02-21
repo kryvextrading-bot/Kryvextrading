@@ -3,6 +3,8 @@
  * Handles real trading execution with admin outcome control
  */
 
+import { notificationService } from './notification-service';
+
 interface SpotTradeRequest {
   pair: string;
   side: 'buy' | 'sell';
@@ -59,6 +61,52 @@ class TradingApiService {
     this.baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002';
   }
 
+  private async createTradeNotification(trade: any, tradeType: string) {
+    try {
+      const userId = localStorage.getItem('userId') || 'demo-user';
+      
+      if (trade.outcome === 'win') {
+        await notificationService.createNotification({
+          user_id: userId,
+          type: 'trade_win',
+          title: 'Trade Profit',
+          message: `Your ${tradeType} trade on ${trade.pair} was profitable with +${trade.pnl} USD`,
+          priority: 'high',
+          action_url: '/trading',
+          action_text: 'View Trade',
+          metadata: {
+            trade_id: trade.id,
+            pair: trade.pair,
+            side: trade.side,
+            amount: trade.amount,
+            pnl: trade.pnl,
+            trade_type: tradeType
+          }
+        });
+      } else if (trade.outcome === 'loss') {
+        await notificationService.createNotification({
+          user_id: userId,
+          type: 'trade_loss',
+          title: 'Trade Loss',
+          message: `Your ${tradeType} trade on ${trade.pair} resulted in -${Math.abs(trade.pnl)} USD`,
+          priority: 'medium',
+          action_url: '/trading',
+          action_text: 'View Trade',
+          metadata: {
+            trade_id: trade.id,
+            pair: trade.pair,
+            side: trade.side,
+            amount: trade.amount,
+            pnl: trade.pnl,
+            trade_type: tradeType
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Failed to create trade notification:', error);
+    }
+  }
+
   private async makeRequest(endpoint: string, data: any): Promise<any> {
     // For testing, we'll use a mock token since the test server doesn't require auth
     const token = localStorage.getItem('authToken') || 'mock-jwt-token-test';
@@ -87,6 +135,12 @@ class TradingApiService {
     try {
       const response = await this.makeRequest('/api/trading/spot', params);
       console.log('✅ Spot trade executed:', response);
+      
+      // Create notification for trade outcome
+      if (response.success && response.trade) {
+        await this.createTradeNotification(response.trade, 'spot');
+      }
+      
       return response;
     } catch (error) {
       console.error('❌ Spot trade failed:', error);
@@ -101,6 +155,12 @@ class TradingApiService {
     try {
       const response = await this.makeRequest('/api/trading/futures', params);
       console.log('✅ Futures trade executed:', response);
+      
+      // Create notification for trade outcome
+      if (response.success && response.trade) {
+        await this.createTradeNotification(response.trade, 'futures');
+      }
+      
       return response;
     } catch (error) {
       console.error('❌ Futures trade failed:', error);
@@ -115,6 +175,12 @@ class TradingApiService {
     try {
       const response = await this.makeRequest('/api/trading/options', params);
       console.log('✅ Options trade executed:', response);
+      
+      // Create notification for trade outcome
+      if (response.success && response.trade) {
+        await this.createTradeNotification(response.trade, 'options');
+      }
+      
       return response;
     } catch (error) {
       console.error('❌ Options trade failed:', error);
