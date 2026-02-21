@@ -2459,15 +2459,6 @@ export default function WalletPage() {
                 </div>
               </div>
 
-              <div className="bg-[#23262F] rounded-xl p-2 sm:p-3">
-                <div className="flex items-center gap-2">
-                  <Info size={12} className="sm:w-3 sm:h-3 text-[#848E9C]" />
-                  <p className="text-[10px] sm:text-xs text-[#848E9C]">
-                    Requires admin approval. Funds added after approval.
-                  </p>
-                </div>
-              </div>
-
               <AnimatePresence>
                 {modalState.error && (
                   <motion.div
