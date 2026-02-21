@@ -86,7 +86,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const register = async (userData: Partial<User> & { password: string }) => {
+  const register = async (userData: Partial<User> & { password: string }, invitationCode?: string) => {
     try {
       setIsLoading(true);
       
@@ -116,7 +116,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const result = await supabaseApi.signUp(
         userData.email,
         userData.password,
-        userInsertData
+        userInsertData,
+        invitationCode
       );
       
       // Handle email confirmation requirement (now always false due to auto-login)

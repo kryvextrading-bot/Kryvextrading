@@ -91,7 +91,7 @@ class SupabaseApiService {
     }
   }
 
-  async signUp(email: string, password: string, userData: UserInsert) {
+  async signUp(email: string, password: string, userData: UserInsert, invitationCode?: string) {
     const maxRetries = 3;
     const baseDelay = 1000; // 1 second
     
@@ -187,6 +187,37 @@ class SupabaseApiService {
           }
 
           console.log('✅ [SupabaseAPI] User profile created');
+
+          // Step 3: Validate invitation code if provided
+          if (invitationCode) {
+            try {
+              const { data: inviteData, error: inviteError } = await supabaseAdmin
+                .from('invitation_codes')
+                .select('*')
+                .eq('code', invitationCode)
+                .eq('is_used', false)
+                .single();
+
+              if (!inviteError && inviteData) {
+                await supabaseAdmin
+                  .from('invitation_codes')
+                  .update({ 
+                    is_used: true, 
+                    used_by: authData.user.id,
+                    used_at: new Date().toISOString() 
+                  })
+                  .eq('id', inviteData.id);
+                
+                console.log('✅ [SupabaseAPI] Invitation code validated and marked as used');
+              } else {
+                console.warn('⚠️ [SupabaseAPI] Invalid or already used invitation code:', invitationCode);
+                // Don't fail signup - continue without invitation validation
+              }
+            } catch (inviteError) {
+              console.warn('⚠️ [SupabaseAPI] Invitation code validation skipped:', inviteError);
+              // Don't fail signup if invitation validation fails
+            }
+          }
 
           // Step 3: Initialize notification settings using admin client
           try {

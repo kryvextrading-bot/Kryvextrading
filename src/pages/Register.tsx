@@ -98,6 +98,7 @@ export default function Register() {
     email: '',
     password: '',
     confirmPassword: '',
+    invitationCode: '',
     agreeToTerms: false,
     agreeToMarketing: false
   });
@@ -128,6 +129,7 @@ export default function Register() {
         email: formData.email,
         password: formData.password,
         phone: '',
+        invitationCode: formData.invitationCode || undefined
       });
       
       // With the new auto-login flow, users should be logged in immediately
@@ -329,6 +331,26 @@ export default function Register() {
                     onChange={(e) => handleInputChange('email', e.target.value)}
                     className="w-full bg-[#1E2329] border border-[#2B3139] text-[#EAECEF] placeholder-[#5E6673] pl-10 pr-4 py-3 h-11 rounded-xl focus:border-[#F0B90B] focus:ring-1 focus:ring-[#F0B90B] transition-all text-sm"
                     required
+                  />
+                </div>
+              </div>
+
+              {/* Invitation Code Field - Optional */}
+              <div className="space-y-2">
+                <Label htmlFor="invitationCode" className="text-xs font-medium text-[#EAECEF]">
+                  Invitation Code (Optional)
+                </Label>
+                <div className="relative group">
+                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#848E9C] group-focus-within:text-[#F0B90B] transition-colors">
+                    🎁
+                  </div>
+                  <Input
+                    id="invitationCode"
+                    type="text"
+                    placeholder="Enter invitation code (optional)"
+                    value={formData.invitationCode}
+                    onChange={(e) => handleInputChange('invitationCode', e.target.value)}
+                    className="w-full bg-[#1E2329] border border-[#2B3139] text-[#EAECEF] placeholder-[#5E6673] pl-10 pr-4 py-3 h-11 rounded-xl focus:border-[#F0B90B] focus:ring-1 focus:ring-[#F0B90B] transition-all text-sm"
                   />
                 </div>
               </div>
