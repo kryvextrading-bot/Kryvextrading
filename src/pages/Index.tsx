@@ -525,7 +525,7 @@ export default function Index() {
         icon: Gift, 
         label: 'Rewards', 
         color: '#F0B90B', 
-        route: '/rewards' 
+        route: '/share' 
       }
     ];
   }, []);
