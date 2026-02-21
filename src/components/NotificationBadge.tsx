@@ -24,15 +24,19 @@ export default function NotificationBadge({ onClick, className = '' }: Notificat
   const loadUnreadCount = async () => {
     if (!user) return;
     
+    // Fetch all notification types: deposit, withdrawal, transfer, trading, and others
     const { count } = await notificationService.getUnreadCount(user.id);
     setUnreadCount(count);
     setShowPulse(count > 0);
+    
+    console.log(`🔔 [NotificationBadge] Loaded ${count} unread notifications for user ${user.id}`);
   };
 
   const subscribeToNotifications = () => {
     if (!user) return;
     
-    return notificationService.subscribeToNotifications(user.id, () => {
+    return notificationService.subscribeToNotifications(user.id, (notification) => {
+      console.log(`🔔 [NotificationBadge] New notification: ${notification.type} - ${notification.title}`);
       loadUnreadCount();
       setShowPulse(true);
       setTimeout(() => setShowPulse(false), 3000);

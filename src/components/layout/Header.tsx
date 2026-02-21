@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useTranslation } from 'react-i18next';
+import NotificationBadge from '@/components/NotificationBadge';
 
 export function Header() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -35,9 +36,13 @@ export function Header() {
           <div className="flex items-center space-x-4">
             {isAuthenticated ? (
               <>
-                <Button className="p-2 hover:bg-muted rounded-full">
-                  <Bell className="h-5 w-5" />
-                </Button>
+                <NotificationBadge 
+                  onClick={() => {
+                    // Navigate to notifications page or open notifications modal
+                    window.location.href = '/account?tab=notifications';
+                  }}
+                  className="p-2 hover:bg-[#23262F] rounded-xl transition-colors"
+                />
                 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
