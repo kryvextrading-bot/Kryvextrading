@@ -105,7 +105,8 @@ class SupabaseApiService {
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const { data, error } = await supabase.auth.signUp({
+        // Step 1: Create auth user
+        const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -117,79 +118,38 @@ class SupabaseApiService {
           }
         });
         
-        if (error) {
+        if (signUpError) {
           // Handle user already exists error - don't retry
-          if (error.message?.includes('User already registered') || 
-              error.message?.includes('already exists') ||
-              error.message?.includes('already been registered') ||
-              error.status === 422) {
+          if (signUpError.message?.includes('User already registered') || 
+              signUpError.message?.includes('already exists') ||
+              signUpError.message?.includes('already been registered') ||
+              signUpError.status === 422) {
             throw new Error('This email is already registered. Please login instead.');
           }
           
           // Handle rate limiting specifically
-          if (error.status === 429 && attempt < maxRetries) {
+          if (signUpError.status === 429 && attempt < maxRetries) {
             const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
             console.log(`Rate limited, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})`);
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }
           
-          throw error;
+          throw signUpError;
         }
         
-        if (!data.user) {
+        if (!authData.user) {
           throw new Error('No user data returned from sign up');
         }
         
-        // Check if email confirmation is required
-        if (data.user && !data.session) {
-          // Email confirmation required - but we'll bypass it for immediate login
-          console.log('📧 Email confirmation would be required, but bypassing for immediate login');
-          
-          // Automatically sign in user after successful signup
-          try {
-            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-              email,
-              password,
-            });
-            
-            if (signInError) {
-              console.error('Auto sign-in failed:', signInError);
-              return { 
-                user: data.user, 
-                profile: null, 
-                requiresConfirmation: false // Don't require confirmation since we're auto-logging
-              };
-            }
-            
-            // Get user profile
-            const { data: profile, error: profileError } = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', signInData.user.id)
-              .maybeSingle()
-            
-            if (profileError && profileError.code !== 'PGRST116') {
-              console.error('Error fetching user profile after auto-login:', profileError);
-            }
-            
-            return { user: signInData.user, profile };
-          } catch (autoLoginError) {
-            console.error('Auto login failed:', autoLoginError);
-            return { 
-              user: data.user, 
-              profile: null, 
-              requiresConfirmation: false
-            };
-          }
-        }
-        
-        // Create user profile using upsert to avoid conflicts
+        console.log('✅ [SupabaseAPI] Auth user created:', authData.user.id);
+
+        // Step 2: Create user profile using admin client to bypass RLS
         try {
           const { data: profile, error: profileError } = await supabaseAdmin
             .from('users')
-            .upsert([{
-              id: data.user.id,
+            .insert({
+              id: authData.user.id,
               email,
               first_name: userData.first_name || '',
               last_name: userData.last_name || '',
@@ -205,44 +165,142 @@ class SupabaseApiService {
               investment_goal: userData.investment_goal || 'Retirement',
               is_admin: false,
               credit_score: 0,
-            }], {
-              onConflict: 'id',
-              ignoreDuplicates: false
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
             })
             .select()
-            .single()
+            .single();
           
-          if (profileError && profileError.code !== '23505') {
-            // Ignore duplicate key errors, throw others
-            console.error('Error creating user profile:', profileError);
-            return { user: data.user, profile: null };
-          }
-          
-          // Verify user has wallet balances (trigger should handle this automatically)
-          try {
-            const { data: walletBalances, error: walletError } = await supabaseAdmin
-              .from('wallet_balances')
-              .select('asset')
-              .eq('user_id', data.user.id);
-              
-            if (walletError) {
-              console.warn('Warning: Could not verify wallet balances:', walletError);
-            } else if (!walletBalances || walletBalances.length === 0) {
-              console.warn('Warning: No wallet balances found for new user - trigger may have failed');
-              // Optionally call manual backup function
-              await supabaseAdmin.rpc('ensure_user_has_wallets', { p_user_id: data.user.id });
-            } else {
-              console.log(`✅ User has ${walletBalances.length} wallet balances ready`);
+          if (profileError) {
+            console.error('❌ [SupabaseAPI] Profile creation error:', profileError);
+            
+            // Cleanup auth user if profile creation fails
+            if (authData.user) {
+              await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
             }
-          } catch (walletCheckError) {
-            console.warn('Warning: Wallet balance verification failed:', walletCheckError);
+            
+            if (profileError.code === '42501') {
+              throw new Error('Database permission error. Please contact support.');
+            }
+            
+            throw new Error('Failed to create user profile. Please try again.');
+          }
+
+          console.log('✅ [SupabaseAPI] User profile created');
+
+          // Step 3: Initialize notification settings using admin client
+          try {
+            // Insert notification settings
+            await supabaseAdmin
+              .from('notification_settings')
+              .insert({
+                user_id: authData.user.id,
+                email_notifications: true,
+                push_notifications: true,
+                trading_alerts: true,
+                price_alerts: false,
+                security_alerts: true,
+                marketing_emails: false,
+                system_updates: true,
+                sound_enabled: true,
+                desktop_notifications: true,
+                mobile_notifications: true,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              });
+
+            // Insert notification preferences for all channels
+            const channels = ['email', 'push', 'sms', 'in-app'];
+            for (const channel of channels) {
+              await supabaseAdmin
+                .from('notification_preferences')
+                .insert({
+                  user_id: authData.user.id,
+                  channel,
+                  email_alerts: true,
+                  sms_alerts: false,
+                  push_alerts: true,
+                  transaction_alerts: true,
+                  security_alerts: true,
+                  marketing_emails: false,
+                  daily_summary: true,
+                  weekly_report: true,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                });
+            }
+
+            // Create welcome notification
+            await supabaseAdmin
+              .from('notifications')
+              .insert({
+                user_id: authData.user.id,
+                type: 'welcome',
+                title: '🎉 Welcome to Kryvex Trading!',
+                message: 'Thank you for joining Kryvex. Complete your KYC verification to start trading.',
+                status: 'unread',
+                priority: 'high',
+                created_at: new Date().toISOString()
+              });
+
+            console.log('✅ [SupabaseAPI] Notification settings initialized');
+          } catch (notificationError) {
+            console.warn('⚠️ [SupabaseAPI] Failed to initialize notification settings:', notificationError);
+            // Don't fail the entire signup if notifications fail
+          }
+
+          // Step 4: Initialize wallet balances using admin client
+          try {
+            await supabaseAdmin.rpc('ensure_user_has_wallets', { p_user_id: authData.user.id });
+            console.log('✅ [SupabaseAPI] Wallet balances initialized');
+          } catch (walletError) {
+            console.warn('⚠️ [SupabaseAPI] Failed to initialize wallet balances:', walletError);
+            // Don't fail the entire signup if wallet initialization fails
+          }
+
+          // Step 5: Auto-login if email confirmation is required
+          if (authData.user && !authData.session) {
+            console.log('📧 [SupabaseAPI] Email confirmation required, attempting auto-login...');
+            
+            try {
+              const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+              });
+              
+              if (signInError) {
+                console.error('❌ [SupabaseAPI] Auto sign-in failed:', signInError);
+                return { 
+                  user: authData.user, 
+                  profile, 
+                  requiresConfirmation: false
+                };
+              }
+              
+              console.log('✅ [SupabaseAPI] Auto-login successful');
+              return { user: signInData.user, profile, requiresConfirmation: false };
+            } catch (autoLoginError) {
+              console.error('❌ [SupabaseAPI] Auto login failed:', autoLoginError);
+              return { 
+                user: authData.user, 
+                profile, 
+                requiresConfirmation: false
+              };
+            }
           }
           
-          return { user: data.user, profile };
+          console.log('✅ [SupabaseAPI] Signup completed successfully');
+          return { user: authData.user, profile, requiresConfirmation: false };
           
         } catch (profileErr) {
-          console.error('Failed to create profile:', profileErr);
-          return { user: data.user, profile: null };
+          console.error('❌ [SupabaseAPI] Failed to create profile:', profileErr);
+          
+          // Cleanup auth user if profile creation fails
+          if (authData.user) {
+            await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+          }
+          
+          throw new Error('Failed to create user profile. Please try again.');
         }
         
       } catch (error) {
