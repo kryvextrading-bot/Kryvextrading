@@ -1,4 +1,4 @@
-import { supabase, Database } from '@/lib/supabase'
+import { supabase, supabaseAdmin, Database } from '@/lib/supabase'
 import { PostgrestError } from '@supabase/supabase-js'
 import { User, UserInsert, UserUpdate, validateUserInsert, validateUserUpdate } from '@/types/user-validation'
 
@@ -146,7 +146,7 @@ class SupabaseApiService {
           // Email confirmation required - but we'll bypass it for immediate login
           console.log('📧 Email confirmation would be required, but bypassing for immediate login');
           
-          // Automatically sign in the user after successful signup
+          // Automatically sign in user after successful signup
           try {
             const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
               email,
@@ -186,7 +186,7 @@ class SupabaseApiService {
         
         // Create user profile using upsert to avoid conflicts
         try {
-          const { data: profile, error: profileError } = await supabase
+          const { data: profile, error: profileError } = await supabaseAdmin
             .from('users')
             .upsert([{
               id: data.user.id,
@@ -220,7 +220,7 @@ class SupabaseApiService {
           
           // Verify user has wallet balances (trigger should handle this automatically)
           try {
-            const { data: walletBalances, error: walletError } = await supabase
+            const { data: walletBalances, error: walletError } = await supabaseAdmin
               .from('wallet_balances')
               .select('asset')
               .eq('user_id', data.user.id);
@@ -230,7 +230,7 @@ class SupabaseApiService {
             } else if (!walletBalances || walletBalances.length === 0) {
               console.warn('Warning: No wallet balances found for new user - trigger may have failed');
               // Optionally call manual backup function
-              await supabase.rpc('ensure_user_has_wallets', { p_user_id: data.user.id });
+              await supabaseAdmin.rpc('ensure_user_has_wallets', { p_user_id: data.user.id });
             } else {
               console.log(`✅ User has ${walletBalances.length} wallet balances ready`);
             }
