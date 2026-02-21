@@ -1529,7 +1529,17 @@ export default function UnifiedTradingPage() {
 
   // Bottom Tabs
   const [activeBottomTab, setActiveBottomTab] = useState<BottomTabType>('active');
-  const [orderHistoryHeight, setOrderHistoryHeight] = useState(320);
+  const [orderHistoryHeight, setOrderHistoryHeight] = useState(() => {
+    // Initialize height based on screen size
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) {
+      // For mobile, use 50% of viewport height
+      return Math.max(200, Math.min(400, window.innerHeight * 0.5));
+    } else {
+      // For desktop, use fixed height
+      return 320;
+    }
+  });
   const resizeRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
 
@@ -1538,6 +1548,27 @@ export default function UnifiedTradingPage() {
     const balance = getTradingBalance('USDT');
     setFuturesBalance(balance);
   }, [getTradingBalance]);
+
+  // Handle window resize/orientation change for mobile
+  useEffect(() => {
+    const handleWindowResize = () => {
+      const isMobile = window.innerWidth < 768;
+      if (isMobile) {
+        // Adjust height for mobile orientation change
+        const newHeight = Math.max(150, Math.min(400, window.innerHeight * 0.5));
+        setOrderHistoryHeight(prev => {
+          // Only update if current height is outside mobile bounds
+          if (prev < 150 || prev > 400) {
+            return newHeight;
+          }
+          return prev;
+        });
+      }
+    };
+
+    window.addEventListener('resize', handleWindowResize);
+    return () => window.removeEventListener('resize', handleWindowResize);
+  }, []);
 
   // Animate chart data
   useEffect(() => {
@@ -1884,27 +1915,70 @@ export default function UnifiedTradingPage() {
   };
 
   // Handle resize for order history
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+  const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     isResizing.current = true;
-    document.addEventListener('mousemove', handleResize);
-    document.addEventListener('mouseup', handleResizeEnd);
+    
+    if ('touches' in e) {
+      // Touch events for mobile
+      document.addEventListener('touchmove', handleTouchResize);
+      document.addEventListener('touchend', handleResizeEnd);
+    } else {
+      // Mouse events for desktop
+      document.addEventListener('mousemove', handleResize);
+      document.addEventListener('mouseup', handleResizeEnd);
+    }
+  }, []);
+
+  // Touch resize handler for mobile
+  const handleTouchResize = useCallback((e: TouchEvent) => {
+    if (!isResizing.current || !resizeRef.current) return;
+    
+    const isMobile = window.innerWidth < 768;
+    const touch = e.touches[0];
+    const newHeight = window.innerHeight - touch.clientY - 60;
+    
+    let maxHeight, minHeight;
+    if (isMobile) {
+      // Mobile constraints - more restrictive
+      maxHeight = window.innerHeight * 0.6; // Max 60% of viewport
+      minHeight = 150; // Minimum smaller for mobile
+    } else {
+      // Desktop constraints
+      maxHeight = window.innerHeight * 0.7;
+      minHeight = 200;
+    }
+    
+    setOrderHistoryHeight(Math.min(maxHeight, Math.max(minHeight, newHeight)));
   }, []);
 
   const handleResize = useCallback((e: MouseEvent) => {
     if (!isResizing.current || !resizeRef.current) return;
     
+    const isMobile = window.innerWidth < 768;
     const newHeight = window.innerHeight - e.clientY - 60;
-    const maxHeight = window.innerHeight * 0.7;
-    const minHeight = 200;
+    
+    let maxHeight, minHeight;
+    if (isMobile) {
+      // Mobile constraints - more restrictive
+      maxHeight = window.innerHeight * 0.6; // Max 60% of viewport
+      minHeight = 150; // Minimum smaller for mobile
+    } else {
+      // Desktop constraints
+      maxHeight = window.innerHeight * 0.7;
+      minHeight = 200;
+    }
     
     setOrderHistoryHeight(Math.min(maxHeight, Math.max(minHeight, newHeight)));
   }, []);
 
   const handleResizeEnd = useCallback(() => {
     isResizing.current = false;
+    // Remove both mouse and touch event listeners
     document.removeEventListener('mousemove', handleResize);
     document.removeEventListener('mouseup', handleResizeEnd);
+    document.removeEventListener('touchmove', handleTouchResize);
+    document.removeEventListener('touchend', handleResizeEnd);
   }, []);
 
   // Get current UTC time
@@ -2238,6 +2312,7 @@ export default function UnifiedTradingPage() {
         <div
           className="absolute top-0 left-0 right-0 h-1 cursor-ns-resize hover:bg-[#F0B90B]/50 transition-colors"
           onMouseDown={handleResizeStart}
+          onTouchStart={handleResizeStart}
         />
 
         {/* Tab Headers */}
