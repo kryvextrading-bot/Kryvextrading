@@ -1239,7 +1239,7 @@ export default function Index() {
                 { icon: Award, label: 'Rewards', badge: '2 new', route: '/share' },
                 { icon: Gift, label: 'Referrals', badge: null, route: '/share' },
                 { icon: Star, label: 'Favorites', badge: null, route: '/account?tab=favorites' },
-                { icon: Sparkles, label: 'New Features', badge: '3', route: 'http://127.0.0.1:51709/presale' },
+                { icon: Sparkles, label: 'New Features', badge: '3', route: '/presale' },
               ].map((item, index) => {
                 const Icon = item.icon;
                 return (
@@ -1251,13 +1251,7 @@ export default function Index() {
                     whileHover={{ x: 5 }}
                     className="w-full flex items-center justify-between p-4 bg-[#1E2329] rounded-xl border border-[#2B3139]"
                     onClick={() => {
-                      if (item.route.startsWith('http')) {
-                        // Handle external URL
-                        window.open(item.route, '_blank');
-                      } else {
-                        // Handle internal route
-                        navigate(item.route);
-                      }
+                      navigate(item.route);
                       setMobileMenuOpen(false);
                     }}
                   >
@@ -1275,31 +1269,6 @@ export default function Index() {
                   </motion.button>
                 );
               })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ===== BOTTOM SHEET ===== */}
-      <AnimatePresence>
-        {activeService && (
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 30 }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-[#1E2329] border-t border-[#2B3139] rounded-t-2xl p-4"
-          >
-            <div className="w-12 h-1 bg-[#2B3139] rounded-full mx-auto mb-4" />
-            <h3 className="text-[#EAECEF] font-medium mb-2">{activeService}</h3>
-            <p className="text-[#848E9C] text-sm mb-4">Quick actions and information</p>
-            <div className="grid grid-cols-2 gap-3">
-              <button className="bg-[#F0B90B] text-[#0B0E11] py-3 rounded-xl font-medium">
-                Get Started
-              </button>
-              <button className="bg-[#2B3139] text-[#EAECEF] py-3 rounded-xl font-medium">
-                Learn More
-              </button>
             </div>
           </motion.div>
         )}
