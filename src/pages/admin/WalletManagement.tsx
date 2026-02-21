@@ -28,6 +28,7 @@ import { adminApiService } from '@/services/admin-api';
 import { walletApiService } from '@/services/wallet-api-new';
 import { depositService } from '@/services/depositService';
 import BalanceSyncService from '@/services/balance-sync';
+import DepositSlip from '@/components/DepositSlip';
 import { TrendingUp } from '@/components/icons/TrendingUp';
 import { cn } from '@/lib/utils';
 import {
@@ -1129,6 +1130,10 @@ export default function WalletManagement() {
   const [fundAmount, setFundAmount] = useState<string>('');
   const [fundCurrency, setFundCurrency] = useState<string>('USDT');
   
+  // Deposit Slip State
+  const [showDepositSlip, setShowDepositSlip] = useState(false);
+  const [depositSlipData, setDepositSlipData] = useState<any>(null);
+  
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -1350,12 +1355,32 @@ export default function WalletManagement() {
 
           const result = await response.json();
           
-          // If server processed approval and added funds, show success
+          // If server processed approval and added funds, show success and deposit slip
           if (result.success) {
             toast({
               title: "Deposit Approved & Processed",
               description: `${request.currency} ${request.amount.toLocaleString()} has been added to user wallet`,
             });
+            
+            // Show deposit slip for approved deposit
+            if (request.type === 'deposit') {
+              const slipData = {
+                transactionId: request.id,
+                date: request.updatedAt || new Date().toISOString(),
+                time: request.updatedAt || new Date().toISOString(),
+                asset: request.currency,
+                status: 'Completed' as const,
+                amount: request.amount,
+                amountUsd: request.amount, // Assuming 1:1 for now, you can add conversion logic
+                userName: request.userName,
+                userEmail: request.userEmail,
+                network: request.method,
+                address: request.address
+              };
+              
+              setDepositSlipData(slipData);
+              setShowDepositSlip(true);
+            }
           }
         } catch (error) {
           console.error('Error updating deposit request:', error);
@@ -2167,6 +2192,18 @@ export default function WalletManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Deposit Slip Modal */}
+      {showDepositSlip && depositSlipData && (
+        <DepositSlip
+          data={depositSlipData}
+          onClose={() => {
+            setShowDepositSlip(false);
+            setDepositSlipData(null);
+          }}
+          showCloseButton={true}
+        />
+      )}
     </div>
   );
 };

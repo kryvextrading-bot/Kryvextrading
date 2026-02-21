@@ -34,6 +34,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
+import DepositSlip from '@/components/DepositSlip';
 
 // Services
 import { walletApiService } from '@/services/wallet-api';
@@ -641,6 +642,8 @@ export default function WalletPage() {
   const [depositRequests, setDepositRequests] = useState<any[]>([]);
   const [showDepositModal, setShowDepositModal] = useState<boolean>(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [showDepositSlip, setShowDepositSlip] = useState<boolean>(false);
+  const [depositSlipData, setDepositSlipData] = useState<any>(null);
   
   // Initialize stats with default values
   const [stats, setStats] = useState({
@@ -833,11 +836,55 @@ export default function WalletPage() {
     });
   }, [refreshBalances, toast]);
 
+  // Load deposit requests and check for approved ones
+  const loadDepositRequests = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      console.log('🔄 Loading deposit requests for user:', user.id);
+      
+      const result = await depositService.getUserDepositRequests(user.id);
+      
+      if (result.success && result.data) {
+        setDepositRequests(result.data);
+        
+        // Check if any deposit was approved and show slip
+        const approvedDeposits = result.data.filter((req: any) => 
+          req.status === 'Approved' || req.status === 'Completed'
+        );
+        
+        if (approvedDeposits.length > 0) {
+          // Show the most recent approved deposit slip
+          const latestApproved = approvedDeposits[0];
+          const slipData = {
+            transactionId: latestApproved.id,
+            date: latestApproved.updated_at || latestApproved.created_at,
+            time: latestApproved.updated_at || latestApproved.created_at,
+            asset: latestApproved.currency,
+            status: 'Completed' as const,
+            amount: latestApproved.amount,
+            amountUsd: latestApproved.amount,
+            userName: `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || user?.email || '',
+            userEmail: user?.email || '',
+            network: latestApproved.network,
+            address: latestApproved.address
+          };
+          
+          setDepositSlipData(slipData);
+          setShowDepositSlip(true);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to load deposit requests:', error);
+    }
+  }, [user]);
+
   // Initialize data on mount
   useEffect(() => {
     refreshBalances?.();
     loadTransactions();
-  }, [refreshBalances]);
+    loadDepositRequests();
+  }, [refreshBalances, loadDepositRequests]);
 
   // Load transactions from backend
   const loadTransactions = useCallback(async () => {
